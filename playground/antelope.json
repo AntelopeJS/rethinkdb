@@ -1,0 +1,34 @@
+{
+  "name": "playground",
+  "version": "1.0.0",
+  "description": "",
+  "author": "",
+  "modules": {
+    "playground": {
+      "source": {
+        "type": "local",
+        "path": ".",
+        "installCommand": "npx tsc"
+      }
+    },
+    "rethinkdb": {
+      "source": {
+        "type": "local",
+        "path": "..",
+        "installCommand": ["npx tsc"]
+      },
+      "config": {
+        "pool": {
+          "pool": true,
+          "cursor": false,
+          "silent": true,
+          "user": "admin",
+          "password": "",
+          "discovery": true,
+          "host": "84.54.32.153",
+          "port": "28015"
+        }
+      }
+    }
+  }
+}
