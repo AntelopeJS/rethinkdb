@@ -24,10 +24,10 @@ This module implements two key interfaces:
 Both interfaces can be used independently or together depending on your application's needs. The interfaces are installed separately to maintain modularity and minimize dependencies.
 
 
-| Name          | Install command                         |            |
-| ------------- | --------------------------------------- | ---------- |
+| Name          | Install command                         |                                                                    |
+| ------------- | --------------------------------------- | ------------------------------------------------------------------ |
 | RethinkDB     | `ajs module imports add rethinkdb`      | [Documentation](https://github.com/AntelopeJS/interface-rethinkdb) |
-| Database      | `ajs module imports add database`       | [Documentation](https://github.com/AntelopeJS/interface-database) |
+| Database      | `ajs module imports add database`       | [Documentation](https://github.com/AntelopeJS/interface-database)  |
 
 ## Overview
 
