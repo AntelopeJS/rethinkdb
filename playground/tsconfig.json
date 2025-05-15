@@ -20,8 +20,8 @@
     "baseUrl": "src",
     "paths": {
       "@ajs.local/*": ["interfaces/*"],
-	  "@ajs/rethinkdb/*": ["../../.antelope/output/rethinkdb/*"],
-	  "@ajs/database/*": ["../../.antelope/output/database/*"],
+      "@ajs/rethinkdb/*": ["../../.antelope/output/rethinkdb/*"],
+      "@ajs/database/*": ["../../.antelope/output/database/*"],
       "@ajs/core/*": ["../../.antelope/interfaces.d/core/*"],
       "@ajs/*": ["../.antelope/interfaces.d/*"]
     }
