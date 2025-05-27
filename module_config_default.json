@@ -1,0 +1,26 @@
+{
+    "config": {
+        "connection": {
+            "host": "localhost",
+            "port": 28015,
+            "db": "test",
+            "user": "admin",
+            "password": "",
+            "timeout": 20,
+            "ssl": false
+        },
+        "pool": {
+            "host": "localhost",
+            "port": 28015,
+            "db": "test",
+            "user": "admin",
+            "password": "",
+            "timeout": 20,
+            "maxConnections": 10,
+            "bufferSize": 50,
+            "maxBufferSize": 100,
+            "discovery": false,
+            "servers": []
+        }
+    }
+} 
