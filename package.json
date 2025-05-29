@@ -41,7 +41,19 @@
       "core@beta",
       "database@beta"
     ],
-    "importsOptional": []
+    "importsOptional": [],
+    "defaultConfig": {
+      "pool": {
+        "pool": true,
+        "cursor": false,
+        "silent": true,
+        "user": "admin",
+        "password": "",
+        "discovery": true,
+        "host": "127.0.0.1",
+        "port": "28015"
+      }
+    }
   },
   "dependencies": {
     "reflect-metadata": "^0.2.2",
