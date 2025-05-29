@@ -19,11 +19,7 @@
     "useDefineForClassFields": true,
     "baseUrl": "src",
     "paths": {
-      "@ajs.local/*": ["interfaces/*"],
-      "@ajs/rethinkdb/*": ["../../.antelope/output/rethinkdb/*"],
-      "@ajs/database/*": ["../../.antelope/output/database/*"],
-      "@ajs/core/*": ["../../.antelope/interfaces.d/core/*"],
-      "@ajs/*": ["../.antelope/interfaces.d/*"]
+      "@ajs/*": ["../../output/*", "../../.antelope/interfaces.d/*", "../.antelope/interfaces.d/*"]
     }
   },
   "include": ["src/**/*.ts"]
