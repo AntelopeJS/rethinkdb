@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.1](https://github.com/AntelopeJS/rethinkdb/compare/v0.1.0...v0.1.1) (2025-07-28)
+
+### Bug Fixes
+
+* implementation and interface mismatch ([#6](https://github.com/AntelopeJS/rethinkdb/issues/6)) ([98a679d](https://github.com/AntelopeJS/rethinkdb/commit/98a679dc6d6eefb0bf007c09cf8009ef546b2442))
+
 ## [0.1.0](https://github.com/AntelopeJS/rethinkdb/compare/v0.0.1...v0.1.0) (2025-05-29)
 
 ### Features
