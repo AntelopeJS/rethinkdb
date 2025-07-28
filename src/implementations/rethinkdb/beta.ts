@@ -1,7 +1,8 @@
 import { RQuery, RunOptions } from 'rethinkdb-ts';
 import { SendQuery } from '../../connection';
 
-export async function RunQuery(query: RQuery, options?: RunOptions) {
+// @ts-ignore
+export async function RunQuery(query: RQuery, options?: RunOptions): any {
   const cursor = await SendQuery((<any>query).term, options);
   if (!cursor) {
     return;

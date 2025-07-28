@@ -456,11 +456,11 @@ export namespace internal {
     return iterator.next();
   }
 
-  export function closeCursor(reqId: number) {
+  export async function closeCursor(reqId: number) {
     if (openedCursors.has(reqId)) {
       const [cursor] = openedCursors.get(reqId)!;
       openedCursors.delete(reqId);
-      return cursor.close();
+      await cursor.close();
     }
   }
 }
