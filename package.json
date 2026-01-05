@@ -39,7 +39,8 @@
     "exportsPath": "dist/interfaces",
     "imports": [
       "core@beta",
-      "database@beta"
+      "database@beta",
+      "logging@beta"
     ],
     "importsOptional": [],
     "defaultConfig": {

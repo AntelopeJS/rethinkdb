@@ -5,6 +5,8 @@ import { ComplexTermJson, TermJson } from 'rethinkdb-ts/lib/internal-types';
 import { Cursor } from 'rethinkdb-ts/lib/response/cursor';
 import { TermType } from 'rethinkdb-ts/lib/proto/enums';
 import { join } from './join';
+import { backtraceTerm } from 'rethinkdb-ts/lib/error/term-backtrace';
+import { Logger } from '../../../utils/logger';
 
 let nextArgNumber = 0;
 export interface TranslationContext {
@@ -415,7 +417,9 @@ export namespace internal {
       argMap: new Map(),
       referencedArgs: new Set(),
     });
-    //console.log('runQuery', JSON.stringify(dbQuery));
+
+    Logger.Debug('Executing query:', backtraceTerm(dbQuery)[0]);
+
     return SendQuery(dbQuery).then(async (cursor) => {
       if (!cursor) {
         return;
@@ -444,12 +448,14 @@ export namespace internal {
         argMap: new Map(),
         referencedArgs: new Set(),
       });
-      //console.log('readCursor', JSON.stringify(dbQuery));
+      Logger.Debug('Opening cursor #', reqId);
       const cursor = await SendQuery(dbQuery);
       assert(cursor, 'Query returned no cursor.');
-      //console.log(cursor.getType());
       openedCursors.set(reqId, [cursor, cursor[Symbol.asyncIterator]()]);
-      cursor.on('close', () => openedCursors.delete(reqId));
+      cursor.on('close', () => {
+        Logger.Debug('Cursor #', reqId, 'closed by server');
+        openedCursors.delete(reqId);
+      });
       cursor.init();
     }
     const [, iterator] = openedCursors.get(reqId)!;
@@ -458,6 +464,7 @@ export namespace internal {
 
   export async function closeCursor(reqId: number) {
     if (openedCursors.has(reqId)) {
+      Logger.Debug('Closing cursor #', reqId);
       const [cursor] = openedCursors.get(reqId)!;
       openedCursors.delete(reqId);
       await cursor.close();
