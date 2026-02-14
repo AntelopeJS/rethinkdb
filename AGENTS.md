@@ -4,18 +4,18 @@
 
 ### Critical Rules
 
-| Rule | Description |
-|------|-------------|
-| English only | All code must be in English: variable names, function names, comments |
-| PNPM only | Always use pnpm, never npm or yarn |
-| NO COMMENTS | Code must be self-documenting through clear naming |
-| NO switch/case | Use objects, maps, or arrays instead |
-| NO inline types | Define proper interfaces/types, never use anonymous types like `{a: string, b: number}` |
-| Functions <= 40 lines | Split into subfunctions if longer |
-| NO magic values | Extract to named constants |
-| Generic over specific | Avoid case-by-case logic |
-| 2 spaces | Use spaces, not tabs |
-| Index re-exports | In index files, prefer `export * from './module'` over named re-exports |
+| Rule                  | Description                                                                             |
+| --------------------- | --------------------------------------------------------------------------------------- |
+| English only          | All code must be in English: variable names, function names, comments                   |
+| PNPM only             | Always use pnpm, never npm or yarn                                                      |
+| NO COMMENTS           | Code must be self-documenting through clear naming                                      |
+| NO switch/case        | Use objects, maps, or arrays instead                                                    |
+| NO inline types       | Define proper interfaces/types, never use anonymous types like `{a: string, b: number}` |
+| Functions ≤ 40 lines  | Split into subfunctions if longer                                                       |
+| NO magic values       | Extract to named constants                                                              |
+| Generic over specific | Avoid case-by-case logic                                                                |
+| 2 spaces              | Use spaces, not tabs                                                                    |
+| Index re-exports      | In index files, prefer `export * from './module'` over named re-exports                 |
 
 ### Code Structure
 
@@ -87,11 +87,3 @@ function findUser(users: User[], id: string) {
 - **DRY**: Don't Repeat Yourself
 - **KISS**: Keep It Simple, Stupid
 - **SOLID**: Single responsibility, Open/closed, Liskov substitution, Interface segregation, Dependency inversion
-
-## Business Context
-
-[TODO: project-specific business rules]
-
-## Areas of Concern
-
-[TODO: technical debt, sensitive areas]
