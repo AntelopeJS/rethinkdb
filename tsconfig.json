@@ -4,7 +4,7 @@
     "target": "esnext",
     "module": "commonjs",
     "lib": ["ES2020"],
-    "allowJs": true,
+    "allowJs": false,
     "outDir": "dist",
     "strict": true,
     "noImplicitAny": true,
@@ -15,12 +15,13 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "declaration": true,
+    "noEmitOnError": true,
     "sourceMap": true,
     "useDefineForClassFields": true,
     "baseUrl": "src",
     "paths": {
       "@ajs.local/*": ["interfaces/*"],
-      "@ajs/*": ["interfaces/*"]
+      "@ajs/*": ["../.antelope/interfaces.d/*", "interfaces/*"]
     }
   },
   "include": ["src/**/*.ts"]
