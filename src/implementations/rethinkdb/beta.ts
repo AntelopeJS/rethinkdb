@@ -1,9 +1,11 @@
 import { RQuery, RunOptions } from 'rethinkdb-ts';
 import { SendQuery } from '../../connection';
+import { TermJson } from 'rethinkdb-ts/lib/internal-types';
 
-// @ts-ignore
-export async function RunQuery(query: RQuery, options?: RunOptions): any {
-  const cursor = await SendQuery((<any>query).term, options);
+type RethinkQueryWithTerm = RQuery & { term: TermJson };
+
+export async function RunQuery(query: RQuery, options?: RunOptions): Promise<unknown> {
+  const cursor = await SendQuery((query as RethinkQueryWithTerm).term, options);
   if (!cursor) {
     return;
   }
@@ -11,11 +13,11 @@ export async function RunQuery(query: RQuery, options?: RunOptions): any {
   if (!results) {
     return;
   }
-  switch (cursor!.getType()) {
+  switch (cursor.getType()) {
     case 'Atom':
       return results[0];
     case 'Cursor':
-      return await cursor.toArray();
+      return cursor.toArray();
     default:
       return results;
   }
