@@ -19,6 +19,7 @@ export default tseslint.config(
       'pnpm-lock.yaml',
       'eslint.config.mjs',
       'playground',
+      'src/test/testproject.js',
     ],
   },
   eslint.configs.recommended,

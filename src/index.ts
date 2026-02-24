@@ -17,8 +17,15 @@ export async function construct(options: Options) {
     throw new Error('Invalid RethinkDB options');
   }
 
-  ImplementInterface(await import('@ajs.local/database/beta/runtime'), await import('./implementations/database/beta'));
   ImplementInterface(await import('@ajs.local/rethinkdb/beta'), await import('./implementations/rethinkdb/beta'));
+  ImplementInterface(
+    await import('@ajs.local/database/beta/query'),
+    await import('./implementations/database/beta/query'),
+  );
+  ImplementInterface(
+    await import('@ajs.local/database/beta/schema'),
+    await import('./implementations/database/beta/schema'),
+  );
 }
 
 export async function start() {}
