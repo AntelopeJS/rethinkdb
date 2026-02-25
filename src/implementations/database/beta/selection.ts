@@ -2,12 +2,12 @@ import { TermType } from 'rethinkdb-ts/lib/proto/enums';
 import { TermJson } from 'rethinkdb-ts/lib/internal-types';
 import { DecodingContext, QueryStage, allocateArgNumber } from './utils';
 import { DecodeValue, executeTermJson } from './query';
-import { CreateInstance, IsValidInstance, WaitForRegistration, existingSchemas } from './schema';
+import { CreateInstance, DestroyInstance, IsValidInstance, WaitForRegistration, existingSchemas } from './schema';
 import { applyStreamStages } from './stream';
 import assert from 'assert';
 import { v4 as uuidv4 } from 'uuid';
 
-type ResultType = 'stream' | 'table' | 'selection' | 'insert' | 'update' | 'replace' | 'delete' | 'createInstance';
+type ResultType = 'stream' | 'table' | 'selection' | 'insert' | 'update' | 'replace' | 'delete' | 'createInstance' | 'destroyInstance';
 
 const WRITE_STAGES = new Set(['insert', 'update', 'replace', 'delete']);
 const PRE_STREAM_STAGES = new Set(['get', 'getAll', 'between', 'insert', 'update', 'replace', 'delete']);
@@ -43,6 +43,13 @@ export class SelectionQuery {
       const instanceId = stages[1].options?.id ?? uuidv4();
       const query = new SelectionQuery(schemaId, instanceId, '', `${schemaId}-${instanceId}`, context);
       query.resultType = 'createInstance';
+      return query;
+    }
+
+    if (stages[1]?.stage === 'destroyInstance') {
+      const instanceId = stages[1].options?.id;
+      const query = new SelectionQuery(schemaId, instanceId, '', `${schemaId}-${instanceId}`, context);
+      query.resultType = 'destroyInstance';
       return query;
     }
 
@@ -114,12 +121,13 @@ export class SelectionQuery {
   }
 
   public async run(): Promise<any> {
-    if (this.resultType !== 'createInstance') {
+    if (this.resultType !== 'createInstance' && this.resultType !== 'destroyInstance') {
       await this.ensureInstance();
     }
 
     const RUN_HANDLERS: Record<string, () => Promise<any>> = {
       createInstance: () => this.runCreateInstance(),
+      destroyInstance: () => this.runDestroyInstance(),
       insert: () => this.runInsert(),
       update: () => this.runUpdate(),
       replace: () => this.runReplace(),
@@ -155,6 +163,10 @@ export class SelectionQuery {
   private async runCreateInstance() {
     await CreateInstance(this.schemaId, this.instanceId);
     return this.instanceId;
+  }
+
+  private async runDestroyInstance() {
+    await DestroyInstance(this.schemaId, this.instanceId);
   }
 
   private async runInsert() {
