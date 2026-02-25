@@ -237,7 +237,8 @@ function handleOrderBy(
 ): TermJson {
   const index = GetIndex(schemaId, tableName, stage.options.index);
   const direction = stage.options.direction === 'desc' ? TermType.DESC : TermType.ASC;
-  const fields = index.fields!.map((f) => [direction, [f]]);
+  const indexFields = index.fields ?? [stage.options.index];
+  const fields = indexFields.map((f) => [direction, [f]]);
 
   if (fields.length === 1) {
     return [TermType.ORDER_BY, [prev, fields[0]]];
@@ -287,14 +288,16 @@ function handleAvg(prev: TermJson, stage: QueryStage): TermJson {
 
 function handleMin(prev: TermJson, stage: QueryStage): TermJson {
   if (stage.options?.field) {
-    return [TermType.MIN, [prev, stage.options.field]];
+    const field = stage.options.field;
+    return [TermType.BRACKET, [[TermType.MIN, [prev, field]], field]];
   }
   return [TermType.MIN, [prev]];
 }
 
 function handleMax(prev: TermJson, stage: QueryStage): TermJson {
   if (stage.options?.field) {
-    return [TermType.MAX, [prev, stage.options.field]];
+    const field = stage.options.field;
+    return [TermType.BRACKET, [[TermType.MAX, [prev, field]], field]];
   }
   return [TermType.MAX, [prev]];
 }
