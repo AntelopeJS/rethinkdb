@@ -27,7 +27,7 @@ export function DecodeValue(value: Value<unknown>, context: DecodingContext): Te
     if (value instanceof Date) {
       return dateToReql(value);
     }
-    if (Object.getPrototypeOf(value) === Object.prototype) {
+    if (value instanceof Object) {
       return Object.fromEntries(Object.entries(value).map(([key, val]) => [key, DecodeValue(val, context)]));
     }
   }
