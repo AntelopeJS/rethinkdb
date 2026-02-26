@@ -27,7 +27,6 @@ async function doRegister(schemaId: string, schema: SchemaDefinition) {
   for (const instance of instances) {
     existingInstances[schemaId].add(instance);
   }
-  await CreateInstance(schemaId, 'default');
 }
 
 export async function WaitForRegistration(schemaId: string) {
@@ -79,18 +78,12 @@ export async function DestroyInstance(schemaId: string, instanceId: string) {
 
 async function createTables(schemaId: string, schema: SchemaDefinition): Promise<string[]> {
   const dbList: string[] = (await executeTermJson([TermType.DB_LIST, []])) ?? [];
-  const instances: string[] = [];
   const prefix = schemaId + '-';
+  const matchingDbs = dbList.filter((db) => db.startsWith(prefix));
 
-  for (const dbName of dbList) {
-    if (!dbName.startsWith(prefix)) {
-      continue;
-    }
-    instances.push(dbName.substring(prefix.length));
-    await initializeDatabase(dbName, schema);
-  }
+  await Promise.all(matchingDbs.map((dbName) => initializeDatabase(dbName, schema)));
 
-  return instances;
+  return matchingDbs.map((db) => db.substring(prefix.length));
 }
 
 async function createSchemaInstance(schemaId: string, instanceId: string, schema: SchemaDefinition) {
@@ -114,18 +107,22 @@ async function initializeDatabase(dbName: string, schema: SchemaDefinition) {
   const db: TermJson = [TermType.DB, [dbName]];
   const tableList: string[] = (await executeTermJson([TermType.TABLE_LIST, [db]])) ?? [];
 
-  for (const [tableName, tableDef] of Object.entries(schema)) {
-    if (!tableList.includes(tableName)) {
-      await executeTermJson([TermType.TABLE_CREATE, [db, tableName], { primary_key: '_id' }]);
-    }
-    await initializeIndexes(db, tableName, tableDef.indexes);
-  }
+  await Promise.all(
+    Object.keys(schema)
+      .filter((t) => !tableList.includes(t))
+      .map((t) => executeTermJson([TermType.TABLE_CREATE, [db, t], { primary_key: '_id' }])),
+  );
+
+  await Promise.all(
+    Object.entries(schema).map(([tableName, tableDef]) => initializeIndexes(db, tableName, tableDef.indexes)),
+  );
 }
 
 async function initializeIndexes(db: TermJson, tableName: string, indexes: Record<string, any>) {
   const table: TermJson = [TermType.TABLE, [db, tableName]];
   const existingIndexList: string[] = (await executeTermJson([TermType.INDEX_LIST, [table]])) ?? [];
 
+  let created = false;
   for (const [indexName, indexDef] of Object.entries(indexes)) {
     if (existingIndexList.includes(indexName)) {
       continue;
@@ -151,6 +148,9 @@ async function initializeIndexes(db: TermJson, tableName: string, indexes: Recor
     } else {
       await executeTermJson([TermType.INDEX_CREATE, [table, indexName], indexDef.multi ? { multi: true } : {}]);
     }
+    created = true;
+  }
+  if (created) {
     await executeTermJson([TermType.INDEX_WAIT, [table]]);
   }
 }
