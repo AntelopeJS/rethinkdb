@@ -79,6 +79,12 @@ export declare class Schema<T = any> extends StagedObject {
      * @returns Created instance ID
      */
     createInstance(id?: string): Query<string>;
+    /**
+     * Destroys an existing instance of the schema
+     *
+     * @param id Instance ID
+     */
+    destroyInstance(id: string): Query<void>;
 }
 /**
  * Schema instance, could be a database or a filtered portion of one depending on the implementation
