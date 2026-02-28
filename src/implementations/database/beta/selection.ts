@@ -2,10 +2,17 @@ import { TermType } from 'rethinkdb-ts/lib/proto/enums';
 import { TermJson } from 'rethinkdb-ts/lib/internal-types';
 import { DecodingContext, QueryStage, allocateArgNumber } from './utils';
 import { DecodeValue, executeTermJson } from './query';
-import { CreateInstance, DestroyInstance, IsValidInstance, WaitForRegistration, existingSchemas } from './schema';
+import {
+  CreateInstance,
+  DestroyInstance,
+  IsRowLevel,
+  IsValidInstance,
+  WaitForRegistration,
+  buildDatabaseName,
+  existingSchemas,
+} from './schema';
 import { applyStreamStages } from './stream';
 import assert from 'assert';
-import { v4 as uuidv4 } from 'uuid';
 
 type ResultType = 'stream' | 'table' | 'selection' | 'insert' | 'update' | 'replace' | 'delete' | 'createInstance' | 'destroyInstance';
 
@@ -18,15 +25,25 @@ export class SelectionQuery {
   public singleElement = false;
   private newValue: any;
   private term: TermJson;
+  private readonly rowLevel: boolean;
 
   public constructor(
     public readonly schemaId: string,
-    public readonly instanceId: string,
+    public readonly instanceId: string | undefined,
     public readonly tableName: string,
     public readonly database: string,
     private context: DecodingContext,
   ) {
-    this.term = [TermType.TABLE, [[TermType.DB, [database]], tableName]];
+    this.rowLevel = IsRowLevel(schemaId);
+    const baseTerm: TermJson = [TermType.TABLE, [[TermType.DB, [database]], tableName]];
+    if (this.rowLevel) {
+      if (instanceId === undefined) {
+        throw new Error(`Row-level schema '${schemaId}' requires a tenant ID`);
+      }
+      this.term = this.buildTenantFilterTerm(baseTerm);
+    } else {
+      this.term = baseTerm;
+    }
   }
 
   public static buildTermJson(stages: QueryStage[], context: DecodingContext): TermJson {
@@ -40,25 +57,26 @@ export class SelectionQuery {
     assert(schemaId, 'Unknown schema');
 
     if (stages[1]?.stage === 'createInstance') {
-      const instanceId = stages[1].options?.id ?? uuidv4();
-      const query = new SelectionQuery(schemaId, instanceId, '', `${schemaId}-${instanceId}`, context);
+      const instanceId = stages[1].options?.id;
+      const database = buildDatabaseName(schemaId, instanceId);
+      const query = new SelectionQuery(schemaId, instanceId, '', database, context);
       query.resultType = 'createInstance';
       return query;
     }
 
     if (stages[1]?.stage === 'destroyInstance') {
       const instanceId = stages[1].options?.id;
-      const query = new SelectionQuery(schemaId, instanceId, '', `${schemaId}-${instanceId}`, context);
+      const database = buildDatabaseName(schemaId, instanceId);
+      const query = new SelectionQuery(schemaId, instanceId, '', database, context);
       query.resultType = 'destroyInstance';
       return query;
     }
 
     assert(stages[1]?.stage === 'instance', 'Expected instance stage');
     const instanceId = stages[1].options?.id;
-    assert(instanceId, 'Missing instance');
     assert(stages[2]?.stage === 'table', 'Expected table stage');
     const tableName = stages[2].options.id;
-    const database = `${schemaId}-${instanceId}`;
+    const database = IsRowLevel(schemaId) ? schemaId : buildDatabaseName(schemaId, instanceId);
 
     const query = new SelectionQuery(schemaId, instanceId, tableName, database, context);
     query.addStages(stages.slice(3));
@@ -161,18 +179,58 @@ export class SelectionQuery {
   }
 
   private async runCreateInstance() {
+    if (this.rowLevel) {
+      return this.instanceId;
+    }
     await CreateInstance(this.schemaId, this.instanceId);
     return this.instanceId;
   }
 
   private async runDestroyInstance() {
+    if (this.rowLevel) {
+      return;
+    }
     await DestroyInstance(this.schemaId, this.instanceId);
   }
 
   private async runInsert() {
-    const insertTerm: TermJson = [TermType.INSERT, [this.term, this.newValue]];
+    let value = this.newValue;
+    if (this.rowLevel && this.instanceId !== undefined) {
+      value = this.stampTenantId(value);
+    }
+    const insertTerm: TermJson = [TermType.INSERT, [this.getTableTerm(), value]];
     const result = await executeTermJson(insertTerm);
     return result?.generated_keys ?? [];
+  }
+
+  private stampTenantId(value: any): any {
+    if (Array.isArray(value) && value[0] === TermType.MAKE_ARRAY) {
+      return [TermType.MAKE_ARRAY, value[1].map((doc: any) => this.stampTenantId(doc))];
+    }
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return { ...value, tenant_id: this.instanceId };
+    }
+    return value;
+  }
+
+  public getTableTerm(): TermJson {
+    return [TermType.TABLE, [[TermType.DB, [this.database]], this.tableName]];
+  }
+
+  public buildTenantFilterTerm(baseTerm: TermJson): TermJson {
+    const argId = allocateArgNumber();
+    const filterFn: TermJson = [
+      TermType.FUNC,
+      [
+        [TermType.MAKE_ARRAY, [argId]],
+        [TermType.EQ, [[TermType.BRACKET, [[TermType.VAR, [argId]], 'tenant_id']], this.instanceId]],
+      ],
+    ];
+    return [TermType.FILTER, [baseTerm, filterFn]];
+  }
+
+  public isRowLevel(): boolean {
+    return this.rowLevel;
   }
 
   private async runUpdate() {
@@ -184,7 +242,11 @@ export class SelectionQuery {
   private async runReplace() {
     const argId = allocateArgNumber();
     const oldDoc: TermJson = [TermType.VAR, [argId]];
-    const merged: TermJson = [TermType.MERGE, [this.newValue, { _id: [TermType.BRACKET, [oldDoc, '_id']] }]];
+    let replaceValue = this.newValue;
+    if (this.rowLevel && this.instanceId !== undefined) {
+      replaceValue = { ...replaceValue, tenant_id: this.instanceId };
+    }
+    const merged: TermJson = [TermType.MERGE, [replaceValue, { _id: [TermType.BRACKET, [oldDoc, '_id']] }]];
     const func: TermJson = [TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], merged]];
     const replaceTerm: TermJson = [TermType.REPLACE, [this.term, func]];
     const result = await executeTermJson(replaceTerm);
@@ -212,27 +274,30 @@ const SELECTION_STAGES: Record<string, SelectionStageHandler> = {
   get: (query, stage) => {
     query.resultType = 'selection';
     query.singleElement = true;
-    const currentTerm = query.buildTerm();
-    query.setTerm([TermType.GET, [currentTerm, stage.args[0]]]);
+    const tableTerm = query.isRowLevel() ? query.getTableTerm() : query.buildTerm();
+    query.setTerm([TermType.GET, [tableTerm, stage.args[0]]]);
   },
   getAll: (query, stage) => {
     query.resultType = 'selection';
-    const currentTerm = query.buildTerm();
+    const baseTerm = query.isRowLevel() ? query.getTableTerm() : query.buildTerm();
     const index = stage.options?.index;
     const keys = stage.args[0];
+    let term: TermJson;
     if (Array.isArray(keys)) {
-      query.setTerm([TermType.GET_ALL, [currentTerm, ...keys], index ? { index } : {}]);
+      term = [TermType.GET_ALL, [baseTerm, ...keys], index ? { index } : {}];
     } else {
-      query.setTerm([TermType.GET_ALL, [currentTerm, keys], index ? { index } : {}]);
+      term = [TermType.GET_ALL, [baseTerm, keys], index ? { index } : {}];
     }
+    query.setTerm(query.isRowLevel() ? query.buildTenantFilterTerm(term) : term);
   },
   between: (query, stage) => {
     query.resultType = 'selection';
-    const currentTerm = query.buildTerm();
+    const baseTerm = query.isRowLevel() ? query.getTableTerm() : query.buildTerm();
     const index = stage.options?.index;
     const low = stage.args[0];
     const high = stage.args[1];
-    query.setTerm([TermType.BETWEEN, [currentTerm, low, high], index ? { index } : {}]);
+    const term: TermJson = [TermType.BETWEEN, [baseTerm, low, high], index ? { index } : {}];
+    query.setTerm(query.isRowLevel() ? query.buildTenantFilterTerm(term) : term);
   },
   insert: (query, stage) => {
     query.resultType = 'insert';

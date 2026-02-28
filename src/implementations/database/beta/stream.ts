@@ -4,7 +4,7 @@ import { DecodingContext, QueryStage, allocateArgNumber } from './utils';
 import { DecodeFunction, DecodeValue } from './query';
 import { Stream } from '@ajs.local/database/beta';
 import { SelectionQuery } from './selection';
-import { GetIndex } from './schema';
+import { GetIndex, IsRowLevel } from './schema';
 
 type StreamStageHandler = (
   prev: TermJson,
@@ -158,7 +158,8 @@ function handleJoin(prev: TermJson, stage: QueryStage, context: DecodingContext)
 
 function handleLookup(prev: TermJson, stage: QueryStage, context: DecodingContext): TermJson {
   const rightStages = (stage.args[0] as Stream<any>).build();
-  const rightTerm = SelectionQuery.buildTermJson(rightStages, context);
+  const rightQuery = SelectionQuery.decode(rightStages, context);
+  const rightTerm = rightQuery.buildTerm();
   const localKey = stage.options.localKey as string;
   const otherKey = stage.options.otherKey as string;
 
@@ -166,7 +167,21 @@ function handleLookup(prev: TermJson, stage: QueryStage, context: DecodingContex
   const row: TermJson = [TermType.VAR, [mapArgId]];
   const localField: TermJson = [TermType.BRACKET, [row, localKey]];
 
-  const lookupResult: TermJson = [TermType.GET_ALL, [rightTerm, localField], { index: otherKey }];
+  let lookupResult: TermJson;
+  if (rightQuery.isRowLevel()) {
+    const filterArgId = allocateArgNumber();
+    const filterDoc: TermJson = [TermType.VAR, [filterArgId]];
+    const filterFn: TermJson = [
+      TermType.FUNC,
+      [
+        [TermType.MAKE_ARRAY, [filterArgId]],
+        [TermType.EQ, [[TermType.BRACKET, [filterDoc, otherKey]], localField]],
+      ],
+    ];
+    lookupResult = [TermType.FILTER, [rightTerm, filterFn]];
+  } else {
+    lookupResult = [TermType.GET_ALL, [rightTerm, localField], { index: otherKey }];
+  }
   const coerced: TermJson = [TermType.COERCE_TO, [lookupResult, 'array']];
 
   const isArray: TermJson = [TermType.TYPE_OF, [localField]];
@@ -265,8 +280,13 @@ function handleNth(prev: TermJson, stage: QueryStage, context: DecodingContext):
   return [TermType.NTH, [prev, n]];
 }
 
-function handleCount(prev: TermJson, stage: QueryStage): TermJson {
+function handleCount(prev: TermJson, stage: QueryStage, _context: DecodingContext, schemaId: string): TermJson {
   if (stage.options?.field) {
+    if (IsRowLevel(schemaId)) {
+      const argId = allocateArgNumber();
+      const mapped: TermJson = [TermType.MAP, [prev, [TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], [TermType.BRACKET, [[TermType.VAR, [argId]], stage.options.field]]]]]];
+      return [TermType.COUNT, [[TermType.DISTINCT, [mapped]]]];
+    }
     return [TermType.COUNT, [[TermType.DISTINCT, [prev], { index: stage.options.field }]]];
   }
   return [TermType.COUNT, [prev]];
@@ -302,8 +322,13 @@ function handleMax(prev: TermJson, stage: QueryStage): TermJson {
   return [TermType.MAX, [prev]];
 }
 
-function handleDistinct(prev: TermJson, stage: QueryStage): TermJson {
+function handleDistinct(prev: TermJson, stage: QueryStage, _context: DecodingContext, schemaId: string): TermJson {
   if (stage.options?.field) {
+    if (IsRowLevel(schemaId)) {
+      const argId = allocateArgNumber();
+      const mapped: TermJson = [TermType.MAP, [prev, [TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], [TermType.BRACKET, [[TermType.VAR, [argId]], stage.options.field]]]]]];
+      return [TermType.DISTINCT, [mapped]];
+    }
     return [TermType.DISTINCT, [prev], { index: stage.options.field }];
   }
   return [TermType.DISTINCT, [prev]];
