@@ -1,5 +1,5 @@
 import { SchemaDefinition, SchemaOptions } from '@ajs.local/database/beta/schema';
-import { assert } from 'console';
+import assert from 'assert';
 import { TermJson } from 'rethinkdb-ts/lib/internal-types';
 import { TermType } from 'rethinkdb-ts/lib/proto/enums';
 import { executeTermJson } from './query';
@@ -147,18 +147,11 @@ async function initializeDatabase(dbName: string, schema: SchemaDefinition, rowL
   );
 
   await Promise.all(
-    Object.entries(schema).map(([tableName, tableDef]) =>
-      initializeIndexes(db, tableName, tableDef.indexes, rowLevel),
-    ),
+    Object.entries(schema).map(([tableName, tableDef]) => initializeIndexes(db, tableName, tableDef.indexes, rowLevel)),
   );
 }
 
-async function initializeIndexes(
-  db: TermJson,
-  tableName: string,
-  indexes: Record<string, any>,
-  rowLevel?: boolean,
-) {
+async function initializeIndexes(db: TermJson, tableName: string, indexes: Record<string, any>, rowLevel?: boolean) {
   const table: TermJson = [TermType.TABLE, [db, tableName]];
   const existingIndexList: string[] = (await executeTermJson([TermType.INDEX_LIST, [table]])) ?? [];
 

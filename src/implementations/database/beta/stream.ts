@@ -284,7 +284,19 @@ function handleCount(prev: TermJson, stage: QueryStage, _context: DecodingContex
   if (stage.options?.field) {
     if (IsRowLevel(schemaId)) {
       const argId = allocateArgNumber();
-      const mapped: TermJson = [TermType.MAP, [prev, [TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], [TermType.BRACKET, [[TermType.VAR, [argId]], stage.options.field]]]]]];
+      const mapped: TermJson = [
+        TermType.MAP,
+        [
+          prev,
+          [
+            TermType.FUNC,
+            [
+              [TermType.MAKE_ARRAY, [argId]],
+              [TermType.BRACKET, [[TermType.VAR, [argId]], stage.options.field]],
+            ],
+          ],
+        ],
+      ];
       return [TermType.COUNT, [[TermType.DISTINCT, [mapped]]]];
     }
     return [TermType.COUNT, [[TermType.DISTINCT, [prev], { index: stage.options.field }]]];
@@ -326,7 +338,19 @@ function handleDistinct(prev: TermJson, stage: QueryStage, _context: DecodingCon
   if (stage.options?.field) {
     if (IsRowLevel(schemaId)) {
       const argId = allocateArgNumber();
-      const mapped: TermJson = [TermType.MAP, [prev, [TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], [TermType.BRACKET, [[TermType.VAR, [argId]], stage.options.field]]]]]];
+      const mapped: TermJson = [
+        TermType.MAP,
+        [
+          prev,
+          [
+            TermType.FUNC,
+            [
+              [TermType.MAKE_ARRAY, [argId]],
+              [TermType.BRACKET, [[TermType.VAR, [argId]], stage.options.field]],
+            ],
+          ],
+        ],
+      ];
       return [TermType.DISTINCT, [mapped]];
     }
     return [TermType.DISTINCT, [prev], { index: stage.options.field }];

@@ -14,7 +14,16 @@ import {
 import { applyStreamStages } from './stream';
 import assert from 'assert';
 
-type ResultType = 'stream' | 'table' | 'selection' | 'insert' | 'update' | 'replace' | 'delete' | 'createInstance' | 'destroyInstance';
+type ResultType =
+  | 'stream'
+  | 'table'
+  | 'selection'
+  | 'insert'
+  | 'update'
+  | 'replace'
+  | 'delete'
+  | 'createInstance'
+  | 'destroyInstance';
 
 const WRITE_STAGES = new Set(['insert', 'update', 'replace', 'delete']);
 const PRE_STREAM_STAGES = new Set(['get', 'getAll', 'between', 'insert', 'update', 'replace', 'delete']);
