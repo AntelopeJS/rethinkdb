@@ -363,12 +363,12 @@ async function InsertMultiTable() {
   expect(multiKeys.orders).to.have.lengthOf(ordersData.length);
   expect(multiKeys.products).to.have.lengthOf(productsData.length);
 
-  const t2UserDocs = await t2Users.run();
-  const t2OrderDocs = await t2Orders.run();
-  const t2ProductDocs = await t2Products.run();
-  expect(t2UserDocs).to.have.lengthOf(0);
-  expect(t2OrderDocs).to.have.lengthOf(0);
-  expect(t2ProductDocs).to.have.lengthOf(0);
+  const t2UserCount = await t2Users.count().run();
+  const t2OrderCount = await t2Orders.count().run();
+  const t2ProductCount = await t2Products.count().run();
+  expect(t2UserCount).to.equal(0);
+  expect(t2OrderCount).to.equal(0);
+  expect(t2ProductCount).to.equal(0);
 }
 
 async function GroupWithAggregations() {
