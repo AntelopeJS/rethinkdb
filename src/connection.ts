@@ -60,7 +60,7 @@ export function GetConnectionType() {
 }
 
 export function SendQuery(query: TermJson, opts?: RunOptions): Promise<Cursor | undefined> {
-  assert(connection, 'TODO: queueing');
+  assert(connection, 'No connection established');
   Logger.Debug('Sending query via', connection.type);
   switch (connection.type) {
     case 'direct':
