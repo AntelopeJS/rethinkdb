@@ -22,6 +22,7 @@ const STREAM_STAGE_MAP: Record<string, StreamStageHandler> = {
   filter: handleFilter,
   pluck: handlePluck,
   without: handleWithout,
+  union: handleUnion,
   join: handleJoin,
   lookup: handleLookup,
   group: handleGroup,
@@ -123,6 +124,12 @@ function handlePluck(prev: TermJson, stage: QueryStage): TermJson {
 function handleWithout(prev: TermJson, stage: QueryStage): TermJson {
   const fields = stage.args[0];
   return [TermType.WITHOUT, [prev, ...fields]];
+}
+
+function handleUnion(prev: TermJson, stage: QueryStage, context: DecodingContext): TermJson {
+  const rightStages = (stage.args[0] as Stream<any>).build();
+  const rightTerm = SelectionQuery.buildTermJson(rightStages, context);
+  return [TermType.UNION, [prev, rightTerm]];
 }
 
 function handleJoin(prev: TermJson, stage: QueryStage, context: DecodingContext): TermJson {
