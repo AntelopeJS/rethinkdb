@@ -284,27 +284,28 @@ const SELECTION_STAGES: Record<string, SelectionStageHandler> = {
     query.resultType = 'selection';
     query.singleElement = true;
     const tableTerm = query.isRowLevel() ? query.getTableTerm() : query.buildTerm();
-    query.setTerm([TermType.GET, [tableTerm, stage.args[0]]]);
+    const key = DecodeValue(stage.args[0], new DecodingContext());
+    query.setTerm([TermType.GET, [tableTerm, key]]);
   },
   getAll: (query, stage) => {
     query.resultType = 'selection';
     const baseTerm = query.isRowLevel() ? query.getTableTerm() : query.buildTerm();
     const index = stage.options?.index;
-    const keys = stage.args[0];
-    let term: TermJson;
-    if (Array.isArray(keys)) {
-      term = [TermType.GET_ALL, [baseTerm, ...keys], index ? { index } : {}];
-    } else {
-      term = [TermType.GET_ALL, [baseTerm, keys], index ? { index } : {}];
-    }
+    const rawKeys = stage.args[0];
+    const context = new DecodingContext();
+    const decodedKeys = Array.isArray(rawKeys)
+      ? rawKeys.map((k) => DecodeValue(k, context))
+      : [DecodeValue(rawKeys, context)];
+    const term: TermJson = [TermType.GET_ALL, [baseTerm, ...decodedKeys], index ? { index } : {}];
     query.setTerm(query.isRowLevel() ? query.buildTenantFilterTerm(term) : term);
   },
   between: (query, stage) => {
     query.resultType = 'selection';
     const baseTerm = query.isRowLevel() ? query.getTableTerm() : query.buildTerm();
     const index = stage.options?.index;
-    const low = stage.args[0];
-    const high = stage.args[1];
+    const context = new DecodingContext();
+    const low = DecodeValue(stage.args[0], context);
+    const high = DecodeValue(stage.args[1], context);
     const term: TermJson = [TermType.BETWEEN, [baseTerm, low, high], index ? { index } : {}];
     query.setTerm(query.isRowLevel() ? query.buildTenantFilterTerm(term) : term);
   },
