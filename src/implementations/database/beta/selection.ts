@@ -1,7 +1,7 @@
 import { TermType } from 'rethinkdb-ts/lib/proto/enums';
 import { TermJson } from 'rethinkdb-ts/lib/internal-types';
 import { DecodingContext, QueryStage, allocateArgNumber } from './utils';
-import { DecodeValue, executeTermJson } from './query';
+import { DecodeFunction, DecodeValue, executeTermJson } from './query';
 import {
   CreateInstance,
   DestroyInstance,
@@ -314,7 +314,14 @@ const SELECTION_STAGES: Record<string, SelectionStageHandler> = {
   },
   update: (query, stage) => {
     query.resultType = 'update';
-    query.setNewValue(DecodeValue(stage.args[0], new DecodingContext()));
+    if (stage.args[0]?.stage === 'func') {
+      const argId = allocateArgNumber();
+      const docVar: TermJson = [TermType.VAR, [argId]];
+      const body = DecodeFunction(stage.args[0], new DecodingContext(), [docVar]);
+      query.setNewValue([TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], body]]);
+    } else {
+      query.setNewValue(DecodeValue(stage.args[0], new DecodingContext()));
+    }
   },
   replace: (query, stage) => {
     query.resultType = 'replace';
