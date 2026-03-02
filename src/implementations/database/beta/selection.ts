@@ -242,6 +242,10 @@ export class SelectionQuery {
     return this.rowLevel;
   }
 
+  public getContext(): DecodingContext {
+    return this.context;
+  }
+
   private async runUpdate() {
     const updateTerm: TermJson = [TermType.UPDATE, [this.term, this.newValue]];
     const result = await executeTermJson(updateTerm);
@@ -284,7 +288,7 @@ const SELECTION_STAGES: Record<string, SelectionStageHandler> = {
     query.resultType = 'selection';
     query.singleElement = true;
     const tableTerm = query.isRowLevel() ? query.getTableTerm() : query.buildTerm();
-    const key = DecodeValue(stage.args[0], new DecodingContext());
+    const key = DecodeValue(stage.args[0], query.getContext());
     query.setTerm([TermType.GET, [tableTerm, key]]);
   },
   getAll: (query, stage) => {
@@ -292,7 +296,7 @@ const SELECTION_STAGES: Record<string, SelectionStageHandler> = {
     const baseTerm = query.isRowLevel() ? query.getTableTerm() : query.buildTerm();
     const index = stage.options?.index;
     const rawKeys = stage.args[0];
-    const context = new DecodingContext();
+    const context = query.getContext();
     const decodedKeys = Array.isArray(rawKeys)
       ? rawKeys.map((k) => DecodeValue(k, context))
       : [DecodeValue(rawKeys, context)];
@@ -303,9 +307,8 @@ const SELECTION_STAGES: Record<string, SelectionStageHandler> = {
     query.resultType = 'selection';
     const baseTerm = query.isRowLevel() ? query.getTableTerm() : query.buildTerm();
     const index = stage.options?.index;
-    const context = new DecodingContext();
-    const low = DecodeValue(stage.args[0], context);
-    const high = DecodeValue(stage.args[1], context);
+    const low = DecodeValue(stage.args[0], query.getContext());
+    const high = DecodeValue(stage.args[1], query.getContext());
     const term: TermJson = [TermType.BETWEEN, [baseTerm, low, high], index ? { index } : {}];
     query.setTerm(query.isRowLevel() ? query.buildTenantFilterTerm(term) : term);
   },
