@@ -9,7 +9,6 @@ import {
   IsValidInstance,
   WaitForRegistration,
   buildDatabaseName,
-  existingSchemas,
 } from './schema';
 import { applyStreamStages } from './stream';
 import assert from 'assert';
@@ -179,11 +178,8 @@ export class SelectionQuery {
 
   private async ensureInstance() {
     await WaitForRegistration(this.schemaId);
-    if (IsValidInstance(this.schemaId, this.instanceId)) {
-      return;
-    }
-    if (this.schemaId in existingSchemas) {
-      await CreateInstance(this.schemaId, this.instanceId);
+    if (!IsValidInstance(this.schemaId, this.instanceId)) {
+      throw new Error(`Instance '${this.instanceId ?? '(global)'}' does not exist for schema '${this.schemaId}'`);
     }
   }
 

@@ -27,10 +27,10 @@ export const Schemas = {
 };
 
 async function doRegister(schemaId: string, schema: SchemaDefinition, options: SchemaOptions) {
-  const instances = await createTables(schemaId, schema, options.rowLevel);
-  for (const instance of instances) {
-    existingInstances[schemaId].add(instance);
+  if (!options.rowLevel) {
+    return;
   }
+  await createRowLevelDatabase(schemaId, schema);
 }
 
 export async function WaitForRegistration(schemaId: string) {
@@ -97,26 +97,12 @@ export async function DestroyInstance(schemaId: string, instanceId: string | und
   await destroySchemaInstance(schemaId, instanceId);
 }
 
-async function createTables(schemaId: string, schema: SchemaDefinition, rowLevel?: boolean): Promise<string[]> {
+async function createRowLevelDatabase(schemaId: string, schema: SchemaDefinition) {
   const dbList: string[] = (await executeTermJson([TermType.DB_LIST, []])) ?? [];
-  const prefix = schemaId + '-';
-  const matchingDbs = dbList.filter((db) => db.startsWith(prefix));
-
-  await Promise.all(matchingDbs.map((dbName) => initializeDatabase(dbName, schema)));
-
-  const instances = matchingDbs.map((db) => db.substring(prefix.length));
-
-  // global instance (no instanceId) or row-level (single DB)
-  if (dbList.includes(schemaId)) {
-    instances.push('');
-    await initializeDatabase(schemaId, schema, rowLevel);
-  } else if (rowLevel) {
+  if (!dbList.includes(schemaId)) {
     await executeTermJson([TermType.DB_CREATE, [schemaId]]);
-    instances.push('');
-    await initializeDatabase(schemaId, schema, rowLevel);
   }
-
-  return instances;
+  await initializeDatabase(schemaId, schema, true);
 }
 
 async function createSchemaInstance(schemaId: string, instanceId: string | undefined, schema: SchemaDefinition) {
