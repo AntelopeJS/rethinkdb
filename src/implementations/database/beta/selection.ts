@@ -2,14 +2,8 @@ import { TermType } from 'rethinkdb-ts/lib/proto/enums';
 import { TermJson } from 'rethinkdb-ts/lib/internal-types';
 import { DecodingContext, QueryStage, allocateArgNumber } from './utils';
 import { DecodeFunction, DecodeValue, executeTermJson } from './query';
-import {
-  CreateInstance,
-  DestroyInstance,
-  IsRowLevel,
-  IsValidInstance,
-  WaitForRegistration,
-  buildDatabaseName,
-} from './schema';
+import { buildDatabaseName } from '../../../connection';
+import { CreateInstance, DestroyInstance, IsRowLevel, IsValidInstance } from './schema';
 import { applyStreamStages } from './stream';
 import assert from 'assert';
 
@@ -177,7 +171,6 @@ export class SelectionQuery {
   }
 
   private async ensureInstance() {
-    await WaitForRegistration(this.schemaId);
     if (!IsValidInstance(this.schemaId, this.instanceId)) {
       throw new Error(`Instance '${this.instanceId ?? '(global)'}' does not exist for schema '${this.schemaId}'`);
     }

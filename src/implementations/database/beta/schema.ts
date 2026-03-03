@@ -1,43 +1,24 @@
 import { SchemaDefinition, SchemaOptions } from '@ajs.local/database/beta/schema';
 import assert from 'assert';
-import { TermJson } from 'rethinkdb-ts/lib/internal-types';
-import { TermType } from 'rethinkdb-ts/lib/proto/enums';
-import { executeTermJson } from './query';
-
-export function buildDatabaseName(schemaId: string, instanceId: string | undefined): string {
-  return instanceId !== undefined ? `${schemaId}-${instanceId}` : schemaId;
-}
+import { CreateRowLevelDatabase, CreateSchemaInstance, DestroySchemaInstance } from '../../../connection';
 
 export const existingSchemas: Record<string, { definition: SchemaDefinition; options: SchemaOptions }> = {};
 export const existingInstances: Record<string, Set<string>> = {};
-const registrationPromises: Record<string, Promise<void>> = {};
 
 export const Schemas = {
-  register(schemaId: string, schema: SchemaDefinition, options: SchemaOptions) {
+  async register(schemaId: string, schema: SchemaDefinition, options: SchemaOptions) {
     existingSchemas[schemaId] = { definition: schema, options };
     existingInstances[schemaId] = new Set<string>();
-    registrationPromises[schemaId] = doRegister(schemaId, schema, options);
-    return registrationPromises[schemaId];
+    if (!options.rowLevel) {
+      return;
+    }
+    await CreateRowLevelDatabase(schemaId, schema);
   },
   unregister(schemaId: string) {
     delete existingSchemas[schemaId];
     delete existingInstances[schemaId];
-    delete registrationPromises[schemaId];
   },
 };
-
-async function doRegister(schemaId: string, schema: SchemaDefinition, options: SchemaOptions) {
-  if (!options.rowLevel) {
-    return;
-  }
-  await createRowLevelDatabase(schemaId, schema);
-}
-
-export async function WaitForRegistration(schemaId: string) {
-  if (schemaId in registrationPromises) {
-    await registrationPromises[schemaId];
-  }
-}
 
 export function IsRowLevel(schemaId: string): boolean {
   return existingSchemas[schemaId]?.options?.rowLevel === true;
@@ -54,18 +35,17 @@ export function GetTable(schemaId: string, tableId: string) {
   return schema[tableId];
 }
 
-export function GetIndex(schemaId: string, tableId: string, indexId: string) {
+export function GetIndex(schemaId: string, tableId: string, indexId: string, onlyIndex?: boolean) {
   const table = GetTable(schemaId, tableId);
   if (indexId in table.indexes) {
     return table.indexes[indexId];
   }
+  assert(!onlyIndex);
   return { fields: [indexId] };
 }
 
 export function IsValidInstance(schemaId: string, instanceId: string | undefined) {
-  if (!(schemaId in existingInstances)) {
-    return false;
-  }
+  assert(schemaId in existingInstances);
   if (IsRowLevel(schemaId)) {
     if (instanceId === undefined) {
       throw new Error(`Row-level schema '${schemaId}' requires a tenant ID`);
@@ -81,7 +61,7 @@ export async function CreateInstance(schemaId: string, instanceId: string | unde
   }
   const schema = GetSchema(schemaId);
   existingInstances[schemaId].add(instanceId ?? '');
-  await createSchemaInstance(schemaId, instanceId, schema);
+  await CreateSchemaInstance(schemaId, instanceId, schema);
 }
 
 export async function DestroyInstance(schemaId: string, instanceId: string | undefined) {
@@ -94,86 +74,5 @@ export async function DestroyInstance(schemaId: string, instanceId: string | und
   if (instances.has(key)) {
     instances.delete(key);
   }
-  await destroySchemaInstance(schemaId, instanceId);
-}
-
-async function createRowLevelDatabase(schemaId: string, schema: SchemaDefinition) {
-  const dbList: string[] = (await executeTermJson([TermType.DB_LIST, []])) ?? [];
-  if (!dbList.includes(schemaId)) {
-    await executeTermJson([TermType.DB_CREATE, [schemaId]]);
-  }
-  await initializeDatabase(schemaId, schema, true);
-}
-
-async function createSchemaInstance(schemaId: string, instanceId: string | undefined, schema: SchemaDefinition) {
-  const dbName = buildDatabaseName(schemaId, instanceId);
-  const dbList: string[] = (await executeTermJson([TermType.DB_LIST, []])) ?? [];
-  if (!dbList.includes(dbName)) {
-    await executeTermJson([TermType.DB_CREATE, [dbName]]);
-  }
-  await initializeDatabase(dbName, schema);
-}
-
-async function destroySchemaInstance(schemaId: string, instanceId: string | undefined) {
-  const dbName = buildDatabaseName(schemaId, instanceId);
-  const dbList: string[] = (await executeTermJson([TermType.DB_LIST, []])) ?? [];
-  if (dbList.includes(dbName)) {
-    await executeTermJson([TermType.DB_DROP, [dbName]]);
-  }
-}
-
-async function initializeDatabase(dbName: string, schema: SchemaDefinition, rowLevel?: boolean) {
-  const db: TermJson = [TermType.DB, [dbName]];
-  const tableList: string[] = (await executeTermJson([TermType.TABLE_LIST, [db]])) ?? [];
-
-  await Promise.all(
-    Object.keys(schema)
-      .filter((t) => !tableList.includes(t))
-      .map((t) => executeTermJson([TermType.TABLE_CREATE, [db, t], { primary_key: '_id' }])),
-  );
-
-  await Promise.all(
-    Object.entries(schema).map(([tableName, tableDef]) => initializeIndexes(db, tableName, tableDef.indexes, rowLevel)),
-  );
-}
-
-async function initializeIndexes(db: TermJson, tableName: string, indexes: Record<string, any>, rowLevel?: boolean) {
-  const table: TermJson = [TermType.TABLE, [db, tableName]];
-  const existingIndexList: string[] = (await executeTermJson([TermType.INDEX_LIST, [table]])) ?? [];
-
-  let created = false;
-  for (const [indexName, indexDef] of Object.entries(indexes)) {
-    if (existingIndexList.includes(indexName)) {
-      continue;
-    }
-    if (indexDef.fields && indexDef.fields.length > 0) {
-      const argId = 0;
-      const fields = indexDef.fields.map((f: string) => [TermType.BRACKET, [[TermType.VAR, [argId]], f]]);
-      await executeTermJson([
-        TermType.INDEX_CREATE,
-        [
-          table,
-          indexName,
-          [
-            TermType.FUNC,
-            [
-              [TermType.MAKE_ARRAY, [argId]],
-              [TermType.MAKE_ARRAY, fields],
-            ],
-          ],
-        ],
-        indexDef.multi ? { multi: true } : {},
-      ]);
-    } else {
-      await executeTermJson([TermType.INDEX_CREATE, [table, indexName], indexDef.multi ? { multi: true } : {}]);
-    }
-    created = true;
-  }
-  if (rowLevel && !existingIndexList.includes('tenant_id')) {
-    await executeTermJson([TermType.INDEX_CREATE, [table, 'tenant_id']]);
-    created = true;
-  }
-  if (created) {
-    await executeTermJson([TermType.INDEX_WAIT, [table]]);
-  }
+  await DestroySchemaInstance(schemaId, instanceId);
 }

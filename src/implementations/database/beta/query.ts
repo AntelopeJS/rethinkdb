@@ -9,7 +9,6 @@ import { SendQuery } from '../../../connection';
 import { Cursor } from 'rethinkdb-ts/lib/response/cursor';
 import assert from 'assert';
 import { Logger } from '../../../utils/logger';
-import { backtraceTerm } from 'rethinkdb-ts/lib/error/term-backtrace';
 
 export function DecodeValue(value: Value<unknown>, context: DecodingContext): TermJson {
   if (value instanceof ValueProxy) {
@@ -79,26 +78,6 @@ export function DecodeFunction(func: QueryStage, context: DecodingContext, argTe
     }
   }
   return val;
-}
-
-async function executeTermJson(term: TermJson): Promise<any> {
-  Logger.Debug('Executing query:', backtraceTerm(term)[0]);
-  const cursor = await SendQuery(term);
-  if (!cursor) {
-    return undefined;
-  }
-  const results = await cursor.resolve();
-  if (!results) {
-    return undefined;
-  }
-  const cursorType = cursor.getType();
-  if (cursorType === 'Atom') {
-    return results[0];
-  }
-  if (cursorType === 'Cursor') {
-    return await cursor.toArray();
-  }
-  return results;
 }
 
 export async function RunQuery(stages: QueryStage[]) {
@@ -171,4 +150,4 @@ export async function CloseCursor(reqId: number) {
   }
 }
 
-export { executeTermJson };
+export { executeTermJson } from '../../../connection';
