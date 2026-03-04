@@ -1,4 +1,4 @@
-import { Schema } from '@ajs/database/beta';
+import { Schema, ValueProxy } from '@ajs/database/beta';
 import { expect } from 'chai';
 import { getUniqueUsers, User } from '../../../datasets/users';
 
@@ -25,6 +25,9 @@ describe('Filter Operations', () => {
   it('Filter by String Equality', FilterByStringEquality);
   it('Filter by Number Comparison', FilterByNumberComparison);
   it('Filter by Boolean', FilterByBoolean);
+  it('Filter with Constant String', FilterWithConstantString);
+  it('Filter with Constant Number', FilterWithConstantNumber);
+  it('Filter with Constant Array', FilterWithConstantArray);
   it('Cleanup', CleanupTest);
 });
 
@@ -82,6 +85,54 @@ async function FilterByBoolean() {
 
   const names = result.map((doc) => doc.name).sort();
   expect(names).to.deep.equal(['Antoine', 'Camille', 'Dominique', 'Emilie']);
+}
+
+async function FilterWithConstantString() {
+  const result = await table.filter((doc) => doc.key('department').eq(ValueProxy.constant('Development'))).run();
+
+  expect(result).to.be.an('array');
+  const expectedCount = testData.filter((user) => user.department === 'Development').length;
+  expect(result).to.have.lengthOf(expectedCount);
+
+  result.forEach((doc) => {
+    expect(doc.department).to.equal('Development');
+  });
+
+  const names = result.map((doc) => doc.name).sort();
+  expect(names).to.deep.equal(['Antoine', 'Camille', 'Emilie']);
+}
+
+async function FilterWithConstantNumber() {
+  const result = await table.filter((doc) => doc.key('age').gt(ValueProxy.constant(25))).run();
+
+  expect(result).to.be.an('array');
+  const expectedCount = testData.filter((user) => user.age > 25).length;
+  expect(result).to.have.lengthOf(expectedCount);
+
+  result.forEach((doc) => {
+    expect(doc.age).to.be.greaterThan(25);
+  });
+
+  const ages = result.map((doc) => doc.age).sort();
+  expect(ages).to.deep.equal([28, 30, 35]);
+}
+
+async function FilterWithConstantArray() {
+  const departments = ['Development', 'Marketing'];
+  const result = await table
+    .filter((doc) => ValueProxy.constant(departments).includes(doc.key('department')))
+    .run();
+
+  expect(result).to.be.an('array');
+  const expectedCount = testData.filter((user) => departments.includes(user.department!)).length;
+  expect(result).to.have.lengthOf(expectedCount);
+
+  result.forEach((doc) => {
+    expect(departments).to.include(doc.department);
+  });
+
+  const names = result.map((doc) => doc.name).sort();
+  expect(names).to.deep.equal(['Alice', 'Antoine', 'Camille', 'Emilie']);
 }
 
 async function CleanupTest() {

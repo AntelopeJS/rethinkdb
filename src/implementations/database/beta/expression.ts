@@ -70,7 +70,7 @@ const COMPLEX_STAGE_MAP: Record<string, StageHandler> = {
     }
     return [TermType.VAR, [num]];
   },
-  constant: (expr, constant: unknown) => DecodeValue(constant, expr.context),
+  constant: (_expr, constant: TermJson) => constant,
   date_with_timezone: (expr, timezone: TermJson) => [TermType.IN_TIMEZONE, [expr.value, timezone]],
   str_split: (expr) => {
     const sep = expr.options?.separator ?? ' ';
