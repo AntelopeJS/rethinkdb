@@ -174,7 +174,7 @@ function handleLookup(prev: TermJson, stage: QueryStage, context: DecodingContex
 
   const mapArgId = allocateArgNumber();
   const row: TermJson = [TermType.VAR, [mapArgId]];
-  const localField: TermJson = [TermType.BRACKET, [row, localKey]];
+  const localField: TermJson = [TermType.DEFAULT, [[TermType.BRACKET, [row, localKey]], '']];
 
   let lookupResult: TermJson;
   if (rightQuery.isRowLevel()) {
