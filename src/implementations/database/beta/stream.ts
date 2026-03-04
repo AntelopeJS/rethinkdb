@@ -37,6 +37,8 @@ const STREAM_STAGE_MAP: Record<string, StreamStageHandler> = {
   distinct: handleDistinct,
 };
 
+const REDUCTION_STAGES = new Set(['nth', 'count', 'sum', 'avg', 'min', 'max']);
+
 export function applyStreamStages(
   prev: TermJson,
   stages: QueryStage[],
@@ -53,7 +55,7 @@ export function applyStreamStages(
     if (stage.stage === 'changes') {
       isChangeStream = true;
     }
-    if (stage.stage === 'nth') {
+    if (REDUCTION_STAGES.has(stage.stage)) {
       singleElement = true;
     }
     if (stage.stage === 'map' && singleElement) {
