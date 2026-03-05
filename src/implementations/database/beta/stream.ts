@@ -196,7 +196,7 @@ function handleLookup(prev: TermJson, stage: QueryStage, context: DecodingContex
   const isArray: TermJson = [TermType.TYPE_OF, [localField]];
   const branchResult: TermJson = [
     TermType.BRANCH,
-    [[TermType.EQ, [isArray, 'ARRAY']], coerced, [TermType.NTH, [coerced, 0]]],
+    [[TermType.EQ, [isArray, 'ARRAY']], coerced, [TermType.NTH, [lookupResult, 0]]],
   ];
 
   const merged: TermJson = [TermType.MERGE, [row, { [localKey]: branchResult }]];
