@@ -177,7 +177,7 @@ function handleLookup(prev: TermJson, stage: QueryStage, context: DecodingContex
   const localField: TermJson = [TermType.DEFAULT, [[TermType.BRACKET, [row, localKey]], '']];
 
   let lookupResult: TermJson;
-  if (rightQuery.isRowLevel()) {
+  if (!rightQuery.isSimpleTable()) {
     const filterArgId = allocateArgNumber();
     const filterDoc: TermJson = [TermType.VAR, [filterArgId]];
     const filterFn: TermJson = [

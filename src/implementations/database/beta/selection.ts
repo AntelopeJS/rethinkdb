@@ -231,6 +231,11 @@ export class SelectionQuery {
     return this.rowLevel;
   }
 
+  public isSimpleTable(): boolean {
+    // TODO: This is really just a patch to avoid putting a GET_ALL after other operations, we should have a way to insert the get all "deeper" in the term
+    return !this.isRowLevel() && Array.isArray(this.term) && this.term[0] === TermType.TABLE;
+  }
+
   public getContext(): DecodingContext {
     return this.context;
   }
