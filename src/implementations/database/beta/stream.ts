@@ -250,7 +250,11 @@ function handleLookup(
   const isArray: TermJson = [TermType.TYPE_OF, [localField]];
   const branchResult: TermJson = [
     TermType.BRANCH,
-    [[TermType.EQ, [isArray, 'ARRAY']], coerced, [TermType.DEFAULT, [[TermType.NTH, [lookupResult, 0]], null]]],
+    [
+      [TermType.EQ, [isArray, "ARRAY"]],
+      coerced,
+      [TermType.DEFAULT, [[TermType.NTH, [lookupResult, 0]], null]],
+    ],
   ];
 
   const merged: TermJson = [
