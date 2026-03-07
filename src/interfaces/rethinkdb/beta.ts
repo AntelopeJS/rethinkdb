@@ -1,5 +1,5 @@
-import { InterfaceFunction } from '@ajs/core/beta';
-import { RQuery, RunOptions, r } from 'rethinkdb-ts';
+import { InterfaceFunction } from "@ajs/core/beta";
+import { type RQuery, type RunOptions, r } from "rethinkdb-ts";
 
 export { r };
 
@@ -15,6 +15,9 @@ export { r };
  * const result = await RunQuery(r.table('users').get('123'), { readMode: 'outdated' });
  * ```
  */
-export const RunQuery: <T extends RQuery>(query: T, options?: RunOptions) => ReturnType<T['run']> = InterfaceFunction<
+export const RunQuery: <T extends RQuery>(
+  query: T,
+  options?: RunOptions,
+) => ReturnType<T["run"]> = InterfaceFunction<
   (query: RQuery, options?: RunOptions) => any
 >() as (...args: any[]) => any;

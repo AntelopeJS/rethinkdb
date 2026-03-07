@@ -1,3 +1,3 @@
-import { Logging } from '@ajs/logging/beta';
+import { Logging } from "@ajs/logging/beta";
 
-export const Logger = new Logging.Channel('rethinkdb');
+export const Logger = new Logging.Channel("rethinkdb");

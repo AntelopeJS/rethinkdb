@@ -1,28 +1,41 @@
-import { TermType } from 'rethinkdb-ts/lib/proto/enums';
-import { TermJson } from 'rethinkdb-ts/lib/internal-types';
-import { DecodingContext, QueryStage, allocateArgNumber } from './utils';
-import { DecodeFunction, DecodeValue, executeTermJson } from './query';
-import { buildDatabaseName } from '../../../connection';
-import { CreateInstance, DestroyInstance, IsRowLevel, IsValidInstance } from './schema';
-import { applyStreamStages } from './stream';
-import assert from 'assert';
+import assert from "node:assert";
+import type { TermJson } from "rethinkdb-ts/lib/internal-types";
+import { TermType } from "rethinkdb-ts/lib/proto/enums";
+import { buildDatabaseName } from "../../../connection";
+import { DecodeFunction, DecodeValue, executeTermJson } from "./query";
+import {
+  CreateInstance,
+  DestroyInstance,
+  IsRowLevel,
+  IsValidInstance,
+} from "./schema";
+import { applyStreamStages } from "./stream";
+import { allocateArgNumber, DecodingContext, type QueryStage } from "./utils";
 
 type ResultType =
-  | 'stream'
-  | 'table'
-  | 'selection'
-  | 'insert'
-  | 'update'
-  | 'replace'
-  | 'delete'
-  | 'createInstance'
-  | 'destroyInstance';
+  | "stream"
+  | "table"
+  | "selection"
+  | "insert"
+  | "update"
+  | "replace"
+  | "delete"
+  | "createInstance"
+  | "destroyInstance";
 
-const WRITE_STAGES = new Set(['insert', 'update', 'replace', 'delete']);
-const PRE_STREAM_STAGES = new Set(['get', 'getAll', 'between', 'insert', 'update', 'replace', 'delete']);
+const WRITE_STAGES = new Set(["insert", "update", "replace", "delete"]);
+const PRE_STREAM_STAGES = new Set([
+  "get",
+  "getAll",
+  "between",
+  "insert",
+  "update",
+  "replace",
+  "delete",
+]);
 
 export class SelectionQuery {
-  public resultType: ResultType = 'table';
+  public resultType: ResultType = "table";
   public isChangeStream = false;
   public singleElement = false;
   private newValue: any;
@@ -37,7 +50,10 @@ export class SelectionQuery {
     private context: DecodingContext,
   ) {
     this.rowLevel = IsRowLevel(schemaId);
-    const baseTerm: TermJson = [TermType.TABLE, [[TermType.DB, [database]], tableName]];
+    const baseTerm: TermJson = [
+      TermType.TABLE,
+      [[TermType.DB, [database]], tableName],
+    ];
     if (this.rowLevel) {
       if (instanceId === undefined) {
         throw new Error(`Row-level schema '${schemaId}' requires a tenant ID`);
@@ -48,39 +64,65 @@ export class SelectionQuery {
     }
   }
 
-  public static buildTermJson(stages: QueryStage[], context: DecodingContext): TermJson {
+  public static buildTermJson(
+    stages: QueryStage[],
+    context: DecodingContext,
+  ): TermJson {
     const query = SelectionQuery.decode(stages, context);
     return query.buildTerm();
   }
 
-  public static decode(stages: QueryStage[], context: DecodingContext): SelectionQuery {
-    assert(stages[0]?.stage === 'schema', 'Expected schema stage');
+  public static decode(
+    stages: QueryStage[],
+    context: DecodingContext,
+  ): SelectionQuery {
+    assert(stages[0]?.stage === "schema", "Expected schema stage");
     const schemaId = stages[0].options?.id;
-    assert(schemaId, 'Unknown schema');
+    assert(schemaId, "Unknown schema");
 
-    if (stages[1]?.stage === 'createInstance') {
+    if (stages[1]?.stage === "createInstance") {
       const instanceId = stages[1].options?.id;
       const database = buildDatabaseName(schemaId, instanceId);
-      const query = new SelectionQuery(schemaId, instanceId, '', database, context);
-      query.resultType = 'createInstance';
+      const query = new SelectionQuery(
+        schemaId,
+        instanceId,
+        "",
+        database,
+        context,
+      );
+      query.resultType = "createInstance";
       return query;
     }
 
-    if (stages[1]?.stage === 'destroyInstance') {
+    if (stages[1]?.stage === "destroyInstance") {
       const instanceId = stages[1].options?.id;
       const database = buildDatabaseName(schemaId, instanceId);
-      const query = new SelectionQuery(schemaId, instanceId, '', database, context);
-      query.resultType = 'destroyInstance';
+      const query = new SelectionQuery(
+        schemaId,
+        instanceId,
+        "",
+        database,
+        context,
+      );
+      query.resultType = "destroyInstance";
       return query;
     }
 
-    assert(stages[1]?.stage === 'instance', 'Expected instance stage');
+    assert(stages[1]?.stage === "instance", "Expected instance stage");
     const instanceId = stages[1].options?.id;
-    assert(stages[2]?.stage === 'table', 'Expected table stage');
+    assert(stages[2]?.stage === "table", "Expected table stage");
     const tableName = stages[2].options.id;
-    const database = IsRowLevel(schemaId) ? schemaId : buildDatabaseName(schemaId, instanceId);
+    const database = IsRowLevel(schemaId)
+      ? schemaId
+      : buildDatabaseName(schemaId, instanceId);
 
-    const query = new SelectionQuery(schemaId, instanceId, tableName, database, context);
+    const query = new SelectionQuery(
+      schemaId,
+      instanceId,
+      tableName,
+      database,
+      context,
+    );
     query.addStages(stages.slice(3));
     return query;
   }
@@ -141,7 +183,10 @@ export class SelectionQuery {
   }
 
   public async run(): Promise<any> {
-    if (this.resultType !== 'createInstance' && this.resultType !== 'destroyInstance') {
+    if (
+      this.resultType !== "createInstance" &&
+      this.resultType !== "destroyInstance"
+    ) {
       await this.ensureInstance();
     }
 
@@ -172,7 +217,9 @@ export class SelectionQuery {
 
   private async ensureInstance() {
     if (!IsValidInstance(this.schemaId, this.instanceId)) {
-      throw new Error(`Instance '${this.instanceId ?? '(global)'}' does not exist for schema '${this.schemaId}'`);
+      throw new Error(
+        `Instance '${this.instanceId ?? "(global)"}' does not exist for schema '${this.schemaId}'`,
+      );
     }
   }
 
@@ -196,16 +243,22 @@ export class SelectionQuery {
     if (this.rowLevel && this.instanceId !== undefined) {
       value = this.stampTenantId(value);
     }
-    const insertTerm: TermJson = [TermType.INSERT, [this.getTableTerm(), value]];
+    const insertTerm: TermJson = [
+      TermType.INSERT,
+      [this.getTableTerm(), value],
+    ];
     const result = await executeTermJson(insertTerm);
     return result?.generated_keys ?? [];
   }
 
   private stampTenantId(value: any): any {
     if (Array.isArray(value) && value[0] === TermType.MAKE_ARRAY) {
-      return [TermType.MAKE_ARRAY, value[1].map((doc: any) => this.stampTenantId(doc))];
+      return [
+        TermType.MAKE_ARRAY,
+        value[1].map((doc: any) => this.stampTenantId(doc)),
+      ];
     }
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
       return { ...value, tenant_id: this.instanceId };
     }
     return value;
@@ -221,7 +274,13 @@ export class SelectionQuery {
       TermType.FUNC,
       [
         [TermType.MAKE_ARRAY, [argId]],
-        [TermType.EQ, [[TermType.BRACKET, [[TermType.VAR, [argId]], 'tenant_id']], this.instanceId]],
+        [
+          TermType.EQ,
+          [
+            [TermType.BRACKET, [[TermType.VAR, [argId]], "tenant_id"]],
+            this.instanceId,
+          ],
+        ],
       ],
     ];
     return [TermType.FILTER, [baseTerm, filterFn]];
@@ -233,7 +292,11 @@ export class SelectionQuery {
 
   public isSimpleTable(): boolean {
     // TODO: This is really just a patch to avoid putting a GET_ALL after other operations, we should have a way to insert the get all "deeper" in the term
-    return !this.isRowLevel() && Array.isArray(this.term) && this.term[0] === TermType.TABLE;
+    return (
+      !this.isRowLevel() &&
+      Array.isArray(this.term) &&
+      this.term[0] === TermType.TABLE
+    );
   }
 
   public getContext(): DecodingContext {
@@ -253,8 +316,14 @@ export class SelectionQuery {
     if (this.rowLevel && this.instanceId !== undefined) {
       replaceValue = { ...replaceValue, tenant_id: this.instanceId };
     }
-    const merged: TermJson = [TermType.MERGE, [replaceValue, { _id: [TermType.BRACKET, [oldDoc, '_id']] }]];
-    const func: TermJson = [TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], merged]];
+    const merged: TermJson = [
+      TermType.MERGE,
+      [replaceValue, { _id: [TermType.BRACKET, [oldDoc, "_id"]] }],
+    ];
+    const func: TermJson = [
+      TermType.FUNC,
+      [[TermType.MAKE_ARRAY, [argId]], merged],
+    ];
     const replaceTerm: TermJson = [TermType.REPLACE, [this.term, func]];
     const result = await executeTermJson(replaceTerm);
     return result?.replaced ?? 0;
@@ -279,53 +348,76 @@ type SelectionStageHandler = (query: SelectionQuery, stage: QueryStage) => void;
 
 const SELECTION_STAGES: Record<string, SelectionStageHandler> = {
   get: (query, stage) => {
-    query.resultType = 'selection';
+    query.resultType = "selection";
     query.singleElement = true;
-    const tableTerm = query.isRowLevel() ? query.getTableTerm() : query.buildTerm();
+    const tableTerm = query.isRowLevel()
+      ? query.getTableTerm()
+      : query.buildTerm();
     const key = DecodeValue(stage.args[0], query.getContext());
     query.setTerm([TermType.GET, [tableTerm, key]]);
   },
   getAll: (query, stage) => {
-    query.resultType = 'selection';
-    const baseTerm = query.isRowLevel() ? query.getTableTerm() : query.buildTerm();
+    query.resultType = "selection";
+    const baseTerm = query.isRowLevel()
+      ? query.getTableTerm()
+      : query.buildTerm();
     const index = stage.options?.index;
     const rawKeys = stage.args[0];
     const context = query.getContext();
     const decodedKeys = Array.isArray(rawKeys)
       ? rawKeys.map((k) => DecodeValue(k, context))
       : [DecodeValue(rawKeys, context)];
-    const term: TermJson = [TermType.GET_ALL, [baseTerm, ...decodedKeys], index ? { index } : {}];
-    query.setTerm(query.isRowLevel() ? query.buildTenantFilterTerm(term) : term);
+    const term: TermJson = [
+      TermType.GET_ALL,
+      [baseTerm, ...decodedKeys],
+      index ? { index } : {},
+    ];
+    query.setTerm(
+      query.isRowLevel() ? query.buildTenantFilterTerm(term) : term,
+    );
   },
   between: (query, stage) => {
-    query.resultType = 'selection';
-    const baseTerm = query.isRowLevel() ? query.getTableTerm() : query.buildTerm();
+    query.resultType = "selection";
+    const baseTerm = query.isRowLevel()
+      ? query.getTableTerm()
+      : query.buildTerm();
     const index = stage.options?.index;
     const low = DecodeValue(stage.args[0], query.getContext());
     const high = DecodeValue(stage.args[1], query.getContext());
-    const term: TermJson = [TermType.BETWEEN, [baseTerm, low, high], index ? { index } : {}];
-    query.setTerm(query.isRowLevel() ? query.buildTenantFilterTerm(term) : term);
+    const term: TermJson = [
+      TermType.BETWEEN,
+      [baseTerm, low, high],
+      index ? { index } : {},
+    ];
+    query.setTerm(
+      query.isRowLevel() ? query.buildTenantFilterTerm(term) : term,
+    );
   },
   insert: (query, stage) => {
-    query.resultType = 'insert';
+    query.resultType = "insert";
     query.setNewValue(DecodeValue(stage.args[0], new DecodingContext()));
   },
   update: (query, stage) => {
-    query.resultType = 'update';
-    if (stage.args[0]?.stage === 'func') {
+    query.resultType = "update";
+    if (stage.args[0]?.stage === "func") {
       const argId = allocateArgNumber();
       const docVar: TermJson = [TermType.VAR, [argId]];
-      const body = DecodeFunction(stage.args[0], new DecodingContext(), [docVar]);
-      query.setNewValue([TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], body]]);
+      const body = DecodeFunction(stage.args[0], new DecodingContext(), [
+        docVar,
+      ]);
+      query.setNewValue([
+        TermType.FUNC,
+        [[TermType.MAKE_ARRAY, [argId]], body],
+      ]);
     } else {
       query.setNewValue(DecodeValue(stage.args[0], new DecodingContext()));
     }
   },
   replace: (query, stage) => {
-    query.resultType = 'replace';
+    query.resultType = "replace";
     query.setNewValue(DecodeValue(stage.args[0], new DecodingContext()));
   },
   delete: (query) => {
-    query.resultType = 'delete';
+    query.resultType = "delete";
   },
 };
