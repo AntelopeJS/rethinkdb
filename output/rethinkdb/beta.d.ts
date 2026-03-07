@@ -1,4 +1,4 @@
-import { RQuery, RunOptions, r } from 'rethinkdb-ts';
+import { type RQuery, type RunOptions, r } from "rethinkdb-ts";
 export { r };
 /**
  * Executes a RethinkDB query with optional configuration options.
@@ -12,4 +12,4 @@ export { r };
  * const result = await RunQuery(r.table('users').get('123'), { readMode: 'outdated' });
  * ```
  */
-export declare const RunQuery: <T extends RQuery>(query: T, options?: RunOptions) => ReturnType<T['run']>;
+export declare const RunQuery: <T extends RQuery>(query: T, options?: RunOptions) => ReturnType<T["run"]>;

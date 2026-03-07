@@ -1,9 +1,15 @@
-import { TermType } from 'rethinkdb-ts/lib/proto/enums';
-import { TermJson } from 'rethinkdb-ts/lib/internal-types';
-import { QueryStage, DecodingContext, allocateArgNumber } from './utils';
-import { DecodeValue } from './query';
+import type { TermJson } from "rethinkdb-ts/lib/internal-types";
+import { TermType } from "rethinkdb-ts/lib/proto/enums";
+import { DecodeValue } from "./query";
+import {
+  allocateArgNumber,
+  type DecodingContext,
+  type QueryStage,
+} from "./utils";
 
-type StageHandler = number | ((expr: ExpressionBuilder, ...args: any[]) => TermJson);
+type StageHandler =
+  | number
+  | ((expr: ExpressionBuilder, ...args: any[]) => TermJson);
 
 interface ExpressionBuilder {
   value: TermJson;
@@ -66,14 +72,17 @@ const COMPLEX_STAGE_MAP: Record<string, StageHandler> = {
   arg: (expr, num: number) => {
     const provider = expr.context.args[num];
     if (provider) {
-      return provider([{ stage: 'arg', args: [num] }]);
+      return provider([{ stage: "arg", args: [num] }]);
     }
     return [TermType.VAR, [num]];
   },
   constant: (_expr, constant: TermJson) => constant,
-  date_with_timezone: (expr, timezone: TermJson) => [TermType.IN_TIMEZONE, [expr.value, timezone]],
+  date_with_timezone: (expr, timezone: TermJson) => [
+    TermType.IN_TIMEZONE,
+    [expr.value, timezone],
+  ],
   str_split: (expr) => {
-    const sep = expr.options?.separator ?? ' ';
+    const sep = expr.options?.separator ?? " ";
     const result: TermJson = [TermType.SPLIT, [expr.value, sep]];
     if (expr.options?.maxSplits) {
       return [TermType.SLICE, [result, 0, expr.options.maxSplits]];
@@ -87,7 +96,7 @@ const COMPLEX_STAGE_MAP: Record<string, StageHandler> = {
         TermType.FUNC,
         [
           [TermType.MAKE_ARRAY, [allocateArgNumber()]],
-          [TermType.COUNT, [[TermType.SPLIT, [expr.value, '']]]],
+          [TermType.COUNT, [[TermType.SPLIT, [expr.value, ""]]]],
         ],
       ],
       expr.value,
@@ -123,7 +132,10 @@ const COMPLEX_STAGE_MAP: Record<string, StageHandler> = {
     newContext.args = { ...expr.context.args };
     newContext.args[argNumbers[0]] = () => [TermType.VAR, [argId]];
     const body = DecodeValue(func.args[1], newContext);
-    return [TermType.MAP, [expr.value, [TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], body]]]];
+    return [
+      TermType.MAP,
+      [expr.value, [TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], body]]],
+    ];
   },
   arr_filter: (expr, func: QueryStage) => {
     const argId = allocateArgNumber();
@@ -132,7 +144,10 @@ const COMPLEX_STAGE_MAP: Record<string, StageHandler> = {
     newContext.args = { ...expr.context.args };
     newContext.args[argNumbers[0]] = () => [TermType.VAR, [argId]];
     const body = DecodeValue(func.args[1], newContext);
-    return [TermType.FILTER, [expr.value, [TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], body]]]];
+    return [
+      TermType.FILTER,
+      [expr.value, [TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], body]]],
+    ];
   },
   obj_index: (expr, key: TermJson, def?: TermJson) => {
     const bracket: TermJson = [TermType.BRACKET, [expr.value, key]];
@@ -147,15 +162,23 @@ const COMPLEX_STAGE_MAP: Record<string, StageHandler> = {
   ],
 };
 
-function applySimpleStage(prev: TermJson, termType: number, args: TermJson[]): TermJson {
+function applySimpleStage(
+  prev: TermJson,
+  termType: number,
+  args: TermJson[],
+): TermJson {
   if (args.length === 0) {
     return [termType, [prev]];
   }
   return [termType, [prev, ...args]];
 }
 
-export function decodeExpression(stages: QueryStage[], context: DecodingContext, startValue?: TermJson): TermJson {
-  const builder: ExpressionBuilder = { value: startValue!, context };
+export function decodeExpression(
+  stages: QueryStage[],
+  context: DecodingContext,
+  startValue: TermJson = [TermType.IMPLICIT_VAR],
+): TermJson {
+  const builder: ExpressionBuilder = { value: startValue, context };
 
   for (const stage of stages) {
     builder.options = stage.options;
@@ -170,7 +193,7 @@ export function decodeExpression(stages: QueryStage[], context: DecodingContext,
       builder.value = (complexHandler as any)(builder, ...decodedArgs);
       continue;
     }
-    throw new Error('Unimplemented expression stage: ' + stage.stage);
+    throw new Error(`Unimplemented expression stage: ${stage.stage}`);
   }
 
   delete builder.options;

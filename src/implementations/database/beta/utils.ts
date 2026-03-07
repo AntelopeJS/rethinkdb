@@ -1,6 +1,6 @@
-import { StagedObject } from '@ajs.local/database/beta/common';
+import type { StagedObject } from "@ajs.local/database/beta/common";
 
-export type QueryStage = StagedObject['stages'][number];
+export type QueryStage = StagedObject["stages"][number];
 
 export type ArgumentProvider = (subQuery: QueryStage[]) => any;
 

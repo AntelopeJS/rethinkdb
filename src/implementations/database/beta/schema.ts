@@ -1,12 +1,26 @@
-import { SchemaDefinition, SchemaOptions } from '@ajs.local/database/beta/schema';
-import assert from 'assert';
-import { CreateRowLevelDatabase, CreateSchemaInstance, DestroySchemaInstance } from '../../../connection';
+import assert from "node:assert";
+import type {
+  SchemaDefinition,
+  SchemaOptions,
+} from "@ajs.local/database/beta/schema";
+import {
+  CreateRowLevelDatabase,
+  CreateSchemaInstance,
+  DestroySchemaInstance,
+} from "../../../connection";
 
-export const existingSchemas: Record<string, { definition: SchemaDefinition; options: SchemaOptions }> = {};
+export const existingSchemas: Record<
+  string,
+  { definition: SchemaDefinition; options: SchemaOptions }
+> = {};
 export const existingInstances: Record<string, Set<string>> = {};
 
 export const Schemas = {
-  async register(schemaId: string, schema: SchemaDefinition, options: SchemaOptions) {
+  async register(
+    schemaId: string,
+    schema: SchemaDefinition,
+    options: SchemaOptions,
+  ) {
     existingSchemas[schemaId] = { definition: schema, options };
     if (!existingInstances[schemaId]) {
       existingInstances[schemaId] = new Set<string>();
@@ -37,7 +51,12 @@ export function GetTable(schemaId: string, tableId: string) {
   return schema[tableId];
 }
 
-export function GetIndex(schemaId: string, tableId: string, indexId: string, onlyIndex?: boolean) {
+export function GetIndex(
+  schemaId: string,
+  tableId: string,
+  indexId: string,
+  onlyIndex?: boolean,
+) {
   const table = GetTable(schemaId, tableId);
   if (indexId in table.indexes) {
     return table.indexes[indexId];
@@ -46,7 +65,10 @@ export function GetIndex(schemaId: string, tableId: string, indexId: string, onl
   return { fields: [indexId] };
 }
 
-export function IsValidInstance(schemaId: string, instanceId: string | undefined) {
+export function IsValidInstance(
+  schemaId: string,
+  instanceId: string | undefined,
+) {
   assert(schemaId in existingInstances);
   if (IsRowLevel(schemaId)) {
     if (instanceId === undefined) {
@@ -54,25 +76,31 @@ export function IsValidInstance(schemaId: string, instanceId: string | undefined
     }
     return true;
   }
-  return existingInstances[schemaId].has(instanceId ?? '');
+  return existingInstances[schemaId].has(instanceId ?? "");
 }
 
-export async function CreateInstance(schemaId: string, instanceId: string | undefined) {
+export async function CreateInstance(
+  schemaId: string,
+  instanceId: string | undefined,
+) {
   if (IsRowLevel(schemaId)) {
     return;
   }
   const schema = GetSchema(schemaId);
-  existingInstances[schemaId].add(instanceId ?? '');
+  existingInstances[schemaId].add(instanceId ?? "");
   await CreateSchemaInstance(schemaId, instanceId, schema);
 }
 
-export async function DestroyInstance(schemaId: string, instanceId: string | undefined) {
+export async function DestroyInstance(
+  schemaId: string,
+  instanceId: string | undefined,
+) {
   if (IsRowLevel(schemaId)) {
     return;
   }
   assert(schemaId in existingInstances);
   const instances = existingInstances[schemaId];
-  const key = instanceId ?? '';
+  const key = instanceId ?? "";
   if (instances.has(key)) {
     instances.delete(key);
   }

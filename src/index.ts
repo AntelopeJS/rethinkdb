@@ -1,7 +1,7 @@
-import 'reflect-metadata';
-import { RConnectionOptions, RPoolConnectionOptions } from 'rethinkdb-ts';
-import { ImplementInterface } from '@ajs/core/beta';
-import { ConnectDirect, ConnectPool, Disconnect } from './connection';
+import "reflect-metadata";
+import { ImplementInterface } from "@ajs/core/beta";
+import type { RConnectionOptions, RPoolConnectionOptions } from "rethinkdb-ts";
+import { ConnectDirect, ConnectPool, Disconnect } from "./connection";
 
 interface Options {
   connection?: RConnectionOptions;
@@ -14,17 +14,20 @@ export async function construct(options: Options) {
   } else if (options?.connection) {
     await ConnectDirect(options.connection);
   } else {
-    throw new Error('Invalid RethinkDB options');
+    throw new Error("Invalid RethinkDB options");
   }
 
-  ImplementInterface(await import('@ajs.local/rethinkdb/beta'), await import('./implementations/rethinkdb/beta'));
-  ImplementInterface(
-    await import('@ajs.local/database/beta/query'),
-    await import('./implementations/database/beta/query'),
+  await ImplementInterface(
+    await import("@ajs.local/rethinkdb/beta"),
+    await import("./implementations/rethinkdb/beta"),
   );
-  ImplementInterface(
-    await import('@ajs.local/database/beta/schema'),
-    await import('./implementations/database/beta/schema'),
+  await ImplementInterface(
+    await import("@ajs.local/database/beta/query"),
+    await import("./implementations/database/beta/query"),
+  );
+  await ImplementInterface(
+    await import("@ajs.local/database/beta/schema"),
+    await import("./implementations/database/beta/schema"),
   );
 }
 
