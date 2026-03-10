@@ -51,6 +51,15 @@ export function GetTable(schemaId: string, tableId: string) {
   return schema[tableId];
 }
 
+export function HasIndex(
+  schemaId: string,
+  tableId: string,
+  indexId: string,
+): boolean {
+  const table = GetTable(schemaId, tableId);
+  return indexId in table.indexes;
+}
+
 export function GetIndex(
   schemaId: string,
   tableId: string,

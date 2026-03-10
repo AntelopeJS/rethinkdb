@@ -2,7 +2,7 @@ import type { Stream } from "@ajs.local/database/beta";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import { TermType } from "rethinkdb-ts/lib/proto/enums";
 import { DecodeFunction, DecodeValue } from "./query";
-import { GetIndex, IsRowLevel } from "./schema";
+import { GetIndex, HasIndex, IsRowLevel } from "./schema";
 import { SelectionQuery } from "./selection";
 import {
   allocateArgNumber,
@@ -325,6 +325,39 @@ function handleGroup(
   return [TermType.MAP, [ungrouped, mapperFunc]];
 }
 
+function isTableTerm(term: TermJson): boolean {
+  return Array.isArray(term) && term[0] === TermType.TABLE;
+}
+
+function buildIndexedOrderBy(
+  tableTerm: TermJson,
+  indexName: string,
+  isDescending: boolean,
+): TermJson {
+  const indexValue: TermJson = isDescending
+    ? [TermType.DESC, [indexName]]
+    : indexName;
+  return [TermType.ORDER_BY, [tableTerm], { index: indexValue }];
+}
+
+function buildNonIndexedOrderBy(
+  prev: TermJson,
+  indexName: string,
+  schemaId: string,
+  tableName: string,
+  isDescending: boolean,
+): TermJson {
+  const index = GetIndex(schemaId, tableName, indexName);
+  const direction = isDescending ? TermType.DESC : TermType.ASC;
+  const indexFields = index.fields ?? [indexName];
+  const fields = indexFields.map((f) => [direction, [f]]);
+
+  if (fields.length === 1) {
+    return [TermType.ORDER_BY, [prev, fields[0]]];
+  }
+  return [TermType.ORDER_BY, [prev, ...fields]];
+}
+
 function handleOrderBy(
   prev: TermJson,
   stage: QueryStage,
@@ -332,16 +365,13 @@ function handleOrderBy(
   schemaId: string,
   tableName: string,
 ): TermJson {
-  const index = GetIndex(schemaId, tableName, stage.options.index);
-  const direction =
-    stage.options.direction === "desc" ? TermType.DESC : TermType.ASC;
-  const indexFields = index.fields ?? [stage.options.index];
-  const fields = indexFields.map((f) => [direction, [f]]);
+  const indexName = stage.options.index;
+  const isDescending = stage.options.direction === "desc";
 
-  if (fields.length === 1) {
-    return [TermType.ORDER_BY, [prev, fields[0]]];
+  if (isTableTerm(prev) && HasIndex(schemaId, tableName, indexName)) {
+    return buildIndexedOrderBy(prev, indexName, isDescending);
   }
-  return [TermType.ORDER_BY, [prev, ...fields]];
+  return buildNonIndexedOrderBy(prev, indexName, schemaId, tableName, isDescending);
 }
 
 function handleSlice(
