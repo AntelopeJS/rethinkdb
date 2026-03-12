@@ -30,6 +30,8 @@ describe("Filter Operations", () => {
   it("Filter with Constant String", FilterWithConstantString);
   it("Filter with Constant Number", FilterWithConstantNumber);
   it("Filter with Constant Array", FilterWithConstantArray);
+  it("Filter with Array Field Filter", FilterWithArrayFieldFilter);
+  it("Filter with Array Field Map", FilterWithArrayFieldMap);
   it("Cleanup", CleanupTest);
 });
 
@@ -155,6 +157,47 @@ async function FilterWithConstantArray() {
 
   const names = result.map((doc) => doc.name).sort();
   expect(names).to.deep.equal(["Alice", "Antoine", "Camille", "Emilie"]);
+}
+
+async function FilterWithArrayFieldFilter() {
+  const targetSkills = ["JavaScript", "Python"];
+  const result = await table
+    .filter((doc) =>
+      doc
+        .key("skills")
+        .filter((skill) => ValueProxy.constant(targetSkills).includes(skill))
+        .count()
+        .gt(0),
+    )
+    .run();
+
+  expect(result).to.be.an("array");
+  const expectedNames = testData
+    .filter((user) => (user.skills ?? []).some((s) => targetSkills.includes(s)))
+    .map((u) => u.name)
+    .sort();
+  expect(result).to.have.lengthOf(expectedNames.length);
+
+  const names = result.map((doc) => doc.name).sort();
+  expect(names).to.deep.equal(expectedNames);
+}
+
+async function FilterWithArrayFieldMap() {
+  const result = await table
+    .filter((doc) => doc.key("skills").count().gt(0))
+    .map((doc) => ({
+      name: doc.key("name"),
+      upperSkills: doc.key("skills").map((skill) => skill.upcase()),
+    }))
+    .run();
+
+  expect(result).to.be.an("array");
+  for (const doc of result) {
+    expect(doc.upperSkills).to.be.an("array");
+    for (const skill of doc.upperSkills) {
+      expect(skill).to.equal(skill.toUpperCase());
+    }
+  }
 }
 
 async function CleanupTest() {

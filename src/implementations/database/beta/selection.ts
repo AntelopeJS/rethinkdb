@@ -245,9 +245,7 @@ export class SelectionQuery {
     if (this.rowLevel && this.instanceId !== undefined) {
       value = this.stampTenantId(value);
     }
-    const insertOpts = this.conflictMode
-      ? { conflict: this.conflictMode }
-      : {};
+    const insertOpts = this.conflictMode ? { conflict: this.conflictMode } : {};
     const insertTerm: TermJson = [
       TermType.INSERT,
       [this.getTableTerm(), value],
@@ -265,8 +263,8 @@ export class SelectionQuery {
       ? this.insertRawArgs
       : [this.insertRawArgs];
     let genIdx = 0;
-    return rawDocs.map((doc: any) =>
-      doc._id ?? doc.id ?? generatedKeys[genIdx++],
+    return rawDocs.map(
+      (doc: any) => doc._id ?? doc.id ?? generatedKeys[genIdx++],
     );
   }
 

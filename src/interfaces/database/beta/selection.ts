@@ -1,4 +1,9 @@
-import type { Changes, DeepPartial, ExtractType, InsertOptions } from "./common";
+import type {
+  Changes,
+  DeepPartial,
+  ExtractType,
+  InsertOptions,
+} from "./common";
 import { Datum } from "./datum";
 import { Query } from "./query";
 import { Stream } from "./stream";
@@ -115,7 +120,10 @@ export class Table<T> extends Selection<T> {
    * @param obj Document(s) to insert
    * @returns Inserted IDs
    */
-  public insert(obj: DeepPartial<T> | DeepPartial<T>[], options?: InsertOptions) {
+  public insert(
+    obj: DeepPartial<T> | DeepPartial<T>[],
+    options?: InsertOptions,
+  ) {
     return this.stage(Query<string[]>, "insert", options, obj);
   }
 

@@ -104,9 +104,7 @@ async function InsertConflictUpdateNewDocTest() {
     kilometers: 10000,
   };
 
-  const response = await table
-    .insert(newDoc, { conflict: "update" })
-    .run();
+  const response = await table.insert(newDoc, { conflict: "update" }).run();
 
   expect(response).to.be.an("array").with.lengthOf(1);
   expect(response[0]).to.be.a("string");

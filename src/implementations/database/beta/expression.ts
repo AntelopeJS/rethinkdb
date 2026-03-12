@@ -1,6 +1,6 @@
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import { TermType } from "rethinkdb-ts/lib/proto/enums";
-import { DecodeValue } from "./query";
+import { DecodeFunction, DecodeValue } from "./query";
 import {
   allocateArgNumber,
   type DecodingContext,
@@ -125,30 +125,6 @@ const COMPLEX_STAGE_MAP: Record<string, StageHandler> = {
     }
     return [TermType.SLICE, [expr.value, start]];
   },
-  arr_map: (expr, func: QueryStage) => {
-    const argId = allocateArgNumber();
-    const argNumbers = func.args[0];
-    const newContext = Object.create(expr.context);
-    newContext.args = { ...expr.context.args };
-    newContext.args[argNumbers[0]] = () => [TermType.VAR, [argId]];
-    const body = DecodeValue(func.args[1], newContext);
-    return [
-      TermType.MAP,
-      [expr.value, [TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], body]]],
-    ];
-  },
-  arr_filter: (expr, func: QueryStage) => {
-    const argId = allocateArgNumber();
-    const argNumbers = func.args[0];
-    const newContext = Object.create(expr.context);
-    newContext.args = { ...expr.context.args };
-    newContext.args[argNumbers[0]] = () => [TermType.VAR, [argId]];
-    const body = DecodeValue(func.args[1], newContext);
-    return [
-      TermType.FILTER,
-      [expr.value, [TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], body]]],
-    ];
-  },
   obj_index: (expr, key: TermJson, def?: TermJson) => {
     const bracket: TermJson = [TermType.BRACKET, [expr.value, key]];
     if (def !== undefined) {
@@ -160,6 +136,34 @@ const COMPLEX_STAGE_MAP: Record<string, StageHandler> = {
     TermType.HAS_FIELDS,
     [expr.value, ...(Array.isArray(fields) ? fields : [fields])],
   ],
+};
+
+type FuncStageHandler = (
+  expr: ExpressionBuilder,
+  stage: QueryStage,
+) => TermJson;
+
+const FUNC_STAGE_MAP: Record<string, FuncStageHandler> = {
+  arr_filter: (expr, stage) => {
+    const func = stage.args[0];
+    const argId = allocateArgNumber();
+    const row: TermJson = [TermType.VAR, [argId]];
+    const body = DecodeFunction(func, expr.context, [row]);
+    return [
+      TermType.FILTER,
+      [expr.value, [TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], body]]],
+    ];
+  },
+  arr_map: (expr, stage) => {
+    const func = stage.args[0];
+    const argId = allocateArgNumber();
+    const row: TermJson = [TermType.VAR, [argId]];
+    const body = DecodeFunction(func, expr.context, [row]);
+    return [
+      TermType.MAP,
+      [expr.value, [TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], body]]],
+    ];
+  },
 };
 
 function applySimpleStage(
@@ -182,6 +186,11 @@ export function decodeExpression(
 
   for (const stage of stages) {
     builder.options = stage.options;
+    const funcHandler = FUNC_STAGE_MAP[stage.stage];
+    if (funcHandler) {
+      builder.value = funcHandler(builder, stage);
+      continue;
+    }
     const decodedArgs = stage.args.map((arg) => DecodeValue(arg, context));
     const simpleType = SIMPLE_STAGE_MAP[stage.stage];
     if (simpleType !== undefined) {
