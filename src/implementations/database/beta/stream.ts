@@ -16,6 +16,7 @@ type StreamStageHandler = (
   context: DecodingContext,
   schemaId: string,
   tableName: string,
+  singleElement: boolean,
 ) => TermJson;
 
 const STREAM_STAGE_MAP: Record<string, StreamStageHandler> = {
@@ -70,7 +71,7 @@ export function applyStreamStages(
     if (!handler) {
       throw new Error(`Unimplemented stream stage: ${stage.stage}`);
     }
-    term = handler(term, stage, context, schemaId, tableName);
+    term = handler(term, stage, context, schemaId, tableName, singleElement);
   }
 
   return { term, isChangeStream, singleElement };
@@ -212,6 +213,9 @@ function handleLookup(
   prev: TermJson,
   stage: QueryStage,
   context: DecodingContext,
+  _schemaId: string,
+  _tableName: string,
+  singleElement: boolean,
 ): TermJson {
   const rightStages = (stage.args[0] as Stream<any>).build();
   const rightQuery = SelectionQuery.decode(rightStages, context);
@@ -262,10 +266,17 @@ function handleLookup(
     [row, { [localKey]: branchResult }],
   ];
 
-  return [
-    TermType.MAP,
-    [prev, [TermType.FUNC, [[TermType.MAKE_ARRAY, [mapArgId]], merged]]],
-  ];
+  if (singleElement) {
+    return [
+      TermType.FUNCALL,
+      [[TermType.FUNC, [[TermType.MAKE_ARRAY, [mapArgId]], merged]], prev],
+    ];
+  } else {
+    return [
+      TermType.MAP,
+      [prev, [TermType.FUNC, [[TermType.MAKE_ARRAY, [mapArgId]], merged]]],
+    ];
+  }
 }
 
 function handleGroup(
@@ -371,7 +382,13 @@ function handleOrderBy(
   if (isTableTerm(prev) && HasIndex(schemaId, tableName, indexName)) {
     return buildIndexedOrderBy(prev, indexName, isDescending);
   }
-  return buildNonIndexedOrderBy(prev, indexName, schemaId, tableName, isDescending);
+  return buildNonIndexedOrderBy(
+    prev,
+    indexName,
+    schemaId,
+    tableName,
+    isDescending,
+  );
 }
 
 function handleSlice(

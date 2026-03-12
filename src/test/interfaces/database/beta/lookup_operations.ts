@@ -43,6 +43,7 @@ describe("Lookup Operations", () => {
 
   it("Insert Test Data", InsertTestData);
   it("Lookup Basic", LookupBasic);
+  it("Lookup On Get", LookupOnGet);
   it("Lookup With Filter", LookupWithFilter);
   it("Cleanup", CleanupTest);
 });
@@ -80,6 +81,24 @@ async function LookupBasic() {
   expect(antoineOrder).to.not.equal(undefined);
   expect(antoineOrder?.customerName).to.have.property("name", "Antoine");
   expect(antoineOrder?.customerName).to.have.property("age", 25);
+}
+
+async function LookupOnGet() {
+  const result = await ordersTable
+    .get(insertedKeys.orders[0])
+    .lookup(usersTable, "customerName", "name")
+    .run();
+
+  expect(result).to.have.property("customerName");
+  const customerName = result.customerName;
+  expect(customerName).to.be.an("object");
+  expect(customerName).to.have.property("name");
+  expect(customerName).to.have.property("age");
+  expect(customerName).to.have.property("email");
+  expect(customerName).to.have.property("isActive");
+
+  expect(result?.customerName).to.have.property("name", "Antoine");
+  expect(result?.customerName).to.have.property("age", 25);
 }
 
 async function LookupWithFilter() {
