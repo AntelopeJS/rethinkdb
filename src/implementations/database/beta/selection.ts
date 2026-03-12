@@ -39,6 +39,8 @@ export class SelectionQuery {
   public isChangeStream = false;
   public singleElement = false;
   private newValue: any;
+  private conflictMode?: "update" | "replace";
+  private insertRawArgs?: any;
   private term: TermJson;
   private readonly rowLevel: boolean;
 
@@ -243,12 +245,29 @@ export class SelectionQuery {
     if (this.rowLevel && this.instanceId !== undefined) {
       value = this.stampTenantId(value);
     }
+    const insertOpts = this.conflictMode
+      ? { conflict: this.conflictMode }
+      : {};
     const insertTerm: TermJson = [
       TermType.INSERT,
       [this.getTableTerm(), value],
+      insertOpts,
     ];
     const result = await executeTermJson(insertTerm);
-    return result?.generated_keys ?? [];
+    if (!this.conflictMode) {
+      return result?.generated_keys ?? [];
+    }
+    return this.buildConflictInsertKeys(result?.generated_keys ?? []);
+  }
+
+  private buildConflictInsertKeys(generatedKeys: string[]): string[] {
+    const rawDocs = Array.isArray(this.insertRawArgs)
+      ? this.insertRawArgs
+      : [this.insertRawArgs];
+    let genIdx = 0;
+    return rawDocs.map((doc: any) =>
+      doc._id ?? doc.id ?? generatedKeys[genIdx++],
+    );
   }
 
   private stampTenantId(value: any): any {
@@ -342,6 +361,14 @@ export class SelectionQuery {
   public setNewValue(value: any) {
     this.newValue = value;
   }
+
+  public setConflictMode(mode?: "update" | "replace") {
+    this.conflictMode = mode;
+  }
+
+  public setInsertRawArgs(args: any) {
+    this.insertRawArgs = args;
+  }
 }
 
 type SelectionStageHandler = (query: SelectionQuery, stage: QueryStage) => void;
@@ -396,6 +423,8 @@ const SELECTION_STAGES: Record<string, SelectionStageHandler> = {
   insert: (query, stage) => {
     query.resultType = "insert";
     query.setNewValue(DecodeValue(stage.args[0], new DecodingContext()));
+    query.setConflictMode(stage.options?.conflict);
+    query.setInsertRawArgs(stage.args[0]);
   },
   update: (query, stage) => {
     query.resultType = "update";
