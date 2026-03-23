@@ -1,3 +1,3 @@
-import { Logging } from "@ajs/logging/beta";
+import { Logging } from "@antelopejs/interface-core/logging";
 
 export const Logger = new Logging.Channel("rethinkdb");

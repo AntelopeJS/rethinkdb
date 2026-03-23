@@ -1,11 +1,11 @@
-module.exports.setup = async () => ({
+import { defineConfig } from "@antelopejs/interface-core/config";
+
+export default defineConfig({
+  name: "rethinkdb-test",
   cacheFolder: ".antelope/cache",
   modules: {
     local: {
-      source: {
-        type: "local",
-        path: ".",
-      },
+      source: { type: "local", path: "." },
       config: {
         pool: {
           pool: true,
@@ -20,6 +20,7 @@ module.exports.setup = async () => ({
       },
     },
   },
+  test: {
+    folder: "dist/test",
+  },
 });
-
-module.exports.cleanup = async () => {};

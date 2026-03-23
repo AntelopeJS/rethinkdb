@@ -1,11 +1,11 @@
 import assert from "node:assert";
-import { Query, ValueProxy } from "@ajs.local/database/beta";
-import type { Value } from "@ajs.local/database/beta/common";
+import { Query, ValueProxy } from "@antelopejs/interface-database";
+import type { Value } from "@antelopejs/interface-database/common";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import { TermType } from "rethinkdb-ts/lib/proto/enums";
 import type { Cursor } from "rethinkdb-ts/lib/response/cursor";
-import { SendQuery } from "../../../connection";
-import { Logger } from "../../../utils/logger";
+import { SendQuery } from "../../connection";
+import { Logger } from "../../utils/logger";
 import { decodeExpression } from "./expression";
 import { SelectionQuery } from "./selection";
 import { DecodingContext, type QueryStage } from "./utils";
@@ -173,4 +173,4 @@ export async function CloseCursor(reqId: number) {
   }
 }
 
-export { executeTermJson } from "../../../connection";
+export { executeTermJson } from "../../connection";

@@ -1,4 +1,4 @@
-import type { Stream } from "@ajs.local/database/beta";
+import type { Stream } from "@antelopejs/interface-database";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import { TermType } from "rethinkdb-ts/lib/proto/enums";
 import { DecodeFunction, DecodeValue } from "./query";

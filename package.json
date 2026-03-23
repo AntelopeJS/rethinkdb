@@ -25,26 +25,19 @@
   "scripts": {
     "build": "rimraf dist && tsc",
     "format": "biome format --write .",
-    "generate": "ajs module exports generate",
     "lint:fix": "biome check --write .",
     "lint": "biome check .",
     "prepack": "pnpm run build",
-    "prepare": "ajs module imports install",
     "release": "pnpm run lint && pnpm run test && pnpm run prepack && release-it",
     "typecheck": "tsc --noEmit",
     "test": "npx tsc && ajs module test"
   },
   "antelopeJs": {
-    "exportsPath": "dist/interfaces",
-    "imports": [
-      "core@beta",
-      "logging@beta"
+    "implements": [
+      "@antelopejs/interface-database",
+      "@antelopejs/interface-rethinkdb"
     ],
-    "importsOptional": [],
-    "test": {
-      "project": "src/test/testproject.js",
-      "folder": "dist/test"
-    },
+    "test": "src/test/antelope.test.ts",
     "defaultConfig": {
       "pool": {
         "pool": true,
@@ -59,6 +52,9 @@
     }
   },
   "dependencies": {
+    "@antelopejs/interface-core": "^0.0.2",
+    "@antelopejs/interface-database": "^0.0.2",
+    "@antelopejs/interface-rethinkdb": "^0.0.2",
     "chai": "^4.5.0",
     "reflect-metadata": "^0.2.2",
     "rethinkdb-ts": "^2.7.0",
@@ -70,8 +66,9 @@
     "@types/mocha": "^10.0.10",
     "rimraf": "^6.0.1",
     "@types/node": "^22.14.1",
-    "release-it": "^19.0.2",
+    "release-it": "^19.2.4",
     "release-it-changelogen": "^0.1.0",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "@types/semver": "^7.7.0"
   }
 }

@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import { ImplementInterface } from "@ajs/core/beta";
+import { ImplementInterface } from "@antelopejs/interface-core";
 import type { RConnectionOptions, RPoolConnectionOptions } from "rethinkdb-ts";
 import { ConnectDirect, ConnectPool, Disconnect } from "./connection";
 
@@ -17,17 +17,17 @@ export async function construct(options: Options) {
     throw new Error("Invalid RethinkDB options");
   }
 
-  await ImplementInterface(
-    await import("@ajs.local/rethinkdb/beta"),
-    await import("./implementations/rethinkdb/beta"),
+  void ImplementInterface(
+    await import("@antelopejs/interface-rethinkdb"),
+    await import("./implementations/rethinkdb"),
   );
-  await ImplementInterface(
-    await import("@ajs.local/database/beta/query"),
-    await import("./implementations/database/beta/query"),
+  void ImplementInterface(
+    await import("@antelopejs/interface-database/query"),
+    await import("./implementations/database/query"),
   );
-  await ImplementInterface(
-    await import("@ajs.local/database/beta/schema"),
-    await import("./implementations/database/beta/schema"),
+  void ImplementInterface(
+    await import("@antelopejs/interface-database/schema"),
+    await import("./implementations/database/schema"),
   );
 }
 

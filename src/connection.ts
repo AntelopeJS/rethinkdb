@@ -1,5 +1,5 @@
 import assert from "node:assert";
-import type { SchemaDefinition } from "@ajs.local/database/beta/schema";
+import type { SchemaDefinition } from "@antelopejs/interface-database/schema";
 import {
   type Connection,
   type MasterPool,

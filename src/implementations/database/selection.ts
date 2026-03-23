@@ -1,7 +1,7 @@
 import assert from "node:assert";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import { TermType } from "rethinkdb-ts/lib/proto/enums";
-import { buildDatabaseName } from "../../../connection";
+import { buildDatabaseName } from "../../connection";
 import { DecodeFunction, DecodeValue, executeTermJson } from "./query";
 import {
   CreateInstance,

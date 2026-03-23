@@ -1,4 +1,4 @@
-import type { StagedObject } from "@ajs.local/database/beta/common";
+import type { StagedObject } from "@antelopejs/interface-database/common";
 
 export type QueryStage = StagedObject["stages"][number];
 
