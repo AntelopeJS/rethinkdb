@@ -3,17 +3,65 @@ import type {
   SchemaDefinition,
   SchemaOptions,
 } from "@antelopejs/interface-database/schema";
-import {
-  CreateRowLevelDatabase,
-  CreateSchemaInstance,
-  DestroySchemaInstance,
-} from "../../connection";
+import { InitializeSchemaInPhysicalStore } from "../../connection";
 
-export const existingSchemas: Record<
+const existingSchemas: Record<
   string,
   { definition: SchemaDefinition; options: SchemaOptions }
 > = {};
-export const existingInstances: Record<string, Set<string>> = {};
+
+const schemaReady: Record<string, Promise<void>> = {};
+
+const collectionOwnership = new Map<string, string>();
+
+function ownershipKey(physicalStore: string, tableName: string): string {
+  return `${physicalStore}\0${tableName}`;
+}
+
+function claimOwnership(
+  physicalStore: string,
+  tableName: string,
+  schemaId: string,
+) {
+  const key = ownershipKey(physicalStore, tableName);
+  const owner = collectionOwnership.get(key);
+  if (owner && owner !== schemaId) {
+    throw new Error(
+      `Table '${tableName}' in physical store '${physicalStore}' is already declared by schema '${owner}', cannot redeclare in '${schemaId}'`,
+    );
+  }
+  collectionOwnership.set(key, schemaId);
+}
+
+function releaseOwnership(
+  physicalStore: string,
+  tableNames: Iterable<string>,
+  schemaId: string,
+) {
+  for (const tableName of tableNames) {
+    const key = ownershipKey(physicalStore, tableName);
+    if (collectionOwnership.get(key) === schemaId) {
+      collectionOwnership.delete(key);
+    }
+  }
+}
+
+function rollbackRegistration(
+  schemaId: string,
+  physicalStore: string,
+  claimedTables: string[],
+) {
+  releaseOwnership(physicalStore, claimedTables, schemaId);
+  delete existingSchemas[schemaId];
+  delete schemaReady[schemaId];
+}
+
+function releasePreviousClaims(schemaId: string) {
+  const previous = existingSchemas[schemaId];
+  if (!previous) return;
+  const previousStore = previous.options.physicalStore ?? schemaId;
+  releaseOwnership(previousStore, Object.keys(previous.definition), schemaId);
+}
 
 export const Schemas = {
   async register(
@@ -21,23 +69,41 @@ export const Schemas = {
     schema: SchemaDefinition,
     options: SchemaOptions,
   ) {
+    const physicalStore = options.physicalStore ?? schemaId;
+    releasePreviousClaims(schemaId);
     existingSchemas[schemaId] = { definition: schema, options };
-    if (!existingInstances[schemaId]) {
-      existingInstances[schemaId] = new Set<string>();
+    const claimed: string[] = [];
+    try {
+      for (const tableName of Object.keys(schema)) {
+        claimOwnership(physicalStore, tableName, schemaId);
+        claimed.push(tableName);
+      }
+      const ready = InitializeSchemaInPhysicalStore(physicalStore, schema);
+      schemaReady[schemaId] = ready;
+      await ready;
+    } catch (err) {
+      rollbackRegistration(schemaId, physicalStore, claimed);
+      throw err;
     }
-    if (!options.rowLevel) {
-      return;
-    }
-    await CreateRowLevelDatabase(schemaId, schema);
   },
   unregister(schemaId: string) {
+    const entry = existingSchemas[schemaId];
+    if (entry) {
+      const physicalStore = entry.options.physicalStore ?? schemaId;
+      releaseOwnership(physicalStore, Object.keys(entry.definition), schemaId);
+    }
     delete existingSchemas[schemaId];
-    delete existingInstances[schemaId];
+    delete schemaReady[schemaId];
   },
 };
 
-export function IsRowLevel(schemaId: string): boolean {
-  return existingSchemas[schemaId]?.options?.rowLevel === true;
+export function WaitForSchemaReady(schemaId: string): Promise<void> {
+  return schemaReady[schemaId] ?? Promise.resolve();
+}
+
+export function GetPhysicalStore(schemaId: string): string {
+  assert(schemaId in existingSchemas, `Unknown schema '${schemaId}'`);
+  return existingSchemas[schemaId].options.physicalStore ?? schemaId;
 }
 
 export function GetSchema(schemaId: string) {
@@ -49,6 +115,10 @@ export function GetTable(schemaId: string, tableId: string) {
   const schema = GetSchema(schemaId);
   assert(tableId in schema);
   return schema[tableId];
+}
+
+export function IsTenantScoped(schemaId: string, tableId: string): boolean {
+  return GetTable(schemaId, tableId).tenantScoped === true;
 }
 
 export function HasIndex(
@@ -72,46 +142,4 @@ export function GetIndex(
   }
   assert(!onlyIndex);
   return { fields: [indexId] };
-}
-
-export function IsValidInstance(
-  schemaId: string,
-  instanceId: string | undefined,
-) {
-  assert(schemaId in existingInstances);
-  if (IsRowLevel(schemaId)) {
-    if (instanceId === undefined) {
-      throw new Error(`Row-level schema '${schemaId}' requires a tenant ID`);
-    }
-    return true;
-  }
-  return existingInstances[schemaId].has(instanceId ?? "");
-}
-
-export async function CreateInstance(
-  schemaId: string,
-  instanceId: string | undefined,
-) {
-  if (IsRowLevel(schemaId)) {
-    return;
-  }
-  const schema = GetSchema(schemaId);
-  existingInstances[schemaId].add(instanceId ?? "");
-  await CreateSchemaInstance(schemaId, instanceId, schema);
-}
-
-export async function DestroyInstance(
-  schemaId: string,
-  instanceId: string | undefined,
-) {
-  if (IsRowLevel(schemaId)) {
-    return;
-  }
-  assert(schemaId in existingInstances);
-  const instances = existingInstances[schemaId];
-  const key = instanceId ?? "";
-  if (instances.has(key)) {
-    instances.delete(key);
-  }
-  await DestroySchemaInstance(schemaId, instanceId);
 }

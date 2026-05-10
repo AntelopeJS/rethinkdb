@@ -53,7 +53,7 @@
   },
   "dependencies": {
     "@antelopejs/interface-core": "^0.0.2",
-    "@antelopejs/interface-database": "^0.0.2",
+    "@antelopejs/interface-database": "^0.1.0",
     "@antelopejs/interface-rethinkdb": "^0.0.2",
     "chai": "^4.5.0",
     "reflect-metadata": "^0.2.2",

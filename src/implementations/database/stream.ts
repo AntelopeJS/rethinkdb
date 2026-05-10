@@ -2,7 +2,7 @@ import type { Stream } from "@antelopejs/interface-database";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import { TermType } from "rethinkdb-ts/lib/proto/enums";
 import { DecodeFunction, DecodeValue } from "./query";
-import { GetIndex, HasIndex, IsRowLevel } from "./schema";
+import { GetIndex, HasIndex } from "./schema";
 import { SelectionQuery } from "./selection";
 import {
   allocateArgNumber,
@@ -421,32 +421,34 @@ function handleNth(
   return [TermType.NTH, [prev, n]];
 }
 
+function buildMappedDistinct(prev: TermJson, field: string): TermJson {
+  const argId = allocateArgNumber();
+  const mapped: TermJson = [
+    TermType.MAP,
+    [
+      prev,
+      [
+        TermType.FUNC,
+        [
+          [TermType.MAKE_ARRAY, [argId]],
+          [TermType.BRACKET, [[TermType.VAR, [argId]], field]],
+        ],
+      ],
+    ],
+  ];
+  return [TermType.DISTINCT, [mapped]];
+}
+
 function handleCount(
   prev: TermJson,
   stage: QueryStage,
   _context: DecodingContext,
-  schemaId: string,
+  _schemaId: string,
+  _tableName: string,
 ): TermJson {
   if (stage.options?.field) {
-    if (IsRowLevel(schemaId)) {
-      const argId = allocateArgNumber();
-      const mapped: TermJson = [
-        TermType.MAP,
-        [
-          prev,
-          [
-            TermType.FUNC,
-            [
-              [TermType.MAKE_ARRAY, [argId]],
-              [
-                TermType.BRACKET,
-                [[TermType.VAR, [argId]], stage.options.field],
-              ],
-            ],
-          ],
-        ],
-      ];
-      return [TermType.COUNT, [[TermType.DISTINCT, [mapped]]]];
+    if (!isTableTerm(prev)) {
+      return [TermType.COUNT, [buildMappedDistinct(prev, stage.options.field)]];
     }
     return [
       TermType.COUNT,
@@ -490,28 +492,12 @@ function handleDistinct(
   prev: TermJson,
   stage: QueryStage,
   _context: DecodingContext,
-  schemaId: string,
+  _schemaId: string,
+  _tableName: string,
 ): TermJson {
   if (stage.options?.field) {
-    if (IsRowLevel(schemaId)) {
-      const argId = allocateArgNumber();
-      const mapped: TermJson = [
-        TermType.MAP,
-        [
-          prev,
-          [
-            TermType.FUNC,
-            [
-              [TermType.MAKE_ARRAY, [argId]],
-              [
-                TermType.BRACKET,
-                [[TermType.VAR, [argId]], stage.options.field],
-              ],
-            ],
-          ],
-        ],
-      ];
-      return [TermType.DISTINCT, [mapped]];
+    if (!isTableTerm(prev)) {
+      return buildMappedDistinct(prev, stage.options.field);
     }
     return [TermType.DISTINCT, [prev], { index: stage.options.field }];
   }

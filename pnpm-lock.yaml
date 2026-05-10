@@ -12,8 +12,8 @@ importers:
         specifier: ^0.0.2
         version: 0.0.2
       '@antelopejs/interface-database':
-        specifier: ^0.0.2
-        version: 0.0.2
+        specifier: ^0.1.0
+        version: 0.1.0
       '@antelopejs/interface-rethinkdb':
         specifier: ^0.0.2
         version: 0.0.2
@@ -63,8 +63,11 @@ packages:
   '@antelopejs/interface-core@0.0.2':
     resolution: {integrity: sha512-CmtOJvSCRj20GOQhrE0PpHybGaW1G1lrepiKHVJa/bclhrvFYgHV0MH84TMpMOHESQT/+wuup007tfXAwaI+Eg==}
 
-  '@antelopejs/interface-database@0.0.2':
-    resolution: {integrity: sha512-SFqPwHZf1Qh1Zfcdu1CSBh5/uqT2jEczMtERcOChQYAiEKN+XwStwVttAY7yy/TKd3frqjZ3GrwKK1qXxqx7qQ==}
+  '@antelopejs/interface-core@0.0.3':
+    resolution: {integrity: sha512-Kw3ffGiQHKJ88AqdFfPuwzl+v0w6QqzqiqnLY7M0MYYw+YwdRNXh5WAJkep0ePudR9leLGXPU//FYizNaDG6yw==}
+
+  '@antelopejs/interface-database@0.1.0':
+    resolution: {integrity: sha512-6r+f5A6fttYrQyUh7NnRJxOaNjgsKpb3CeROIQGB7z5EB1vsxgOji8X3CBXflZeEIPlueMuw+YKv1e5+LE6hDg==}
 
   '@antelopejs/interface-rethinkdb@0.0.2':
     resolution: {integrity: sha512-0g2Nuyfw0AHsZ3PXrG9bVJm854aFJVhw8VVrA0tPYhYy7vFrLrsxCrhgcvqsjYlcmRRnjpwaC6lxDgwUXHHfsA==}
@@ -1177,9 +1180,13 @@ snapshots:
     dependencies:
       reflect-metadata: 0.2.2
 
-  '@antelopejs/interface-database@0.0.2':
+  '@antelopejs/interface-core@0.0.3':
     dependencies:
-      '@antelopejs/interface-core': 0.0.2
+      reflect-metadata: 0.2.2
+
+  '@antelopejs/interface-database@0.1.0':
+    dependencies:
+      '@antelopejs/interface-core': 0.0.3
 
   '@antelopejs/interface-rethinkdb@0.0.2':
     dependencies:

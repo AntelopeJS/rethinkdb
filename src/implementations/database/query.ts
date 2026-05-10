@@ -7,6 +7,7 @@ import type { Cursor } from "rethinkdb-ts/lib/response/cursor";
 import { SendQuery } from "../../connection";
 import { Logger } from "../../utils/logger";
 import { decodeExpression } from "./expression";
+import { WaitForSchemaReady } from "./schema";
 import { SelectionQuery } from "./selection";
 import { DecodingContext, type QueryStage } from "./utils";
 
@@ -116,7 +117,7 @@ export async function ReadCursor(reqId: number, stages: QueryStage[]) {
   if (!openCursors.has(reqId)) {
     const context = new DecodingContext();
     const query = SelectionQuery.decode(stages, context);
-    await query.ensureReady();
+    await WaitForSchemaReady(query.schemaId);
     const term = query.buildTerm();
     Logger.Debug("Opening cursor #", reqId);
     const cursor = await SendQuery(term);

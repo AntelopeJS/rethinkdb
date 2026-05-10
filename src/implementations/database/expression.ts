@@ -132,10 +132,6 @@ const COMPLEX_STAGE_MAP: Record<string, StageHandler> = {
     }
     return bracket;
   },
-  obj_has: (expr, fields: TermJson) => [
-    TermType.HAS_FIELDS,
-    [expr.value, ...(Array.isArray(fields) ? fields : [fields])],
-  ],
 };
 
 type FuncStageHandler = (
@@ -144,6 +140,10 @@ type FuncStageHandler = (
 ) => TermJson;
 
 const FUNC_STAGE_MAP: Record<string, FuncStageHandler> = {
+  obj_has: (expr, stage) => {
+    const fields = stage.args[0] as string[];
+    return [TermType.HAS_FIELDS, [expr.value, ...fields]];
+  },
   arr_filter: (expr, stage) => {
     const func = stage.args[0];
     const argId = allocateArgNumber();
