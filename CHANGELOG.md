@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.1.0
+
+[compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.0.0...v1.1.0)
+
+### 🚀 Enhancements
+
+- ⚠️  Per-table tenant scoping with shared physical stores ([#15](https://github.com/AntelopeJS/rethinkdb/pull/15))
+
+### 🏡 Chore
+
+- Update package.json ([5873032](https://github.com/AntelopeJS/rethinkdb/commit/5873032))
+- Update dependencies ([2b18a04](https://github.com/AntelopeJS/rethinkdb/commit/2b18a04))
+
+#### ⚠️ Breaking Changes
+
+- ⚠️  Per-table tenant scoping with shared physical stores ([#15](https://github.com/AntelopeJS/rethinkdb/pull/15))
+
+### ❤️ Contributors
+
+- Antony Rizzitelli <upd4ting@gmail.com>
+
 ## v1.0.0
 
 [compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v0.1.2...v1.0.0)
