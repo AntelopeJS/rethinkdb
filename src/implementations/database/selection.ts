@@ -287,6 +287,11 @@ export class SelectionQuery {
   }
 
   private async runReplace() {
+    if (this.tenant.kind === "cross") {
+      throw new Error(
+        `Replace on tenant-scoped table '${this.tableName}' requires a specific tenant id (CROSS_TENANT would silently strip the tenant_id from the replaced document; use update for cross-tenant mutations)`,
+      );
+    }
     const argId = allocateArgNumber();
     const oldDoc: TermJson = [TermType.VAR, [argId]];
     let replaceValue = this.newValue;
