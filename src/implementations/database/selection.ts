@@ -5,7 +5,12 @@ import { TermType } from "rethinkdb-ts/lib/proto/enums";
 import { DecodeFunction, DecodeValue, executeTermJson } from "./query";
 import { GetPhysicalStore, IsTenantScoped, WaitForSchemaReady } from "./schema";
 import { applyStreamStages } from "./stream";
-import { allocateArgNumber, DecodingContext, type QueryStage } from "./utils";
+import {
+  allocateArgNumber,
+  DecodingContext,
+  type QueryStage,
+  TENANT_ID_FIELD,
+} from "./utils";
 
 type ResultType =
   | "stream"
@@ -235,7 +240,7 @@ export class SelectionQuery {
       ];
     }
     if (value && typeof value === "object" && !Array.isArray(value)) {
-      return { ...value, tenant_id: tenantId };
+      return { ...value, [TENANT_ID_FIELD]: tenantId };
     }
     return value;
   }
@@ -255,7 +260,7 @@ export class SelectionQuery {
         [
           TermType.EQ,
           [
-            [TermType.BRACKET, [[TermType.VAR, [argId]], "tenant_id"]],
+            [TermType.BRACKET, [[TermType.VAR, [argId]], TENANT_ID_FIELD]],
             tenantId,
           ],
         ],
@@ -296,7 +301,10 @@ export class SelectionQuery {
     const oldDoc: TermJson = [TermType.VAR, [argId]];
     let replaceValue = this.newValue;
     if (this.tenant.kind === "scoped") {
-      replaceValue = { ...replaceValue, tenant_id: this.tenant.tenantId };
+      replaceValue = {
+        ...replaceValue,
+        [TENANT_ID_FIELD]: this.tenant.tenantId,
+      };
     }
     const merged: TermJson = [
       TermType.MERGE,

@@ -14,6 +14,7 @@ import { backtraceTerm } from "rethinkdb-ts/lib/error/term-backtrace";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import { TermType } from "rethinkdb-ts/lib/proto/enums";
 import type { Cursor } from "rethinkdb-ts/lib/response/cursor";
+import { TENANT_ID_FIELD } from "./implementations/database/utils";
 import { Logger } from "./utils/logger";
 
 let connection:
@@ -102,8 +103,6 @@ export async function executeTermJson(term: TermJson): Promise<any> {
   }
   return results;
 }
-
-const TENANT_ID_FIELD = "tenant_id";
 
 export async function InitializeSchemaInPhysicalStore(
   physicalStore: string,
