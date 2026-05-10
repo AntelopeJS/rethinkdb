@@ -103,57 +103,18 @@ export async function executeTermJson(term: TermJson): Promise<any> {
   return results;
 }
 
-export function buildDatabaseName(
-  schemaId: string,
-  instanceId: string | undefined,
-): string {
-  return instanceId !== undefined ? `${schemaId}-${instanceId}` : schemaId;
-}
+const TENANT_ID_FIELD = "tenant_id";
 
-export async function CreateRowLevelDatabase(
-  schemaId: string,
+export async function InitializeSchemaInPhysicalStore(
+  physicalStore: string,
   schema: SchemaDefinition,
 ) {
   const dbList: string[] =
     (await executeTermJson([TermType.DB_LIST, []])) ?? [];
-  if (!dbList.includes(schemaId)) {
-    await executeTermJson([TermType.DB_CREATE, [schemaId]]);
+  if (!dbList.includes(physicalStore)) {
+    await executeTermJson([TermType.DB_CREATE, [physicalStore]]);
   }
-  await initializeDatabase(schemaId, schema, true);
-}
-
-export async function CreateSchemaInstance(
-  schemaId: string,
-  instanceId: string | undefined,
-  schema: SchemaDefinition,
-) {
-  const dbName = buildDatabaseName(schemaId, instanceId);
-  const dbList: string[] =
-    (await executeTermJson([TermType.DB_LIST, []])) ?? [];
-  if (!dbList.includes(dbName)) {
-    await executeTermJson([TermType.DB_CREATE, [dbName]]);
-  }
-  await initializeDatabase(dbName, schema);
-}
-
-export async function DestroySchemaInstance(
-  schemaId: string,
-  instanceId: string | undefined,
-) {
-  const dbName = buildDatabaseName(schemaId, instanceId);
-  const dbList: string[] =
-    (await executeTermJson([TermType.DB_LIST, []])) ?? [];
-  if (dbList.includes(dbName)) {
-    await executeTermJson([TermType.DB_DROP, [dbName]]);
-  }
-}
-
-async function initializeDatabase(
-  dbName: string,
-  schema: SchemaDefinition,
-  rowLevel?: boolean,
-) {
-  const db: TermJson = [TermType.DB, [dbName]];
+  const db: TermJson = [TermType.DB, [physicalStore]];
   const tableList: string[] =
     (await executeTermJson([TermType.TABLE_LIST, [db]])) ?? [];
 
@@ -171,7 +132,7 @@ async function initializeDatabase(
 
   await Promise.all(
     Object.entries(schema).map(([tableName, tableDef]) =>
-      initializeIndexes(db, tableName, tableDef.indexes, rowLevel),
+      initializeIndexes(db, tableName, tableDef.indexes, tableDef.tenantScoped),
     ),
   );
 }
@@ -180,7 +141,7 @@ async function initializeIndexes(
   db: TermJson,
   tableName: string,
   indexes: Record<string, any>,
-  rowLevel?: boolean,
+  tenantScoped?: boolean,
 ) {
   const table: TermJson = [TermType.TABLE, [db, tableName]];
   const existingIndexList: string[] =
@@ -221,8 +182,8 @@ async function initializeIndexes(
     }
     created = true;
   }
-  if (rowLevel && !existingIndexList.includes("tenant_id")) {
-    await executeTermJson([TermType.INDEX_CREATE, [table, "tenant_id"]]);
+  if (tenantScoped && !existingIndexList.includes(TENANT_ID_FIELD)) {
+    await executeTermJson([TermType.INDEX_CREATE, [table, TENANT_ID_FIELD]]);
     created = true;
   }
   if (created) {

@@ -1,14 +1,9 @@
 import assert from "node:assert";
+import { CROSS_TENANT } from "@antelopejs/interface-database/schema";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import { TermType } from "rethinkdb-ts/lib/proto/enums";
-import { buildDatabaseName } from "../../connection";
 import { DecodeFunction, DecodeValue, executeTermJson } from "./query";
-import {
-  CreateInstance,
-  DestroyInstance,
-  IsRowLevel,
-  IsValidInstance,
-} from "./schema";
+import { GetPhysicalStore, IsTenantScoped, WaitForSchemaReady } from "./schema";
 import { applyStreamStages } from "./stream";
 import { allocateArgNumber, DecodingContext, type QueryStage } from "./utils";
 
@@ -19,9 +14,12 @@ type ResultType =
   | "insert"
   | "update"
   | "replace"
-  | "delete"
-  | "createInstance"
-  | "destroyInstance";
+  | "delete";
+
+type TenantContext =
+  | { kind: "none" }
+  | { kind: "scoped"; tenantId: string }
+  | { kind: "cross" };
 
 const WRITE_STAGES = new Set(["insert", "update", "replace", "delete"]);
 const PRE_STREAM_STAGES = new Set([
@@ -34,6 +32,30 @@ const PRE_STREAM_STAGES = new Set([
   "delete",
 ]);
 
+function resolveTenantContext(
+  schemaId: string,
+  tableName: string,
+  instanceId: unknown,
+): TenantContext {
+  if (!IsTenantScoped(schemaId, tableName)) {
+    return { kind: "none" };
+  }
+  if (instanceId === undefined) {
+    throw new Error(
+      `Table '${tableName}' is tenant-scoped: a tenant id must be provided via Schema.instance(...)`,
+    );
+  }
+  if (instanceId === CROSS_TENANT) {
+    return { kind: "cross" };
+  }
+  if (typeof instanceId !== "string") {
+    throw new Error(
+      `Invalid tenant id for table '${tableName}': expected string or CROSS_TENANT, got ${typeof instanceId}`,
+    );
+  }
+  return { kind: "scoped", tenantId: instanceId };
+}
+
 export class SelectionQuery {
   public resultType: ResultType = "table";
   public isChangeStream = false;
@@ -42,24 +64,21 @@ export class SelectionQuery {
   private conflictMode?: "update" | "replace";
   private insertRawArgs?: any;
   private term: TermJson;
-  private readonly rowLevel: boolean;
+  private readonly tenant: TenantContext;
 
   public constructor(
     public readonly schemaId: string,
-    public readonly instanceId: string | undefined,
+    public readonly instanceId: string | typeof CROSS_TENANT | undefined,
     public readonly tableName: string,
     public readonly database: string,
     private context: DecodingContext,
   ) {
-    this.rowLevel = IsRowLevel(schemaId);
+    this.tenant = resolveTenantContext(schemaId, tableName, instanceId);
     const baseTerm: TermJson = [
       TermType.TABLE,
       [[TermType.DB, [database]], tableName],
     ];
-    if (this.rowLevel) {
-      if (instanceId === undefined) {
-        throw new Error(`Row-level schema '${schemaId}' requires a tenant ID`);
-      }
+    if (this.tenant.kind === "scoped") {
       this.term = this.buildTenantFilterTerm(baseTerm);
     } else {
       this.term = baseTerm;
@@ -82,41 +101,11 @@ export class SelectionQuery {
     const schemaId = stages[0].options?.id;
     assert(schemaId, "Unknown schema");
 
-    if (stages[1]?.stage === "createInstance") {
-      const instanceId = stages[1].options?.id;
-      const database = buildDatabaseName(schemaId, instanceId);
-      const query = new SelectionQuery(
-        schemaId,
-        instanceId,
-        "",
-        database,
-        context,
-      );
-      query.resultType = "createInstance";
-      return query;
-    }
-
-    if (stages[1]?.stage === "destroyInstance") {
-      const instanceId = stages[1].options?.id;
-      const database = buildDatabaseName(schemaId, instanceId);
-      const query = new SelectionQuery(
-        schemaId,
-        instanceId,
-        "",
-        database,
-        context,
-      );
-      query.resultType = "destroyInstance";
-      return query;
-    }
-
     assert(stages[1]?.stage === "instance", "Expected instance stage");
     const instanceId = stages[1].options?.id;
     assert(stages[2]?.stage === "table", "Expected table stage");
     const tableName = stages[2].options.id;
-    const database = IsRowLevel(schemaId)
-      ? schemaId
-      : buildDatabaseName(schemaId, instanceId);
+    const database = GetPhysicalStore(schemaId);
 
     const query = new SelectionQuery(
       schemaId,
@@ -185,16 +174,8 @@ export class SelectionQuery {
   }
 
   public async run(): Promise<any> {
-    if (
-      this.resultType !== "createInstance" &&
-      this.resultType !== "destroyInstance"
-    ) {
-      await this.ensureInstance();
-    }
-
+    await WaitForSchemaReady(this.schemaId);
     const RUN_HANDLERS: Record<string, () => Promise<any>> = {
-      createInstance: () => this.runCreateInstance(),
-      destroyInstance: () => this.runDestroyInstance(),
       insert: () => this.runInsert(),
       update: () => this.runUpdate(),
       replace: () => this.runReplace(),
@@ -213,37 +194,15 @@ export class SelectionQuery {
     return result;
   }
 
-  public async ensureReady() {
-    await this.ensureInstance();
-  }
-
-  private async ensureInstance() {
-    if (!IsValidInstance(this.schemaId, this.instanceId)) {
+  private async runInsert() {
+    if (this.tenant.kind === "cross") {
       throw new Error(
-        `Instance '${this.instanceId ?? "(global)"}' does not exist for schema '${this.schemaId}'`,
+        `Insert into tenant-scoped table '${this.tableName}' requires a specific tenant id (CROSS_TENANT is read-only)`,
       );
     }
-  }
-
-  private async runCreateInstance() {
-    if (this.rowLevel) {
-      return this.instanceId;
-    }
-    await CreateInstance(this.schemaId, this.instanceId);
-    return this.instanceId;
-  }
-
-  private async runDestroyInstance() {
-    if (this.rowLevel) {
-      return;
-    }
-    await DestroyInstance(this.schemaId, this.instanceId);
-  }
-
-  private async runInsert() {
     let value = this.newValue;
-    if (this.rowLevel && this.instanceId !== undefined) {
-      value = this.stampTenantId(value);
+    if (this.tenant.kind === "scoped") {
+      value = this.stampTenantId(value, this.tenant.tenantId);
     }
     const insertOpts = this.conflictMode ? { conflict: this.conflictMode } : {};
     const insertTerm: TermJson = [
@@ -268,15 +227,15 @@ export class SelectionQuery {
     );
   }
 
-  private stampTenantId(value: any): any {
+  private stampTenantId(value: any, tenantId: string): any {
     if (Array.isArray(value) && value[0] === TermType.MAKE_ARRAY) {
       return [
         TermType.MAKE_ARRAY,
-        value[1].map((doc: any) => this.stampTenantId(doc)),
+        value[1].map((doc: any) => this.stampTenantId(doc, tenantId)),
       ];
     }
     if (value && typeof value === "object" && !Array.isArray(value)) {
-      return { ...value, tenant_id: this.instanceId };
+      return { ...value, tenant_id: tenantId };
     }
     return value;
   }
@@ -286,6 +245,8 @@ export class SelectionQuery {
   }
 
   public buildTenantFilterTerm(baseTerm: TermJson): TermJson {
+    assert(this.tenant.kind === "scoped");
+    const tenantId = this.tenant.tenantId;
     const argId = allocateArgNumber();
     const filterFn: TermJson = [
       TermType.FUNC,
@@ -295,7 +256,7 @@ export class SelectionQuery {
           TermType.EQ,
           [
             [TermType.BRACKET, [[TermType.VAR, [argId]], "tenant_id"]],
-            this.instanceId,
+            tenantId,
           ],
         ],
       ],
@@ -303,14 +264,13 @@ export class SelectionQuery {
     return [TermType.FILTER, [baseTerm, filterFn]];
   }
 
-  public isRowLevel(): boolean {
-    return this.rowLevel;
+  public hasTenantFilter(): boolean {
+    return this.tenant.kind === "scoped";
   }
 
   public isSimpleTable(): boolean {
-    // TODO: This is really just a patch to avoid putting a GET_ALL after other operations, we should have a way to insert the get all "deeper" in the term
     return (
-      !this.isRowLevel() &&
+      !this.hasTenantFilter() &&
       Array.isArray(this.term) &&
       this.term[0] === TermType.TABLE
     );
@@ -330,8 +290,8 @@ export class SelectionQuery {
     const argId = allocateArgNumber();
     const oldDoc: TermJson = [TermType.VAR, [argId]];
     let replaceValue = this.newValue;
-    if (this.rowLevel && this.instanceId !== undefined) {
-      replaceValue = { ...replaceValue, tenant_id: this.instanceId };
+    if (this.tenant.kind === "scoped") {
+      replaceValue = { ...replaceValue, tenant_id: this.tenant.tenantId };
     }
     const merged: TermJson = [
       TermType.MERGE,
@@ -375,7 +335,7 @@ const SELECTION_STAGES: Record<string, SelectionStageHandler> = {
   get: (query, stage) => {
     query.resultType = "selection";
     query.singleElement = true;
-    const tableTerm = query.isRowLevel()
+    const tableTerm = query.hasTenantFilter()
       ? query.getTableTerm()
       : query.buildTerm();
     const key = DecodeValue(stage.args[0], query.getContext());
@@ -383,7 +343,7 @@ const SELECTION_STAGES: Record<string, SelectionStageHandler> = {
   },
   getAll: (query, stage) => {
     query.resultType = "selection";
-    const baseTerm = query.isRowLevel()
+    const baseTerm = query.hasTenantFilter()
       ? query.getTableTerm()
       : query.buildTerm();
     const index = stage.options?.index;
@@ -398,12 +358,12 @@ const SELECTION_STAGES: Record<string, SelectionStageHandler> = {
       index ? { index } : {},
     ];
     query.setTerm(
-      query.isRowLevel() ? query.buildTenantFilterTerm(term) : term,
+      query.hasTenantFilter() ? query.buildTenantFilterTerm(term) : term,
     );
   },
   between: (query, stage) => {
     query.resultType = "selection";
-    const baseTerm = query.isRowLevel()
+    const baseTerm = query.hasTenantFilter()
       ? query.getTableTerm()
       : query.buildTerm();
     const index = stage.options?.index;
@@ -415,7 +375,7 @@ const SELECTION_STAGES: Record<string, SelectionStageHandler> = {
       index ? { index } : {},
     ];
     query.setTerm(
-      query.isRowLevel() ? query.buildTenantFilterTerm(term) : term,
+      query.hasTenantFilter() ? query.buildTenantFilterTerm(term) : term,
     );
   },
   insert: (query, stage) => {
