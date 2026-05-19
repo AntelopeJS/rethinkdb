@@ -20,7 +20,14 @@ export const Schemas = {
     existingSchemas[schemaId] = { definition: schema };
     const ready = initializeSchema(schemaId, schema);
     schemaReady[schemaId] = ready;
-    await ready;
+    try {
+      await ready;
+    } catch (err) {
+      delete existingSchemas[schemaId];
+      delete schemaReady[schemaId];
+      delete existingInstances[schemaId];
+      throw err;
+    }
   },
   unregister(schemaId: string) {
     delete existingSchemas[schemaId];

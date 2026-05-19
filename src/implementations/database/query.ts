@@ -143,9 +143,12 @@ const openCursors = new Map<number, OpenCursor>();
 
 export async function ReadCursor(reqId: number, stages: QueryStage[]) {
   if (!openCursors.has(reqId)) {
+    assert(stages[0]?.stage === "schema", "Expected schema stage");
+    const schemaId = stages[0].options?.id;
+    assert(schemaId, "Unknown schema");
+    await WaitForSchemaReady(schemaId);
     const context = new DecodingContext();
     const query = SelectionQuery.decode(stages, context);
-    await WaitForSchemaReady(query.schemaId);
     const term = query.buildTerm();
     Logger.Debug("Opening cursor #", reqId);
     const cursor = await SendQuery(term);
