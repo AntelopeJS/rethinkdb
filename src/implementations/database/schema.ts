@@ -3,7 +3,11 @@ import type { SchemaDefinition } from "@antelopejs/interface-database/schema";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import { TermType } from "rethinkdb-ts/lib/proto/enums";
 import { executeTermJson, InitializeSchemaDatabase } from "../../connection";
-import { INSTANCE_REGISTRY_FIELD, INSTANCE_REGISTRY_TABLE } from "./utils";
+import {
+  INSTANCE_REGISTRY_FIELD,
+  INSTANCE_REGISTRY_TABLE,
+  TENANT_ID_FIELD,
+} from "./utils";
 
 const existingSchemas: Record<string, { definition: SchemaDefinition }> = {};
 
@@ -147,7 +151,7 @@ async function deleteInstanceRows(
   const matching: TermJson = [
     TermType.GET_ALL,
     [table, instanceId],
-    { index: "tenant_id" },
+    { index: TENANT_ID_FIELD },
   ];
   await executeTermJson([TermType.DELETE, [matching]]);
 }
