@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.2.0
+
+### 🚀 Enhancements
+
+- ⚠️  Explicit instance lifecycle (`createInstance`, `destroyInstance`, `listInstances`) tracked via a `__instances__` table inside each schema's database.
+- ⚠️  Rename `CROSS_TENANT` import to `CROSS_INSTANCE` (semantics unchanged: skip filter on read/update/delete, reject on insert/replace).
+
+### 🏗️ Breaking Changes
+
+- ⚠️  `tenantScoped` and `physicalStore` are no longer honored — every table is implicitly instance-scoped, every schema lives in its own database (`${schemaId}`).
+- ⚠️  Strict instance validation: `instance(id).table(...)` rejects unless `createInstance(id)` was called first.
+
 ## v1.1.0
 
 [compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.0.0...v1.1.0)

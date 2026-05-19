@@ -1,9 +1,10 @@
 import assert from "node:assert";
-import { CROSS_TENANT } from "@antelopejs/interface-database/schema";
+import { CROSS_INSTANCE } from "@antelopejs/interface-database/schema";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import { TermType } from "rethinkdb-ts/lib/proto/enums";
-import { DecodeFunction, DecodeValue, executeTermJson } from "./query";
-import { GetPhysicalStore, IsTenantScoped, WaitForSchemaReady } from "./schema";
+import { executeTermJson } from "../../connection";
+import { DecodeFunction, DecodeValue } from "./query";
+import { IsValidInstance, WaitForSchemaReady } from "./schema";
 import { applyStreamStages } from "./stream";
 import {
   allocateArgNumber,
@@ -21,10 +22,7 @@ type ResultType =
   | "replace"
   | "delete";
 
-type TenantContext =
-  | { kind: "none" }
-  | { kind: "scoped"; tenantId: string }
-  | { kind: "cross" };
+type TenantContext = { kind: "scoped"; tenantId: string } | { kind: "cross" };
 
 const WRITE_STAGES = new Set(["insert", "update", "replace", "delete"]);
 const PRE_STREAM_STAGES = new Set([
@@ -42,23 +40,21 @@ function resolveTenantContext(
   tableName: string,
   instanceId: unknown,
 ): TenantContext {
-  if (!IsTenantScoped(schemaId, tableName)) {
-    return { kind: "none" };
-  }
-  if (instanceId === undefined) {
-    throw new Error(
-      `Table '${tableName}' is tenant-scoped: a tenant id must be provided via Schema.instance(...)`,
-    );
-  }
-  if (instanceId === CROSS_TENANT) {
+  if (instanceId === CROSS_INSTANCE) {
     return { kind: "cross" };
   }
-  if (typeof instanceId !== "string") {
+  if (instanceId !== undefined && typeof instanceId !== "string") {
     throw new Error(
-      `Invalid tenant id for table '${tableName}': expected string or CROSS_TENANT, got ${typeof instanceId}`,
+      `Invalid instance id for table '${tableName}': expected string or CROSS_INSTANCE, got ${typeof instanceId}`,
     );
   }
-  return { kind: "scoped", tenantId: instanceId };
+  const tenantId = instanceId ?? "";
+  if (!IsValidInstance(schemaId, tenantId)) {
+    throw new Error(
+      `Instance '${tenantId}' of schema '${schemaId}' does not exist; call createInstance first`,
+    );
+  }
+  return { kind: "scoped", tenantId };
 }
 
 export class SelectionQuery {
@@ -73,7 +69,7 @@ export class SelectionQuery {
 
   public constructor(
     public readonly schemaId: string,
-    public readonly instanceId: string | typeof CROSS_TENANT | undefined,
+    public readonly instanceId: string | typeof CROSS_INSTANCE | undefined,
     public readonly tableName: string,
     public readonly database: string,
     private context: DecodingContext,
@@ -110,13 +106,12 @@ export class SelectionQuery {
     const instanceId = stages[1].options?.id;
     assert(stages[2]?.stage === "table", "Expected table stage");
     const tableName = stages[2].options.id;
-    const database = GetPhysicalStore(schemaId);
 
     const query = new SelectionQuery(
       schemaId,
       instanceId,
       tableName,
-      database,
+      schemaId,
       context,
     );
     query.addStages(stages.slice(3));
@@ -202,7 +197,7 @@ export class SelectionQuery {
   private async runInsert() {
     if (this.tenant.kind === "cross") {
       throw new Error(
-        `Insert into tenant-scoped table '${this.tableName}' requires a specific tenant id (CROSS_TENANT is read-only)`,
+        `Insert with CROSS_INSTANCE is not supported on table '${this.tableName}'`,
       );
     }
     let value = this.newValue;
@@ -294,7 +289,7 @@ export class SelectionQuery {
   private async runReplace() {
     if (this.tenant.kind === "cross") {
       throw new Error(
-        `Replace on tenant-scoped table '${this.tableName}' requires a specific tenant id (CROSS_TENANT would silently strip the tenant_id from the replaced document; use update for cross-tenant mutations)`,
+        `Replace with CROSS_INSTANCE is not supported on table '${this.tableName}' (would silently strip the tenant_id from the replaced document; use update for cross-instance mutations)`,
       );
     }
     const argId = allocateArgNumber();
