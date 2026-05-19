@@ -1,109 +1,62 @@
 import assert from "node:assert";
-import type {
-  SchemaDefinition,
-  SchemaOptions,
-} from "@antelopejs/interface-database/schema";
-import { InitializeSchemaInPhysicalStore } from "../../connection";
+import type { SchemaDefinition } from "@antelopejs/interface-database/schema";
+import type { TermJson } from "rethinkdb-ts/lib/internal-types";
+import { TermType } from "rethinkdb-ts/lib/proto/enums";
+import { executeTermJson, InitializeSchemaDatabase } from "../../connection";
+import {
+  INSTANCE_REGISTRY_FIELD,
+  INSTANCE_REGISTRY_TABLE,
+  TENANT_ID_FIELD,
+} from "./utils";
 
-const existingSchemas: Record<
-  string,
-  { definition: SchemaDefinition; options: SchemaOptions }
-> = {};
+const existingSchemas: Record<string, { definition: SchemaDefinition }> = {};
 
 const schemaReady: Record<string, Promise<void>> = {};
 
-const collectionOwnership = new Map<string, string>();
-
-function ownershipKey(physicalStore: string, tableName: string): string {
-  return `${physicalStore}\0${tableName}`;
-}
-
-function claimOwnership(
-  physicalStore: string,
-  tableName: string,
-  schemaId: string,
-) {
-  const key = ownershipKey(physicalStore, tableName);
-  const owner = collectionOwnership.get(key);
-  if (owner && owner !== schemaId) {
-    throw new Error(
-      `Table '${tableName}' in physical store '${physicalStore}' is already declared by schema '${owner}', cannot redeclare in '${schemaId}'`,
-    );
-  }
-  collectionOwnership.set(key, schemaId);
-}
-
-function releaseOwnership(
-  physicalStore: string,
-  tableNames: Iterable<string>,
-  schemaId: string,
-) {
-  for (const tableName of tableNames) {
-    const key = ownershipKey(physicalStore, tableName);
-    if (collectionOwnership.get(key) === schemaId) {
-      collectionOwnership.delete(key);
-    }
-  }
-}
-
-function rollbackRegistration(
-  schemaId: string,
-  physicalStore: string,
-  claimedTables: string[],
-) {
-  releaseOwnership(physicalStore, claimedTables, schemaId);
-  delete existingSchemas[schemaId];
-  delete schemaReady[schemaId];
-}
-
-function releasePreviousClaims(schemaId: string) {
-  const previous = existingSchemas[schemaId];
-  if (!previous) return;
-  const previousStore = previous.options.physicalStore ?? schemaId;
-  releaseOwnership(previousStore, Object.keys(previous.definition), schemaId);
-}
+const existingInstances: Record<string, Set<string>> = {};
 
 export const Schemas = {
-  async register(
-    schemaId: string,
-    schema: SchemaDefinition,
-    options: SchemaOptions,
-  ) {
-    const physicalStore = options.physicalStore ?? schemaId;
-    releasePreviousClaims(schemaId);
-    existingSchemas[schemaId] = { definition: schema, options };
-    const claimed: string[] = [];
+  async register(schemaId: string, schema: SchemaDefinition) {
+    existingSchemas[schemaId] = { definition: schema };
+    const ready = initializeSchema(schemaId, schema);
+    schemaReady[schemaId] = ready;
     try {
-      for (const tableName of Object.keys(schema)) {
-        claimOwnership(physicalStore, tableName, schemaId);
-        claimed.push(tableName);
-      }
-      const ready = InitializeSchemaInPhysicalStore(physicalStore, schema);
-      schemaReady[schemaId] = ready;
       await ready;
     } catch (err) {
-      rollbackRegistration(schemaId, physicalStore, claimed);
+      delete existingSchemas[schemaId];
+      delete schemaReady[schemaId];
+      delete existingInstances[schemaId];
       throw err;
     }
   },
   unregister(schemaId: string) {
-    const entry = existingSchemas[schemaId];
-    if (entry) {
-      const physicalStore = entry.options.physicalStore ?? schemaId;
-      releaseOwnership(physicalStore, Object.keys(entry.definition), schemaId);
-    }
     delete existingSchemas[schemaId];
     delete schemaReady[schemaId];
+    delete existingInstances[schemaId];
   },
 };
 
-export function WaitForSchemaReady(schemaId: string): Promise<void> {
-  return schemaReady[schemaId] ?? Promise.resolve();
+async function initializeSchema(schemaId: string, schema: SchemaDefinition) {
+  await InitializeSchemaDatabase(schemaId, schema);
+  await hydrateInstances(schemaId);
 }
 
-export function GetPhysicalStore(schemaId: string): string {
-  assert(schemaId in existingSchemas, `Unknown schema '${schemaId}'`);
-  return existingSchemas[schemaId].options.physicalStore ?? schemaId;
+async function hydrateInstances(schemaId: string) {
+  const table: TermJson = [
+    TermType.TABLE,
+    [[TermType.DB, [schemaId]], INSTANCE_REGISTRY_TABLE],
+  ];
+  const rows: Array<{ _id: string; instance_id: string }> =
+    (await executeTermJson(table)) ?? [];
+  const set = new Set<string>();
+  for (const row of rows) {
+    set.add(row.instance_id);
+  }
+  existingInstances[schemaId] = set;
+}
+
+export function WaitForSchemaReady(schemaId: string): Promise<void> {
+  return schemaReady[schemaId] ?? Promise.resolve();
 }
 
 export function GetSchema(schemaId: string) {
@@ -115,10 +68,6 @@ export function GetTable(schemaId: string, tableId: string) {
   const schema = GetSchema(schemaId);
   assert(tableId in schema);
   return schema[tableId];
-}
-
-export function IsTenantScoped(schemaId: string, tableId: string): boolean {
-  return GetTable(schemaId, tableId).tenantScoped === true;
 }
 
 export function HasIndex(
@@ -142,4 +91,83 @@ export function GetIndex(
   }
   assert(!onlyIndex);
   return { fields: [indexId] };
+}
+
+export function IsValidInstance(
+  schemaId: string,
+  instanceId: string | undefined,
+): boolean {
+  return existingInstances[schemaId]?.has(instanceId ?? "") ?? false;
+}
+
+export async function CreateInstance(
+  schemaId: string,
+  instanceId: string | undefined,
+): Promise<string> {
+  await WaitForSchemaReady(schemaId);
+  const id = instanceId ?? "";
+  const registryTable: TermJson = [
+    TermType.TABLE,
+    [[TermType.DB, [schemaId]], INSTANCE_REGISTRY_TABLE],
+  ];
+  await executeTermJson([
+    TermType.INSERT,
+    [registryTable, { _id: id, [INSTANCE_REGISTRY_FIELD]: id }],
+    { conflict: "replace" },
+  ]);
+  if (!existingInstances[schemaId]) {
+    existingInstances[schemaId] = new Set<string>();
+  }
+  existingInstances[schemaId].add(id);
+  return id;
+}
+
+export async function DestroyInstance(
+  schemaId: string,
+  instanceId: string | undefined,
+): Promise<void> {
+  await WaitForSchemaReady(schemaId);
+  const id = instanceId ?? "";
+  const schema = GetSchema(schemaId);
+  const db: TermJson = [TermType.DB, [schemaId]];
+
+  await Promise.all(
+    Object.keys(schema).map((tableName) =>
+      deleteInstanceRows(db, tableName, id),
+    ),
+  );
+
+  const registryTable: TermJson = [
+    TermType.TABLE,
+    [db, INSTANCE_REGISTRY_TABLE],
+  ];
+  await executeTermJson([
+    TermType.DELETE,
+    [[TermType.GET, [registryTable, id]]],
+  ]);
+
+  existingInstances[schemaId]?.delete(id);
+}
+
+async function deleteInstanceRows(
+  db: TermJson,
+  tableName: string,
+  instanceId: string,
+) {
+  const table: TermJson = [TermType.TABLE, [db, tableName]];
+  const matching: TermJson = [
+    TermType.GET_ALL,
+    [table, instanceId],
+    { index: TENANT_ID_FIELD },
+  ];
+  await executeTermJson([TermType.DELETE, [matching]]);
+}
+
+export async function ListInstances(schemaId: string): Promise<string[]> {
+  await WaitForSchemaReady(schemaId);
+  const set = existingInstances[schemaId];
+  if (!set) {
+    return [];
+  }
+  return Array.from(set).filter((id) => id !== "");
 }

@@ -7,7 +7,12 @@ import type { Cursor } from "rethinkdb-ts/lib/response/cursor";
 import { SendQuery } from "../../connection";
 import { Logger } from "../../utils/logger";
 import { decodeExpression } from "./expression";
-import { WaitForSchemaReady } from "./schema";
+import {
+  CreateInstance,
+  DestroyInstance,
+  ListInstances,
+  WaitForSchemaReady,
+} from "./schema";
 import { SelectionQuery } from "./selection";
 import { DecodingContext, type QueryStage } from "./utils";
 
@@ -99,10 +104,33 @@ export function DecodeFunction(
   return val;
 }
 
+type SchemaStageHandler = (
+  schemaId: string,
+  stages: QueryStage[],
+) => Promise<any>;
+
+const SCHEMA_STAGE_HANDLERS: Record<string, SchemaStageHandler> = {
+  instance: async (schemaId, stages) => {
+    await WaitForSchemaReady(schemaId);
+    const context = new DecodingContext();
+    return SelectionQuery.decode(stages, context).run();
+  },
+  createInstance: (schemaId, stages) =>
+    CreateInstance(schemaId, stages[1]?.options?.id),
+  destroyInstance: (schemaId, stages) =>
+    DestroyInstance(schemaId, stages[1]?.options?.id),
+  listInstances: (schemaId) => ListInstances(schemaId),
+};
+
 export async function RunQuery(stages: QueryStage[]) {
-  const context = new DecodingContext();
-  const query = SelectionQuery.decode(stages, context);
-  return query.run();
+  assert(stages[0]?.stage === "schema", "Expected schema stage");
+  const schemaId = stages[0].options?.id;
+  assert(schemaId, "Unknown schema");
+
+  const next = stages[1]?.stage;
+  const handler = next ? SCHEMA_STAGE_HANDLERS[next] : undefined;
+  assert(handler, `Unknown schema stage '${next}'`);
+  return handler(schemaId, stages);
 }
 
 interface OpenCursor {
@@ -115,9 +143,12 @@ const openCursors = new Map<number, OpenCursor>();
 
 export async function ReadCursor(reqId: number, stages: QueryStage[]) {
   if (!openCursors.has(reqId)) {
+    assert(stages[0]?.stage === "schema", "Expected schema stage");
+    const schemaId = stages[0].options?.id;
+    assert(schemaId, "Unknown schema");
+    await WaitForSchemaReady(schemaId);
     const context = new DecodingContext();
     const query = SelectionQuery.decode(stages, context);
-    await WaitForSchemaReady(query.schemaId);
     const term = query.buildTerm();
     Logger.Debug("Opening cursor #", reqId);
     const cursor = await SendQuery(term);
