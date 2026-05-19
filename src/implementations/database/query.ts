@@ -110,7 +110,8 @@ type SchemaStageHandler = (
 ) => Promise<any>;
 
 const SCHEMA_STAGE_HANDLERS: Record<string, SchemaStageHandler> = {
-  instance: (_schemaId, stages) => {
+  instance: async (schemaId, stages) => {
+    await WaitForSchemaReady(schemaId);
     const context = new DecodingContext();
     return SelectionQuery.decode(stages, context).run();
   },
