@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.2.1
+
+[compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.1.0...v1.2.1)
+
+### 🚀 Enhancements
+
+- Explicit instance lifecycle, CROSS_INSTANCE rename ([#16](https://github.com/AntelopeJS/rethinkdb/pull/16))
+
+### ❤️ Contributors
+
+- Thomas ([@Thomasims](http://github.com/Thomasims))
+
 ## v1.2.0
 
 ### 🚀 Enhancements
