@@ -268,13 +268,13 @@ export class SelectionQuery {
     return [TermType.FILTER, [baseTerm, filterFn]];
   }
 
-  public hasTenantFilter(): boolean {
+  public isScopedTenant(): boolean {
     return this.tenant.kind === "scoped";
   }
 
   public isSimpleTable(): boolean {
     return (
-      !this.hasTenantFilter() &&
+      !this.isScopedTenant() &&
       Array.isArray(this.term) &&
       this.term[0] === TermType.TABLE
     );
@@ -347,7 +347,7 @@ const SELECTION_STAGES: Record<string, SelectionStageHandler> = {
   get: (query, stage) => {
     query.resultType = "selection";
     query.singleElement = true;
-    const tableTerm = query.hasTenantFilter()
+    const tableTerm = query.isScopedTenant()
       ? query.getTableTerm()
       : query.buildTerm();
     const key = DecodeValue(stage.args[0], query.getContext());
@@ -355,7 +355,7 @@ const SELECTION_STAGES: Record<string, SelectionStageHandler> = {
   },
   getAll: (query, stage) => {
     query.resultType = "selection";
-    const baseTerm = query.hasTenantFilter()
+    const baseTerm = query.isScopedTenant()
       ? query.getTableTerm()
       : query.buildTerm();
     const index = stage.options?.index;
@@ -370,12 +370,12 @@ const SELECTION_STAGES: Record<string, SelectionStageHandler> = {
       index ? { index } : {},
     ];
     query.setTerm(
-      query.hasTenantFilter() ? query.buildTenantFilterTerm(term) : term,
+      query.isScopedTenant() ? query.buildTenantFilterTerm(term) : term,
     );
   },
   between: (query, stage) => {
     query.resultType = "selection";
-    const baseTerm = query.hasTenantFilter()
+    const baseTerm = query.isScopedTenant()
       ? query.getTableTerm()
       : query.buildTerm();
     const index = stage.options?.index;
@@ -387,7 +387,7 @@ const SELECTION_STAGES: Record<string, SelectionStageHandler> = {
       index ? { index } : {},
     ];
     query.setTerm(
-      query.hasTenantFilter() ? query.buildTenantFilterTerm(term) : term,
+      query.isScopedTenant() ? query.buildTenantFilterTerm(term) : term,
     );
   },
   insert: (query, stage) => {
