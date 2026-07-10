@@ -80,7 +80,11 @@ export class SelectionQuery {
       [[TermType.DB, [database]], tableName],
     ];
     if (this.tenant.kind === "scoped") {
-      this.term = this.buildTenantFilterTerm(baseTerm);
+      this.term = [
+        TermType.GET_ALL,
+        [baseTerm, this.tenant.tenantId],
+        { index: TENANT_ID_FIELD },
+      ];
     } else {
       this.term = baseTerm;
     }
