@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.2.3
+
+[compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.2.2...v1.2.3)
+
+### 🔥 Performance
+
+- Use tenant_id index for tenant-scoped reads instead of full-table filter ([#19](https://github.com/AntelopeJS/rethinkdb/pull/19))
+
+### ❤️ Contributors
+
+- Fabrice Cst <fabrice@altab.be>
+
 ## v1.2.2
 
 [compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.2.1...v1.2.2)
