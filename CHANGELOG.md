@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.2.4
+
+[compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.2.3...v1.2.4)
+
+### 🩹 Fixes
+
+- **runtime:** Support Core 1.5 interface packages ([#20](https://github.com/AntelopeJS/rethinkdb/pull/20))
+
+### ❤️ Contributors
+
+- Antony Rizzitelli <upd4ting@gmail.com>
+
 ## v1.2.3
 
 [compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.2.2...v1.2.3)

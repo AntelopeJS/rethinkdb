@@ -1,6 +1,6 @@
 {
   "name": "@antelopejs/rethinkdb",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "RethinkDB module that implements the Database interface of antelopejs",
   "keywords": [
     "antelopejs",
