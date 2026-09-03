@@ -23,6 +23,11 @@ jobs:
   release:
     runs-on: ubuntu-latest
     environment: npm-publish
+    services:
+      rethinkdb:
+        image: rethinkdb:2.4
+        ports:
+          - 28015:28015
     permissions:
       contents: write
       id-token: write
