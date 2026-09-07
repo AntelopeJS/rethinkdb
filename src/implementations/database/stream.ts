@@ -1,9 +1,12 @@
+import { TermType } from "rethinkdb-ts/lib/proto/enums";
 import type { Stream } from "@antelopejs/interface-database";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
-import { TermType } from "rethinkdb-ts/lib/proto/enums";
-import { DecodeFunction, DecodeValue } from "./query";
-import { GetIndex, HasIndex } from "./schema";
+
+// oxlint-disable-next-line import/no-cycle -- join and union right-hand sides are sub-queries; see expression.ts
 import { SelectionQuery } from "./selection";
+import { GetIndex, HasIndex } from "./schema";
+// oxlint-disable-next-line import/no-cycle -- stream stages decode values; see expression.ts
+import { DecodeFunction, DecodeValue } from "./expression";
 import {
   allocateArgNumber,
   type DecodingContext,
@@ -504,4 +507,3 @@ function handleDistinct(
   return [TermType.DISTINCT, [prev]];
 }
 
-export { STREAM_STAGE_MAP };

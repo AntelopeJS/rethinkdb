@@ -1,5 +1,11 @@
 import assert from "node:assert";
+import { TermType } from "rethinkdb-ts/lib/proto/enums";
+import type { Cursor } from "rethinkdb-ts/lib/response/cursor";
+import type { TermJson } from "rethinkdb-ts/lib/internal-types";
+import { backtraceTerm } from "rethinkdb-ts/lib/error/term-backtrace";
 import type { SchemaDefinition } from "@antelopejs/interface-database/schema";
+import type { RethinkDBConnection } from "rethinkdb-ts/lib/connection/connection";
+import type { MasterConnectionPool } from "rethinkdb-ts/lib/connection/master-pool";
 import {
   type Connection,
   type MasterPool,
@@ -8,17 +14,12 @@ import {
   type RunOptions,
   r,
 } from "rethinkdb-ts";
-import type { RethinkDBConnection } from "rethinkdb-ts/lib/connection/connection";
-import type { MasterConnectionPool } from "rethinkdb-ts/lib/connection/master-pool";
-import { backtraceTerm } from "rethinkdb-ts/lib/error/term-backtrace";
-import type { TermJson } from "rethinkdb-ts/lib/internal-types";
-import { TermType } from "rethinkdb-ts/lib/proto/enums";
-import type { Cursor } from "rethinkdb-ts/lib/response/cursor";
+
+import { Logger } from "./utils/logger";
 import {
   INSTANCE_REGISTRY_TABLE,
   TENANT_ID_FIELD,
 } from "./implementations/database/utils";
-import { Logger } from "./utils/logger";
 
 let connection:
   | {
@@ -63,14 +64,6 @@ export function Disconnect() {
         break;
     }
   }
-}
-
-export function GetConnection(): Connection | MasterPool | undefined {
-  return connection?.connection;
-}
-
-export function GetConnectionType() {
-  return connection?.type ?? "none";
 }
 
 export function SendQuery(

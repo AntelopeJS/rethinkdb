@@ -1,6 +1,14 @@
-import type { TermJson } from "rethinkdb-ts/lib/internal-types";
+import assert from "node:assert";
 import { TermType } from "rethinkdb-ts/lib/proto/enums";
-import { DecodeFunction, DecodeValue } from "./query";
+import type { TermJson } from "rethinkdb-ts/lib/internal-types";
+import { Query, ValueProxy } from "@antelopejs/interface-database";
+import type { Value } from "@antelopejs/interface-database/common";
+
+// The ReQL compiler is one mutually recursive unit: decoding a value can hit a sub-query,
+// building a sub-query applies stream stages, and a stream stage decodes values again.
+// The cycle is the recursion, not an accident of where the code sits.
+// oxlint-disable-next-line import/no-cycle -- value decoding recurses into sub-query building
+import { SelectionQuery } from "./selection";
 import {
   allocateArgNumber,
   type DecodingContext,
@@ -177,7 +185,7 @@ function applySimpleStage(
   return [termType, [prev, ...args]];
 }
 
-export function decodeExpression(
+function decodeExpression(
   stages: QueryStage[],
   context: DecodingContext,
   startValue: TermJson = [TermType.IMPLICIT_VAR],
@@ -207,4 +215,92 @@ export function decodeExpression(
 
   delete builder.options;
   return builder.value;
+}
+
+export function DecodeValue(
+  value: Value<unknown>,
+  context: DecodingContext,
+): TermJson {
+  if (value instanceof ValueProxy) {
+    return decodeExpression(value.build(), context);
+  }
+
+  if (value instanceof Query) {
+    return decodeSubquery(value.build(), context);
+  }
+
+  if (value && typeof value === "object") {
+    if (Array.isArray(value)) {
+      return [
+        TermType.MAKE_ARRAY,
+        value.map((val) => DecodeValue(val, context)),
+      ] as TermJson;
+    }
+    if (value instanceof Date) {
+      return dateToReql(value);
+    }
+    if (value instanceof Object) {
+      return Object.fromEntries(
+        Object.entries(value).map(([key, val]) => [
+          key,
+          DecodeValue(val, context),
+        ]),
+      );
+    }
+  }
+
+  if (value === undefined) {
+    return undefined as any;
+  }
+
+  return value as TermJson;
+}
+
+function dateToReql(date: Date): TermJson {
+  const timeZone = date.getTimezoneOffset();
+  return {
+    $reql_type$: "TIME",
+    epoch_time: +date / 1000,
+    timezone: `${timeZone <= 0 ? "+" : "-"}${Math.abs(Math.floor(timeZone / 60))
+      .toFixed(0)
+      .padStart(2, "0")}:${Math.abs(timeZone % 60)
+      .toFixed(0)
+      .padStart(2, "0")}`,
+  };
+}
+
+function decodeSubquery(
+  stages: QueryStage[],
+  context: DecodingContext,
+): TermJson {
+  if (stages[0]?.stage === "arg") {
+    const num = stages[0].args[0];
+    const provider = context.args[num];
+    assert(provider, "Unknown arg used");
+    return provider(stages);
+  }
+  return SelectionQuery.buildTermJson(stages, context);
+}
+
+export function DecodeFunction(
+  func: QueryStage,
+  context: DecodingContext,
+  argTerms: TermJson[],
+): TermJson {
+  const argNumbers: number[] = func.args[0];
+  const oldArgs: Record<number, any> = {};
+  for (let i = 0; i < argNumbers.length; ++i) {
+    oldArgs[argNumbers[i]] = context.args[argNumbers[i]];
+    const argTerm = argTerms[i];
+    context.args[argNumbers[i]] = () => argTerm;
+  }
+  const val = DecodeValue(func.args[1], context);
+  for (let i = 0; i < argNumbers.length; ++i) {
+    if (oldArgs[argNumbers[i]] !== undefined) {
+      context.args[argNumbers[i]] = oldArgs[argNumbers[i]];
+    } else {
+      delete context.args[argNumbers[i]];
+    }
+  }
+  return val;
 }
