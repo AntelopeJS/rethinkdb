@@ -506,4 +506,3 @@ function handleDistinct(
   }
   return [TermType.DISTINCT, [prev]];
 }
-
