@@ -44,13 +44,13 @@
 
 ### 🚀 Enhancements
 
-- ⚠️  Explicit instance lifecycle (`createInstance`, `destroyInstance`, `listInstances`) tracked via a `__instances__` table inside each schema's database.
-- ⚠️  Rename `CROSS_TENANT` import to `CROSS_INSTANCE` (semantics unchanged: skip filter on read/update/delete, reject on insert/replace).
+- ⚠️ Explicit instance lifecycle (`createInstance`, `destroyInstance`, `listInstances`) tracked via a `__instances__` table inside each schema's database.
+- ⚠️ Rename `CROSS_TENANT` import to `CROSS_INSTANCE` (semantics unchanged: skip filter on read/update/delete, reject on insert/replace).
 
 ### 🏗️ Breaking Changes
 
-- ⚠️  `tenantScoped` and `physicalStore` are no longer honored — every table is implicitly instance-scoped, every schema lives in its own database (`${schemaId}`).
-- ⚠️  Strict instance validation: `instance(id).table(...)` rejects unless `createInstance(id)` was called first.
+- ⚠️ `tenantScoped` and `physicalStore` are no longer honored — every table is implicitly instance-scoped, every schema lives in its own database (`${schemaId}`).
+- ⚠️ Strict instance validation: `instance(id).table(...)` rejects unless `createInstance(id)` was called first.
 
 ## v1.1.0
 
@@ -58,7 +58,7 @@
 
 ### 🚀 Enhancements
 
-- ⚠️  Per-table tenant scoping with shared physical stores ([#15](https://github.com/AntelopeJS/rethinkdb/pull/15))
+- ⚠️ Per-table tenant scoping with shared physical stores ([#15](https://github.com/AntelopeJS/rethinkdb/pull/15))
 
 ### 🏡 Chore
 
@@ -67,7 +67,7 @@
 
 #### ⚠️ Breaking Changes
 
-- ⚠️  Per-table tenant scoping with shared physical stores ([#15](https://github.com/AntelopeJS/rethinkdb/pull/15))
+- ⚠️ Per-table tenant scoping with shared physical stores ([#15](https://github.com/AntelopeJS/rethinkdb/pull/15))
 
 ### ❤️ Contributors
 

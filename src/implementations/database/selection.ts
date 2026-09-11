@@ -1,11 +1,14 @@
 import assert from "node:assert";
-import { CROSS_INSTANCE } from "@antelopejs/interface-database/schema";
-import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import { TermType } from "rethinkdb-ts/lib/proto/enums";
-import { executeTermJson } from "../../connection";
-import { DecodeFunction, DecodeValue } from "./query";
-import { IsValidInstance, WaitForSchemaReady } from "./schema";
+import type { TermJson } from "rethinkdb-ts/lib/internal-types";
+import { CROSS_INSTANCE } from "@antelopejs/interface-database/schema";
+
+// oxlint-disable-next-line import/no-cycle -- sub-query building applies stream stages; see expression.ts
 import { applyStreamStages } from "./stream";
+import { executeTermJson } from "../../connection";
+// oxlint-disable-next-line import/no-cycle -- sub-query building decodes values; see expression.ts
+import { DecodeFunction, DecodeValue } from "./expression";
+import { IsValidInstance, WaitForSchemaReady } from "./schema";
 import {
   allocateArgNumber,
   DecodingContext,

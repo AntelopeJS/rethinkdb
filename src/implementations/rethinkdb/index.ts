@@ -1,5 +1,6 @@
 import type { RQuery, RunOptions } from "rethinkdb-ts";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
+
 import { SendQuery } from "../../connection";
 
 type RethinkQueryWithTerm = RQuery & { term: TermJson };

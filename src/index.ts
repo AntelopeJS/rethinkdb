@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { ImplementInterface } from "@antelopejs/interface-core";
 import type { RConnectionOptions, RPoolConnectionOptions } from "rethinkdb-ts";
+
 import { ConnectDirect, ConnectPool, Disconnect } from "./connection";
 
 interface Options {
