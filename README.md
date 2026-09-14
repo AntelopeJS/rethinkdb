@@ -83,6 +83,39 @@ The module supports two connection methods:
 - Direct connection using `r.connect()` with `RConnectionOptions`
 - Connection pool using `r.connectPool()` with `RPoolConnectionOptions`
 
+## Atomic single-record mutations
+
+`table.atomicMutation(key, request).run()` checks one primary key, its instance,
+and the requested condition inside a deterministic native RethinkDB `replace`
+function. It never inserts a missing record or retries a submitted mutation.
+`CROSS_INSTANCE` and selections are not supported.
+
+Revision-based updates replace the supplied top-level fields, including complete
+nested objects, and install `nextRevision` in the same write. Revision-based
+deletes remove the matching record. The `{ kind: "missing" }` expected revision
+matches an absent field on an existing record, not a stored `null` value. Callers
+must use fresh revision tokens and must not reuse an identity across incarnations.
+
+`deleteIfEqual` checks one scalar field, including a `Date`, before deleting the
+record. It does not provide revision-based protection against a value changing
+and later changing back. Retention callers must keep their cutoff fixed and
+re-evaluate eligibility when they observe a different value.
+
+The result is `applied`, `not-applied`, or `unknown`. Missing records, wrong
+instances, and condition mismatches return `not-applied`. Lost acknowledgements,
+indeterminate driver errors, untyped write-result errors, and malformed
+acknowledgements return `unknown`; callers must reconcile them rather than infer
+that no write occurred. Invalid requests and definite typed query-validation
+errors throw. Ordinary insert/update/replace/delete operations reject write
+errors, including duplicate primary keys; a multi-record write may have partially
+succeeded before it reports an error.
+
+This implementation requires `@antelopejs/interface-database` version `0.1.6`
+or later within the supported range. Its shared real-backend conformance suite
+runs automatically through `ajs module test`, alongside this provider's native
+acknowledgement, storage, and fault tests. Install the published dependencies
+with `pnpm install --frozen-lockfile`; no local artifact is required.
+
 ## License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
