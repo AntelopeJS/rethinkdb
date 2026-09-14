@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.3.0
+
+[compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.2.4...v1.3.0)
+
+### 🚀 Enhancements
+
+- **database:** Add atomic single-record mutations ([#23](https://github.com/AntelopeJS/rethinkdb/pull/23))
+
+### 🏡 Chore
+
+- Replace Biome with oxlint, oxfmt and Knip ([#22](https://github.com/AntelopeJS/rethinkdb/pull/22))
+
+### 🤖 CI
+
+- Standardize npm releases ([#21](https://github.com/AntelopeJS/rethinkdb/pull/21))
+
+### ❤️ Contributors
+
+- Antony Rizzitelli <rizzitelli.antony@pm.me>
+- Thomas ([@Thomasims](http://github.com/Thomasims))
+
 ## v1.2.4
 
 [compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.2.3...v1.2.4)
