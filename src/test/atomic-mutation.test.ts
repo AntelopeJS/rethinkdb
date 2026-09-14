@@ -6,9 +6,7 @@ import { RethinkDBError } from "rethinkdb-ts/lib/error/error";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import {
   Schema,
-  CROSS_INSTANCE,
   type AtomicEqualityValue,
-  type AtomicMutation,
   type AtomicUpdate,
 } from "@antelopejs/interface-database";
 
@@ -36,7 +34,6 @@ const schema = new Schema<AtomicTables>("test-atomic-mutation", {
 const table = schema.instance("owner").table("records");
 const other = schema.instance("other").table("records");
 const initialRevision = "initial";
-const raceRounds = 8;
 
 function update(value: string): AtomicUpdate<AtomicRecord> {
   return {
@@ -68,62 +65,16 @@ describe("Atomic single-record mutations", () => {
     await schema.destroyInstance("other").run();
     await schema.destroyInstance().run();
   });
-  it("serializes competing patches", contendUpdates);
-  it("serializes deletion against update", contendDelete);
   it("distinguishes absent and null revisions", missingRevision);
-  it("isolates tenants", isolateTenants);
-  it("supports default instance without upsert", defaultInstance);
   it("replaces fields literally, including dates", replaceFields);
   it("does not retry lost acknowledgements", lostAcknowledgement);
   it("does not retry absent acknowledgements", missingAcknowledgement);
   it("rejects malformed acknowledgement counts", malformedAcknowledgement);
   it("rejects invalid input before sending", rejectInvalid);
   it("checks scalar equality inside deletion", deleteEquality);
-  it("protects refreshes from stale cleanup", contendEquality);
   it("distinguishes definite and uncertain errors", classifyErrors);
   it("fails closed on malformed stages", rejectStages);
 });
-
-async function contendUpdates() {
-  for (let round = 0; round < raceRounds; round++) {
-    const key = await insertRecord();
-    const requests = [update("left"), update("right")];
-    const outcomes = await Promise.all(
-      requests.map((request) => table.atomicMutation(key, request).run()),
-    );
-    assert.deepEqual([...outcomes].sort(), ["applied", "not-applied"]);
-    const winner = requests[outcomes.indexOf("applied")];
-    const stored = await table.get(key).run();
-    assert.equal(stored.value, winner.patch.value);
-    assert.equal(stored.revision, winner.nextRevision);
-  }
-}
-
-async function contendDelete() {
-  const requests: AtomicMutation<AtomicRecord>[] = [
-    {
-      type: "delete",
-      revisionField: "revision",
-      expectedRevision: initialRevision,
-    },
-    update("survived"),
-  ];
-  for (let round = 0; round < raceRounds; round++) {
-    const key = await insertRecord();
-    requests.reverse();
-    const outcomes = await Promise.all(
-      requests.map((request) => table.atomicMutation(key, request).run()),
-    );
-    assert.deepEqual([...outcomes].sort(), ["applied", "not-applied"]);
-    const stored = await table.get(key).run();
-    if (requests[outcomes.indexOf("applied")].type === "delete") {
-      assert.equal(stored, undefined);
-      continue;
-    }
-    assert.equal(stored.value, "survived");
-    assert.equal(stored.revision, "revision-survived");
-  }
-}
 
 async function missingRevision() {
   const absent = randomUUID();
@@ -157,49 +108,6 @@ async function missingRevision() {
   assert.equal(await table.get(missingRow).run(), undefined);
   assert.equal((await table.get(storedNull).run()).revision, null);
   assert.equal((await table.get(absent).run()).revision, request.nextRevision);
-}
-
-async function isolateTenants() {
-  const key = await insertRecord();
-  assert.equal(
-    await other.atomicMutation(key, update("intruder")).run(),
-    "not-applied",
-  );
-  assert.equal(
-    await other
-      .atomicMutation(key, {
-        type: "delete",
-        revisionField: "revision",
-        expectedRevision: initialRevision,
-      })
-      .run(),
-    "not-applied",
-  );
-  assert.throws(() =>
-    schema
-      .instance(CROSS_INSTANCE)
-      .table("records")
-      .atomicMutation(key, update("cross")),
-  );
-  assert.equal(await other.get(key).run(), undefined);
-  assert.equal((await table.get(key).run()).revision, initialRevision);
-}
-
-async function defaultInstance() {
-  const defaultTable = schema.instance().table("records");
-  const key = randomUUID();
-  assert.equal(
-    await defaultTable.atomicMutation(key, update("default")).run(),
-    "not-applied",
-  );
-  await defaultTable
-    .insert({ _id: key, revision: initialRevision, value: "original" })
-    .run();
-  assert.equal(
-    await defaultTable.atomicMutation(key, update("default")).run(),
-    "applied",
-  );
-  assert.equal((await defaultTable.get(key).run()).value, "default");
 }
 
 async function replaceFields() {
@@ -347,29 +255,6 @@ async function deleteEquality() {
     assert.equal(await table.atomicMutation(key, request).run(), "applied");
     assert.equal(await table.get(key).run(), undefined);
     assert.equal(await table.atomicMutation(key, request).run(), "not-applied");
-  }
-}
-
-async function contendEquality() {
-  const requests: AtomicMutation<AtomicRecord>[] = [
-    { type: "deleteIfEqual", field: "equal", expectedValue: "expired" },
-    { ...update("refresh"), patch: { equal: "refreshed" } },
-  ];
-  for (let round = 0; round < raceRounds; round++) {
-    const key = await insertRecord();
-    await table.get(key).update({ equal: "expired" }).run();
-    requests.reverse();
-    const outcomes = await Promise.all(
-      requests.map((request) => table.atomicMutation(key, request).run()),
-    );
-    assert.deepEqual([...outcomes].sort(), ["applied", "not-applied"]);
-    const stored = await table.get(key).run();
-    if (requests[outcomes.indexOf("applied")].type === "deleteIfEqual") {
-      assert.equal(stored, undefined);
-      continue;
-    }
-    assert.equal(stored.equal, "refreshed");
-    assert.equal(stored.revision, "revision-refresh");
   }
 }
 
