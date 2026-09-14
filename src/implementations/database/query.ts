@@ -1,9 +1,11 @@
 import assert from "node:assert";
 import type { Cursor } from "rethinkdb-ts/lib/response/cursor";
+import { ValidateAtomicMutationTable } from "@antelopejs/interface-database/atomic";
 
 import { Logger } from "../../utils/logger";
 import { SendQuery } from "../../connection";
 import { SelectionQuery } from "./selection";
+import { runAtomicMutation } from "./atomic";
 import { DecodingContext, type QueryStage } from "./utils";
 import {
   CreateInstance,
@@ -20,6 +22,9 @@ type SchemaStageHandler = (
 const SCHEMA_STAGE_HANDLERS: Record<string, SchemaStageHandler> = {
   instance: async (schemaId, stages) => {
     await WaitForSchemaReady(schemaId);
+    if (stages.some((stage) => stage.stage === "atomicMutation")) {
+      return runAtomicStages(stages);
+    }
     const context = new DecodingContext();
     return SelectionQuery.decode(stages, context).run();
   },
@@ -39,6 +44,31 @@ export async function RunQuery(stages: QueryStage[]) {
   const handler = next ? SCHEMA_STAGE_HANDLERS[next] : undefined;
   assert(handler, `Unknown schema stage '${next}'`);
   return handler(schemaId, stages);
+}
+
+function runAtomicStages(stages: QueryStage[]) {
+  const terminal = stages.at(-1);
+  assert(
+    terminal?.stage === "atomicMutation",
+    "Atomic mutation must be terminal",
+  );
+  assert(
+    terminal.options === undefined && terminal.args?.length === 2,
+    "Atomic mutation requires one key and request without options",
+  );
+  const prefix = stages.slice(0, -1);
+  ValidateAtomicMutationTable(prefix);
+  const query = SelectionQuery.decode(prefix, new DecodingContext());
+  assert(
+    typeof query.instanceId !== "symbol",
+    "Atomic mutation must be scoped",
+  );
+  return runAtomicMutation(
+    query.getTableTerm(),
+    query.instanceId ?? "",
+    terminal.args[0],
+    terminal.args[1],
+  );
 }
 
 interface OpenCursor {
