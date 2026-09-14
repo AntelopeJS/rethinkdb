@@ -69,6 +69,7 @@ export class SelectionQuery {
   private insertRawArgs?: any;
   private term: TermJson;
   private readonly tenant: TenantContext;
+  private scopedGet = false;
 
   public constructor(
     public readonly schemaId: string,
@@ -146,6 +147,10 @@ export class SelectionQuery {
 
     for (const stage of preStreamStages) {
       this.applySelectionStage(stage);
+    }
+
+    if (this.scopedGet && !writeStage && streamStages[0]?.stage !== "changes") {
+      this.term = [TermType.DEFAULT, [[TermType.NTH, [this.term, 0]], null]];
     }
 
     if (streamStages.length > 0) {
@@ -251,6 +256,18 @@ export class SelectionQuery {
     return [TermType.TABLE, [[TermType.DB, [this.database]], this.tableName]];
   }
 
+  public setGet(key: TermJson) {
+    this.resultType = "selection";
+    this.singleElement = true;
+    this.scopedGet = this.isScopedTenant();
+    this.term = this.scopedGet
+      ? this.buildTenantFilterTerm([
+          TermType.GET_ALL,
+          [this.getTableTerm(), key],
+        ])
+      : [TermType.GET, [this.term, key]];
+  }
+
   public buildTenantFilterTerm(baseTerm: TermJson): TermJson {
     assert(this.tenant.kind === "scoped");
     const tenantId = this.tenant.tenantId;
@@ -348,13 +365,8 @@ type SelectionStageHandler = (query: SelectionQuery, stage: QueryStage) => void;
 
 const SELECTION_STAGES: Record<string, SelectionStageHandler> = {
   get: (query, stage) => {
-    query.resultType = "selection";
-    query.singleElement = true;
-    const tableTerm = query.isScopedTenant()
-      ? query.getTableTerm()
-      : query.buildTerm();
     const key = DecodeValue(stage.args[0], query.getContext());
-    query.setTerm([TermType.GET, [tableTerm, key]]);
+    query.setGet(key);
   },
   getAll: (query, stage) => {
     query.resultType = "selection";

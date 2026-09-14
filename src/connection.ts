@@ -16,6 +16,7 @@ import {
 } from "rethinkdb-ts";
 
 import { Logger } from "./utils/logger";
+import { validateWriteResult } from "./write-result";
 import {
   INSTANCE_REGISTRY_TABLE,
   TENANT_ID_FIELD,
@@ -92,6 +93,7 @@ export async function executeTermJson(term: TermJson): Promise<any> {
   }
   const cursorType = cursor.getType();
   if (cursorType === "Atom") {
+    validateWriteResult(term, results[0]);
     return results[0];
   }
   if (cursorType === "Cursor") {
