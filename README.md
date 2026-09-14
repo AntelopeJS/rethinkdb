@@ -110,11 +110,11 @@ errors throw. Ordinary insert/update/replace/delete operations reject write
 errors, including duplicate primary keys; a multi-record write may have partially
 succeeded before it reports an error.
 
-This implementation requires `@antelopejs/interface-database` version `0.1.5`
-or later within the supported range, which provides the contract introduced in
-[interface-database PR #15](https://github.com/AntelopeJS/interface-database/pull/15).
-Earlier versions do not provide the atomic mutation API. Install the published
-dependencies with `pnpm install --frozen-lockfile`; no local artifact is required.
+This implementation requires `@antelopejs/interface-database` version `0.1.6`
+or later within the supported range. Its shared real-backend conformance suite
+runs automatically through `ajs module test`, alongside this provider's native
+acknowledgement, storage, and fault tests. Install the published dependencies
+with `pnpm install --frozen-lockfile`; no local artifact is required.
 
 ## License
 

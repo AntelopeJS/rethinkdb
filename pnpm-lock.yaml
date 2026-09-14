@@ -12,8 +12,8 @@ importers:
         specifier: '>=0.0.5 <1.0.0'
         version: 0.0.5
       '@antelopejs/interface-database':
-        specifier: '>=0.1.5 <1.0.0'
-        version: 0.1.5(@antelopejs/interface-core@0.0.5)
+        specifier: ^0.1.6
+        version: 0.1.6(@antelopejs/interface-core@0.0.5)
       '@antelopejs/interface-rethinkdb':
         specifier: '>=0.0.4 <1.0.0'
         version: 0.0.4(@antelopejs/interface-core@0.0.5)
@@ -75,8 +75,8 @@ packages:
   '@antelopejs/interface-core@0.0.5':
     resolution: {integrity: sha512-4H6hpFfiK2+DE8vL2mEtPbq1WNch9lt40QNr9KjBrOAtnuq/zMfIlzhbEsda39m+FVkMWXfUYoVolRogVKCLIQ==}
 
-  '@antelopejs/interface-database@0.1.5':
-    resolution: {integrity: sha512-y/KJjVJSQJ1smGctju9jPsoNncOtmeZ0X0sbmnbkCDG3tpbMyUlpjuRn6hB8018Qp/Zkbn+dDDAoFLDmH3CvxA==}
+  '@antelopejs/interface-database@0.1.6':
+    resolution: {integrity: sha512-y/P/BC659qHQfq+ItVyZ6FmdWNUH3PRKDYCDbVaRtmIH64CKpvcmmjsCV3zWK4FfzYtWZ15yw4rJfSwMF9JszQ==}
     peerDependencies:
       '@antelopejs/interface-core': '>=0.0.3 <1.0.0'
 
@@ -2038,7 +2038,7 @@ snapshots:
     dependencies:
       reflect-metadata: 0.2.2
 
-  '@antelopejs/interface-database@0.1.5(@antelopejs/interface-core@0.0.5)':
+  '@antelopejs/interface-database@0.1.6(@antelopejs/interface-core@0.0.5)':
     dependencies:
       '@antelopejs/interface-core': 0.0.5
 
