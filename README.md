@@ -1,5 +1,3 @@
-![RethinkDB](.github/social-card.png)
-
 # @antelopejs/rethinkdb
 
 <div align="center">
