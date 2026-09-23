@@ -13,120 +13,15 @@ on:
           - next
 
 permissions:
-  contents: read
+  contents: write
+  id-token: write
 
-# Mirrors AntelopeJS/.github/.github/workflows/release-npm-public.yml@f4ce81591d09d271a480fd796e12a725cc973e0f
-# plus the rethinkdb service the release tests need; keep the two in sync.
 jobs:
   release:
-    runs-on: ubuntu-latest
-    environment: npm-publish
-    permissions:
-      contents: write
-      id-token: write
-    concurrency:
-      group: npm-release-${{ github.repository }}
-      cancel-in-progress: false
-    services:
-      rethinkdb:
-        image: rethinkdb:2.4
-        ports:
-          - 28015:28015
-    steps:
-      - name: Validate release source and channel
-        env:
-          CHANNEL: ${{ inputs.channel }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: |
-          case "$CHANNEL" in
-            latest) release_branch=$DEFAULT_BRANCH ;;
-            next) release_branch=next ;;
-            *) echo "Unsupported npm channel: $CHANNEL" >&2; exit 1 ;;
-          esac
-          test "$GITHUB_REF" = "refs/heads/$release_branch" || {
-            echo "The $CHANNEL channel must be released from the $release_branch branch, not $GITHUB_REF." >&2
-            exit 1
-          }
-
-      - name: Validate release credential
-        env:
-          RELEASE_GITHUB_TOKEN: ${{ secrets.RELEASE_GITHUB_TOKEN }}
-        run: |
-          test -n "$RELEASE_GITHUB_TOKEN" || {
-            echo "RELEASE_GITHUB_TOKEN is not configured." >&2
-            exit 1
-          }
-
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
-        with:
-          node-version: 24
-          registry-url: https://registry.npmjs.org
-          cache: pnpm
-
-      - name: Validate package publication metadata
-        run: |
-          node <<'NODE'
-          const pkg = require('./package.json')
-          const errors = []
-          if (!pkg.name?.startsWith('@antelopejs/')) errors.push('name must use the @antelopejs scope')
-          if (pkg.private === true) errors.push('private must not be true')
-          if (pkg.license !== 'Apache-2.0') errors.push('license must be Apache-2.0')
-          if (pkg.publishConfig?.access !== 'public') errors.push('publishConfig.access must be public')
-          if (pkg.publishConfig?.provenance !== true) errors.push('publishConfig.provenance must be true')
-          if (errors.length) {
-            console.error(errors.join('\n'))
-            process.exit(1)
-          }
-          NODE
-
-      - run: pnpm install --frozen-lockfile
-
-      - run: pnpm add --global @antelopejs/core
-
-      - name: Configure release identity
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Publish release
-        env:
-          CHANNEL: ${{ inputs.channel }}
-          GITHUB_TOKEN: ${{ secrets.RELEASE_GITHUB_TOKEN }}
-        run: |
-          auth=$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)
-          git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic $auth"
-          trap 'git config --local --unset-all http.https://github.com/.extraheader || true' EXIT
-
-          args=(--ci "--git.requireBranch=$GITHUB_REF_NAME")
-          if [ "$CHANNEL" = latest ]; then
-            # Stable releases ignore prerelease tags, so requireCommits and the
-            # changelog compare against the last stable release.
-            prerelease_tags='*.*.*-*'
-            args+=("--git.tagExclude=$prerelease_tags")
-            tag_match=$(node <<'NODE'
-          const fs = require('node:fs')
-          const config = fs.existsSync('.release-it.json') ? JSON.parse(fs.readFileSync('.release-it.json', 'utf8')) : {}
-          const git = config.git ?? {}
-          console.log((git.tagMatch || git.tagName || 'v${version}').replace('${version}', '*'))
-          NODE
-            )
-            stable_tag=$(git describe --tags --abbrev=0 --match "$tag_match" --exclude "$prerelease_tags" 2>/dev/null || true)
-            if [ -n "$stable_tag" ]; then
-              args+=("--plugins.release-it-changelogen.from=$stable_tag")
-            fi
-            # Promoting a prerelease ships its base version (1.9.0-next.4 -> 1.9.0).
-            version=$(node -p "require('./package.json').version")
-            case "$version" in
-              *-*) args+=("--increment=${version%%-*}") ;;
-            esac
-          else
-            args+=(--preRelease=next)
-          fi
-          pnpm release "${args[@]}"
+    uses: AntelopeJS/.github/.github/workflows/release-npm-public.yml@v1
+    with:
+      channel: ${{ inputs.channel }}
+      install-core: true
+      services-compose-file: .github/release-services.yml
+    secrets:
+      RELEASE_GITHUB_TOKEN: ${{ secrets.RELEASE_GITHUB_TOKEN }}

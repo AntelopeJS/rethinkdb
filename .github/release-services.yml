@@ -1,0 +1,10 @@
+services:
+  rethinkdb:
+    image: rethinkdb:2.4
+    ports:
+      - 28015:28015
+    healthcheck:
+      test: ["CMD", "bash", "-c", ": > /dev/tcp/127.0.0.1/28015"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
