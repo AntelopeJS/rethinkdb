@@ -15,6 +15,8 @@ on:
 permissions:
   contents: read
 
+# Mirrors AntelopeJS/.github/.github/workflows/release-npm-public.yml@f4ce81591d09d271a480fd796e12a725cc973e0f
+# plus the rethinkdb service the release tests need; keep the two in sync.
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -36,14 +38,15 @@ jobs:
           CHANNEL: ${{ inputs.channel }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          test "$GITHUB_REF" = "refs/heads/$DEFAULT_BRANCH" || {
-            echo "Releases must run from the default branch ($DEFAULT_BRANCH)." >&2
-            exit 1
-          }
           case "$CHANNEL" in
-            latest|next) ;;
+            latest) release_branch=$DEFAULT_BRANCH ;;
+            next) release_branch=next ;;
             *) echo "Unsupported npm channel: $CHANNEL" >&2; exit 1 ;;
           esac
+          test "$GITHUB_REF" = "refs/heads/$release_branch" || {
+            echo "The $CHANNEL channel must be released from the $release_branch branch, not $GITHUB_REF." >&2
+            exit 1
+          }
 
       - name: Validate release credential
         env:
@@ -101,8 +104,29 @@ jobs:
           git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic $auth"
           trap 'git config --local --unset-all http.https://github.com/.extraheader || true' EXIT
 
+          args=(--ci "--git.requireBranch=$GITHUB_REF_NAME")
           if [ "$CHANNEL" = latest ]; then
-            pnpm release --ci
+            # Stable releases ignore prerelease tags, so requireCommits and the
+            # changelog compare against the last stable release.
+            prerelease_tags='*.*.*-*'
+            args+=("--git.tagExclude=$prerelease_tags")
+            tag_match=$(node <<'NODE'
+          const fs = require('node:fs')
+          const config = fs.existsSync('.release-it.json') ? JSON.parse(fs.readFileSync('.release-it.json', 'utf8')) : {}
+          const git = config.git ?? {}
+          console.log((git.tagMatch || git.tagName || 'v${version}').replace('${version}', '*'))
+          NODE
+            )
+            stable_tag=$(git describe --tags --abbrev=0 --match "$tag_match" --exclude "$prerelease_tags" 2>/dev/null || true)
+            if [ -n "$stable_tag" ]; then
+              args+=("--plugins.release-it-changelogen.from=$stable_tag")
+            fi
+            # Promoting a prerelease ships its base version (1.9.0-next.4 -> 1.9.0).
+            version=$(node -p "require('./package.json').version")
+            case "$version" in
+              *-*) args+=("--increment=${version%%-*}") ;;
+            esac
           else
-            pnpm release --ci --preRelease=next
+            args+=(--preRelease=next)
           fi
+          pnpm release "${args[@]}"
