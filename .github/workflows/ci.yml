@@ -11,13 +11,9 @@ permissions:
 jobs:
   checks:
     runs-on: ubuntu-latest
-    services:
-      rethinkdb:
-        image: rethinkdb:2.4
-        ports:
-          - 28015:28015
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - run: docker compose -f .github/release-services.yml up -d --wait
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
@@ -37,3 +33,5 @@ jobs:
       - run: pnpm knip
       - run: pnpm typecheck
       - run: pnpm test
+      - if: always()
+        run: docker compose -f .github/release-services.yml down -v
