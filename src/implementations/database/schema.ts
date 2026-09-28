@@ -8,6 +8,7 @@ import type {
 
 import { executeTermJson } from "../../connection";
 import { InitializeSchemaDatabase, retryWithBackoff } from "./initialize";
+import { assertValidIndexNames } from "./indexes";
 import {
   INSTANCE_REGISTRY_FIELD,
   INSTANCE_REGISTRY_TABLE,
@@ -41,8 +42,9 @@ export const Schemas = {
   },
 };
 
-function initializeSchema(schemaId: string, schema: SchemaDefinition) {
-  return retryWithBackoff(async () => {
+async function initializeSchema(schemaId: string, schema: SchemaDefinition) {
+  assertValidIndexNames(schema);
+  await retryWithBackoff(async () => {
     await InitializeSchemaDatabase(schemaId, schema);
     await hydrateInstances(schemaId);
   });
@@ -64,10 +66,6 @@ async function hydrateInstances(schemaId: string) {
 
 export function WaitForSchemaReady(schemaId: string): Promise<void> {
   return schemaReady[schemaId] ?? Promise.resolve();
-}
-
-export async function WaitForAllSchemasReady(): Promise<void> {
-  await Promise.allSettled(Object.values(schemaReady));
 }
 
 export function GetSchema(schemaId: string) {

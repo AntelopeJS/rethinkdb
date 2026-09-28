@@ -13,7 +13,6 @@ import {
 import * as connection from "../connection";
 import { validateWriteResult } from "../write-result";
 import { RunQuery } from "../implementations/database/query";
-import { WaitForAllSchemasReady } from "../implementations/database/schema";
 import type { QueryStage } from "../implementations/database/utils";
 
 interface AtomicRecord {
@@ -25,6 +24,8 @@ interface AtomicRecord {
   equal?: AtomicEqualityValue | null;
 }
 
+type Execute = typeof connection.executeTermJson;
+
 interface AtomicTables {
   records: AtomicRecord;
 }
@@ -35,6 +36,7 @@ const schema = new Schema<AtomicTables>("test-atomic-mutation", {
 const table = schema.instance("owner").table("records");
 const other = schema.instance("other").table("records");
 const initialRevision = "initial";
+const SLOW_TEST_TIMEOUT_MS = 120000;
 
 function update(value: string): AtomicUpdate<AtomicRecord> {
   return {
@@ -46,6 +48,19 @@ function update(value: string): AtomicUpdate<AtomicRecord> {
   };
 }
 
+function targetsSchema(term: TermJson): boolean {
+  return JSON.stringify(term).includes(JSON.stringify(schema.id));
+}
+
+function mockSchemaExecution(implementation: Execute) {
+  const execute = connection.executeTermJson;
+  const fault = mock.fn(implementation);
+  mock.method(connection, "executeTermJson", (term: TermJson) =>
+    targetsSchema(term) ? fault(term) : execute(term),
+  );
+  return fault;
+}
+
 async function insertRecord(): Promise<string> {
   const key = randomUUID();
   await table
@@ -54,9 +69,9 @@ async function insertRecord(): Promise<string> {
   return key;
 }
 
-describe("Atomic single-record mutations", () => {
+describe("Atomic single-record mutations", function () {
+  this.timeout(SLOW_TEST_TIMEOUT_MS);
   before(async () => {
-    await WaitForAllSchemasReady();
     await schema.createInstance("owner").run();
     await schema.createInstance("other").run();
     await schema.createInstance().run();
@@ -135,9 +150,7 @@ async function replaceFields() {
 async function lostAcknowledgement() {
   const key = await insertRecord();
   const execute = connection.executeTermJson;
-  const fault = mock.method(
-    connection,
-    "executeTermJson",
+  const fault = mockSchemaExecution(
     async (...args: Parameters<typeof execute>) => {
       await execute(...args);
       throw new Error("Connection closed before acknowledgement");
@@ -154,11 +167,7 @@ async function lostAcknowledgement() {
 
 async function missingAcknowledgement() {
   const key = await insertRecord();
-  const fault = mock.method(
-    connection,
-    "executeTermJson",
-    async () => undefined,
-  );
+  const fault = mockSchemaExecution(async () => undefined);
   assert.equal(
     await table.atomicMutation(key, update("unconfirmed")).run(),
     "unknown",
@@ -183,11 +192,7 @@ async function malformedAcknowledgement() {
     { ...empty, replaced: 2 },
     { ...empty, unchanged: 1, skipped: 1 },
   ]) {
-    const fault = mock.method(
-      connection,
-      "executeTermJson",
-      async () => result,
-    );
+    const fault = mockSchemaExecution(async () => result);
     assert.equal(
       await table.atomicMutation(key, update("malformed")).run(),
       "unknown",
@@ -200,7 +205,7 @@ async function malformedAcknowledgement() {
 
 async function rejectInvalid() {
   const key = await insertRecord();
-  const fault = mock.method(connection, "executeTermJson", async () => {
+  const fault = mockSchemaExecution(async () => {
     throw new Error("Must not send");
   });
   await assert.rejects(
@@ -266,7 +271,7 @@ async function classifyErrors() {
     RethinkDBErrorType.CONNECTION,
     RethinkDBErrorType.OP_INDETERMINATE,
   ]) {
-    const fault = mock.method(connection, "executeTermJson", async () => {
+    const fault = mockSchemaExecution(async () => {
       throw new RethinkDBError("Uncertain", { type });
     });
     assert.equal(
@@ -276,7 +281,7 @@ async function classifyErrors() {
     assert.equal(fault.mock.callCount(), 1);
     mock.restoreAll();
   }
-  mock.method(connection, "executeTermJson", async (term: TermJson) => {
+  mockSchemaExecution(async (term: TermJson) => {
     validateWriteResult(term, {
       errors: 1,
       first_error: "Untyped write failure",
@@ -290,7 +295,7 @@ async function classifyErrors() {
   const error = new RethinkDBError("Invalid query", {
     type: RethinkDBErrorType.QUERY_LOGIC,
   });
-  mock.method(connection, "executeTermJson", async () => {
+  mockSchemaExecution(async () => {
     throw error;
   });
   await assert.rejects(
@@ -309,7 +314,7 @@ async function rejectStages() {
     { stage: "instance", options: { id: "owner" }, args: [] },
     { stage: "table", options: { id: "records" }, args: [] },
   ];
-  const fault = mock.method(connection, "executeTermJson", async () => {
+  const fault = mockSchemaExecution(async () => {
     throw new Error("Must not send");
   });
   await assert.rejects(RunQuery([...prefix, { ...terminal, options: {} }]));

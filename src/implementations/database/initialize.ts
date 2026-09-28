@@ -67,19 +67,22 @@ async function ensureIndexes(
   indexes: Record<string, IndexDefinition>,
 ) {
   const existing = await listNames([TermType.INDEX_LIST, [table]]);
-  const missing = buildIndexCreations(table, indexes).filter(
+  const creations = buildIndexCreations(table, indexes);
+  const missing = creations.filter(
     (creation) => !existing.includes(creation.name),
   );
   for (const creation of missing) {
     Logger.Debug("Creating index", creation.name);
     await createIfMissing(creation.term);
   }
-  await executeTermJson([TermType.INDEX_WAIT, [table]]);
+  const managed = creations.map((creation) => creation.name);
+  await executeTermJson([TermType.INDEX_WAIT, [table, ...managed]]);
 }
 
 /**
  * Creates the missing schema database, tables and indexes, ignoring "already
- * exists" errors from other processes, then waits until every index is ready.
+ * exists" errors from other processes, then waits until the indexes it manages
+ * are ready.
  */
 export async function InitializeSchemaDatabase(
   dbName: string,

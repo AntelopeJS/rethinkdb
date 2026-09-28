@@ -5,7 +5,11 @@ import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 // oxlint-disable-next-line import/no-cycle -- join and union right-hand sides are sub-queries; see expression.ts
 import { SelectionQuery } from "./selection";
 import { FindIndex, GetIndex } from "./schema";
-import { warnUnindexedCrossInstance } from "./indexes";
+import {
+  buildIndexScanPredicate,
+  buildIndexScanValues,
+  warnUnindexedCrossInstance,
+} from "./indexes";
 // oxlint-disable-next-line import/no-cycle -- stream stages decode values; see expression.ts
 import { DecodeFunction, DecodeValue } from "./expression";
 import {
@@ -13,7 +17,10 @@ import {
   type DecodingContext,
   PRIMARY_KEY_FIELD,
   type QueryStage,
+  TENANT_ID_FIELD,
 } from "./utils";
+
+const ALWAYS_INDEXED_FIELDS = new Set([PRIMARY_KEY_FIELD, TENANT_ID_FIELD]);
 
 type StreamStageHandler = (
   prev: TermJson,
@@ -235,28 +242,12 @@ function handleLookup(
     [[TermType.BRACKET, [row, localKey]], ""],
   ];
 
-  let lookupResult: TermJson;
-  const hasUsableIndex =
-    rightQuery.isSimpleTable() &&
-    hasCrossInstanceIndex(rightQuery.schemaId, rightQuery.tableName, otherKey);
-  if (!hasUsableIndex) {
-    const filterArgId = allocateArgNumber();
-    const filterDoc: TermJson = [TermType.VAR, [filterArgId]];
-    const filterFn: TermJson = [
-      TermType.FUNC,
-      [
-        [TermType.MAKE_ARRAY, [filterArgId]],
-        [TermType.EQ, [[TermType.BRACKET, [filterDoc, otherKey]], localField]],
-      ],
-    ];
-    lookupResult = [TermType.FILTER, [rightTerm, filterFn]];
-  } else {
-    lookupResult = [
-      TermType.GET_ALL,
-      [rightTerm, localField],
-      { index: otherKey },
-    ];
-  }
+  const lookupResult = buildLookupSelection(
+    rightQuery,
+    rightTerm,
+    otherKey,
+    localField,
+  );
   const coerced: TermJson = [TermType.COERCE_TO, [lookupResult, "array"]];
 
   const isArray: TermJson = [TermType.TYPE_OF, [localField]];
@@ -285,6 +276,41 @@ function handleLookup(
       [prev, [TermType.FUNC, [[TermType.MAKE_ARRAY, [mapArgId]], merged]]],
     ];
   }
+}
+
+function buildLookupSelection(
+  rightQuery: SelectionQuery,
+  rightTerm: TermJson,
+  otherKey: string,
+  localField: TermJson,
+): TermJson {
+  const { schemaId, tableName } = rightQuery;
+  const isSimpleTable = rightQuery.isSimpleTable();
+  if (isSimpleTable && hasCrossInstanceIndex(schemaId, tableName, otherKey)) {
+    return [TermType.GET_ALL, [rightTerm, localField], { index: otherKey }];
+  }
+  const matchesLocal = (value: TermJson): TermJson => [
+    TermType.EQ,
+    [value, localField],
+  ];
+  const definition = FindIndex(schemaId, tableName, otherKey);
+  const predicate =
+    isSimpleTable && definition
+      ? buildIndexScanPredicate(
+          { schemaId, tableName, indexName: otherKey, definition },
+          matchesLocal,
+        )
+      : buildFieldFunction(otherKey, matchesLocal);
+  return [TermType.FILTER, [rightTerm, predicate]];
+}
+
+function buildFieldFunction(
+  field: string,
+  transform: (value: TermJson) => TermJson = (value) => value,
+): TermJson {
+  const argId = allocateArgNumber();
+  const value: TermJson = [TermType.BRACKET, [[TermType.VAR, [argId]], field]];
+  return [TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], transform(value)]];
 }
 
 function handleGroup(
@@ -354,19 +380,8 @@ function hasCrossInstanceIndex(
   indexName: string,
 ): boolean {
   return (
-    indexName === PRIMARY_KEY_FIELD ||
+    ALWAYS_INDEXED_FIELDS.has(indexName) ||
     FindIndex(schemaId, tableName, indexName)?.crossInstance === true
-  );
-}
-
-function canUseCrossInstanceIndex(
-  prev: TermJson,
-  schemaId: string,
-  tableName: string,
-  indexName: string,
-): boolean {
-  return (
-    isTableTerm(prev) && hasCrossInstanceIndex(schemaId, tableName, indexName)
   );
 }
 
@@ -415,7 +430,7 @@ function handleOrderBy(
     if (definition.crossInstance) {
       return buildIndexedOrderBy(prev, indexName, isDescending);
     }
-    warnUnindexedCrossInstance(schemaId, tableName, indexName);
+    warnUnindexedCrossInstance({ schemaId, tableName, indexName, definition });
   }
   return buildNonIndexedOrderBy(
     prev,
@@ -457,21 +472,30 @@ function handleNth(
 }
 
 function buildMappedDistinct(prev: TermJson, field: string): TermJson {
-  const argId = allocateArgNumber();
-  const mapped: TermJson = [
-    TermType.MAP,
-    [
-      prev,
-      [
-        TermType.FUNC,
-        [
-          [TermType.MAKE_ARRAY, [argId]],
-          [TermType.BRACKET, [[TermType.VAR, [argId]], field]],
-        ],
-      ],
-    ],
+  return [
+    TermType.DISTINCT,
+    [[TermType.MAP, [prev, buildFieldFunction(field)]]],
   ];
-  return [TermType.DISTINCT, [mapped]];
+}
+
+function buildFieldDistinct(
+  prev: TermJson,
+  field: string,
+  schemaId: string,
+  tableName: string,
+): TermJson {
+  if (!isTableTerm(prev)) {
+    return buildMappedDistinct(prev, field);
+  }
+  if (hasCrossInstanceIndex(schemaId, tableName, field)) {
+    return [TermType.DISTINCT, [prev], { index: field }];
+  }
+  const definition = FindIndex(schemaId, tableName, field);
+  if (!definition) {
+    return buildMappedDistinct(prev, field);
+  }
+  const index = { schemaId, tableName, indexName: field, definition };
+  return [TermType.DISTINCT, [buildIndexScanValues(prev, index)]];
 }
 
 function handleCount(
@@ -481,18 +505,14 @@ function handleCount(
   schemaId: string,
   tableName: string,
 ): TermJson {
-  if (stage.options?.field) {
-    if (
-      !canUseCrossInstanceIndex(prev, schemaId, tableName, stage.options.field)
-    ) {
-      return [TermType.COUNT, [buildMappedDistinct(prev, stage.options.field)]];
-    }
-    return [
-      TermType.COUNT,
-      [[TermType.DISTINCT, [prev], { index: stage.options.field }]],
-    ];
+  const field = stage.options?.field;
+  if (!field) {
+    return [TermType.COUNT, [prev]];
   }
-  return [TermType.COUNT, [prev]];
+  return [
+    TermType.COUNT,
+    [buildFieldDistinct(prev, field, schemaId, tableName)],
+  ];
 }
 
 function handleSum(prev: TermJson, stage: QueryStage): TermJson {
@@ -532,13 +552,9 @@ function handleDistinct(
   schemaId: string,
   tableName: string,
 ): TermJson {
-  if (stage.options?.field) {
-    if (
-      !canUseCrossInstanceIndex(prev, schemaId, tableName, stage.options.field)
-    ) {
-      return buildMappedDistinct(prev, stage.options.field);
-    }
-    return [TermType.DISTINCT, [prev], { index: stage.options.field }];
+  const field = stage.options?.field;
+  if (!field) {
+    return [TermType.DISTINCT, [prev]];
   }
-  return [TermType.DISTINCT, [prev]];
+  return buildFieldDistinct(prev, field, schemaId, tableName);
 }

@@ -93,20 +93,31 @@ module maintains:
 - `<name>`, the unprefixed index, only when the index is declared with
   `crossInstance: true`. `CROSS_INSTANCE` reads on the index use it.
 
-`CROSS_INSTANCE` `getAll`, `between` and `orderBy` on an index that is not
-declared with `crossInstance: true` still work, but scan the table instead of
-using an index. The module logs a warning the first time a process runs such a
-query for each schema, table and index. Plain filters never log a warning.
+`CROSS_INSTANCE` `getAll`, `between`, `orderBy`, `count(field)`,
+`distinct(field)` and `lookup` on an index that is not declared with
+`crossInstance: true` still work, but scan the table instead of using an index.
+The module logs a warning the first time a process runs such a query for each
+schema, table and index. Plain filters never log a warning.
+
+The scans return the same results as the index would, with two exceptions:
+
+- `getAll`, `between` and `lookup` return each matching document once, while
+  the index returns a document once per matching key or `multi` entry.
+- `orderBy` also returns documents that lack the sorted field, like scoped
+  `orderBy`, while the index leaves them out.
+
+Index names ending with `__i` are reserved for the instance-prefixed indexes:
+schema initialization rejects them.
 
 Scoped `orderBy` does not use an index: an index would leave out documents
 that lack the sorted field, and scoped `orderBy` keeps returning them.
 
 Schema initialization creates databases, tables and indexes only when they are
 missing, and ignores "already exists" errors when another process booting at
-the same time creates them first. It
-retries a failed initialization up to five times with exponential backoff, and
-waits until every index is ready before the schema accepts queries. RethinkDB
-builds indexes in the background without blocking writes.
+the same time creates them first. It retries a failed initialization up to five
+times with exponential backoff, and waits until the indexes it manages are
+ready before the schema accepts queries. RethinkDB builds indexes in the
+background without blocking writes.
 
 ### Upgrading from 1.3
 

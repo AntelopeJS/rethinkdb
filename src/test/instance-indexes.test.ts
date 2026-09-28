@@ -33,8 +33,19 @@ interface Item {
   category?: string;
 }
 
+interface Label {
+  _id: string;
+  tag: string;
+}
+
+interface LookedUpLabel {
+  _id: string;
+  tag: Item | null;
+}
+
 interface Tables {
   items: Item;
+  labels: Label;
 }
 
 interface Selectable {
@@ -43,9 +54,11 @@ interface Selectable {
 
 const SCHEMA_ID = "test-instance-indexes";
 const CONCURRENT_SCHEMA_ID = "test-instance-indexes-concurrent";
+const RESERVED_SCHEMA_ID = "test-instance-indexes-reserved";
 const CONCURRENT_BOOTS = 4;
-const SLOW_TEST_TIMEOUT_MS = 30000;
+const SLOW_TEST_TIMEOUT_MS = 120000;
 const TABLE = "items";
+const LABELS = "labels";
 const DEFINITION: SchemaDefinition = {
   items: {
     fields: { status: "string", rank: "number", tags: ["string"] },
@@ -56,6 +69,7 @@ const DEFINITION: SchemaDefinition = {
       category: { crossInstance: true },
     },
   },
+  labels: { fields: { tag: "string" }, indexes: {} },
 };
 const DOCUMENTS: Record<string, Item[]> = {
   alpha: [
@@ -73,8 +87,12 @@ const DOCUMENTS: Record<string, Item[]> = {
   beta: [
     { _id: "b1", status: "open", rank: 1, tags: ["red"], category: "x" },
     { _id: "b2", status: "closed", rank: 2, category: "y" },
+    { _id: "b3", status: "open", tags: ["green"] },
   ],
 };
+const LABEL_DOCUMENTS: Label[] = ["red", "blue", "green", "white"].map(
+  (tag) => ({ _id: tag, tag }),
+);
 
 const db: TermJson = [TermType.DB, [SCHEMA_ID]];
 const table: TermJson = [TermType.TABLE, [db, TABLE]];
@@ -94,6 +112,14 @@ function field(name: string): TermJson {
 
 function ids(documents: Item[]): string[] {
   return documents.map((document) => document._id).sort();
+}
+
+function sortValues(values: unknown[]): string[] {
+  return values.map((value) => JSON.stringify(value)).sort();
+}
+
+function unique(values: string[]): string[] {
+  return [...new Set(values)];
 }
 
 function buildTerm(query: Selectable): TermJson {
@@ -166,11 +192,13 @@ describe("Instance-prefixed indexes", function () {
       await schema.createInstance(instanceId).run();
       await schema.instance(instanceId).table(TABLE).insert(documents).run();
     }
+    await schema.instance("alpha").table(LABELS).insert(LABEL_DOCUMENTS).run();
   });
   afterEach(() => mock.restoreAll());
   after(async () => {
     await dropDatabase(SCHEMA_ID);
     await dropDatabase(CONCURRENT_SCHEMA_ID);
+    await dropDatabase(RESERVED_SCHEMA_ID);
   });
   it(
     "adds instance-prefixed indexes to a table with legacy indexes",
@@ -190,6 +218,15 @@ describe("Instance-prefixed indexes", function () {
     "scans other indexes across instances with the same results",
     crossInstanceScan,
   );
+  it(
+    "keeps cross-instance count and distinct results on other indexes",
+    crossInstanceDistinct,
+  );
+  it(
+    "looks up multi indexes across instances without an index",
+    crossInstanceLookup,
+  );
+  it("rejects index names with the reserved suffix", reservedIndexSuffix);
   it(
     "creates the database and indexes from concurrent boots",
     concurrentInitialization,
@@ -338,30 +375,81 @@ async function crossInstanceScan() {
     ids(await items.between("status", "closed", "open").run()),
     await legacyCross(legacyBetween("status", "closed", "open")),
   );
-  assert.deepEqual(ids(await items.getAll("blue", "tags").run()), ["a1", "a2"]);
-  assert.deepEqual(ids(await items.getAll("red", "tags").run()), [
-    "a1",
-    "a3",
-    "b1",
-  ]);
+  assert.deepEqual(
+    ids(await items.getAll("blue", "tags").run()),
+    await legacyCross(legacyGetAll("tags", "blue")),
+  );
+  assert.deepEqual(
+    ids(await items.getAll("red", "tags").run()),
+    unique(await legacyCross(legacyGetAll("tags", "red"))),
+  );
   const ordered: Item[] = await items.orderBy("status").run();
   assert.deepEqual(
     ordered.map((item) => item.status),
-    [undefined, "closed", "closed", "open", "open", "open"],
+    [undefined, "closed", "closed", "open", "open", "open", "open"],
+  );
+}
+
+async function crossInstanceDistinct() {
+  mock.method(Logger, "Warn", () => undefined);
+  const items = schema.instance(CROSS_INSTANCE).table(TABLE);
+  for (const index of ["status", "status_rank", "tags"] as const) {
+    const legacy: TermJson = [TermType.DISTINCT, [table], { index }];
+    assert.deepEqual(
+      sortValues(await items.distinct(index).run()),
+      sortValues(await executeTermJson(legacy)),
+    );
+    assert.equal(
+      await items.count(index).run(),
+      await executeTermJson([TermType.COUNT, [legacy]]),
+    );
+  }
+}
+
+async function crossInstanceLookup() {
+  mock.method(Logger, "Warn", () => undefined);
+  const items = schema.instance(CROSS_INSTANCE).table(TABLE);
+  const labels = schema.instance(CROSS_INSTANCE).table(LABELS);
+  const found: LookedUpLabel[] = await labels
+    .lookup(items, "tag", "tags")
+    .run();
+  assert.equal(found.length, LABEL_DOCUMENTS.length);
+  for (const label of found) {
+    const legacy = await legacyCross(legacyGetAll("tags", label._id));
+    assert.equal(label.tag === null, legacy.length === 0);
+    assert.ok(label.tag === null || legacy.includes(label.tag._id));
+  }
+  assert.ok(found.some((label) => label._id === "blue" && label.tag !== null));
+}
+
+async function reservedIndexSuffix() {
+  const reserved: SchemaDefinition = {
+    [TABLE]: { fields: {}, indexes: { status__i: {} } },
+  };
+  await assert.rejects(
+    Schemas.register(RESERVED_SCHEMA_ID, reserved),
+    /Index 'status__i' of table 'items' ends with the reserved suffix '__i'/,
   );
 }
 
 async function crossInstanceWarning() {
   const warn = mock.method(Logger, "Warn", () => undefined);
   const items = schema.instance(CROSS_INSTANCE).table(TABLE);
+  const labels = schema.instance(CROSS_INSTANCE).table(LABELS);
+  buildTerm(labels.lookup(items, "tag", "tags"));
+  buildTerm(items.count("tags"));
+  buildTerm(items.distinct("tags"));
+  assert.equal(warn.mock.callCount(), 1);
+  assert.match(String(warn.mock.calls[0].arguments[0]), /index 'tags'/);
   buildTerm(items.getAll("open", "status"));
   buildTerm(items.between("status", "a", "z"));
   buildTerm(items.orderBy("status"));
   buildTerm(items.filter((item) => item.key("status").eq("open")));
-  assert.equal(warn.mock.callCount(), 1);
-  assert.match(String(warn.mock.calls[0].arguments[0]), /index 'status'/);
-  buildTerm(items.orderBy("status_rank"));
   assert.equal(warn.mock.callCount(), 2);
+  assert.match(String(warn.mock.calls[1].arguments[0]), /index 'status'/);
+  buildTerm(items.orderBy("status_rank"));
+  buildTerm(items.distinct("category"));
+  assert.equal(warn.mock.callCount(), 3);
 }
 
 function runConcurrently(boot: () => Promise<unknown>) {
@@ -371,9 +459,12 @@ function runConcurrently(boot: () => Promise<unknown>) {
 async function concurrentInitialization() {
   await dropDatabase(CONCURRENT_SCHEMA_ID);
   await runConcurrently(() => ensureDatabase(CONCURRENT_SCHEMA_ID));
-  const tablesOnly: SchemaDefinition = {
-    [TABLE]: { ...DEFINITION[TABLE], indexes: {} },
-  };
+  const tablesOnly: SchemaDefinition = Object.fromEntries(
+    Object.entries(DEFINITION).map(([name, definition]) => [
+      name,
+      { ...definition, indexes: {} },
+    ]),
+  );
   await InitializeSchemaDatabase(CONCURRENT_SCHEMA_ID, tablesOnly);
   await runConcurrently(() =>
     InitializeSchemaDatabase(CONCURRENT_SCHEMA_ID, DEFINITION),

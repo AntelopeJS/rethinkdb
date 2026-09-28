@@ -1,6 +1,9 @@
 import { TermType } from "rethinkdb-ts/lib/proto/enums";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
-import type { IndexDefinition } from "@antelopejs/interface-database/schema";
+import type {
+  IndexDefinition,
+  SchemaDefinition,
+} from "@antelopejs/interface-database/schema";
 
 import { Logger } from "../../utils/logger";
 import { allocateArgNumber, TENANT_ID_FIELD } from "./utils";
@@ -25,17 +28,20 @@ export interface IndexedRead {
   matches: TermBuilder;
 }
 
-export interface IndexedReadTarget {
+export interface DeclaredIndex {
   schemaId: string;
   tableName: string;
   indexName: string;
   definition: IndexDefinition;
+}
+
+export interface IndexedReadTarget extends DeclaredIndex {
   table: TermJson;
   source: TermJson;
   tenantId?: string;
 }
 
-const warnedIndexes = new Set<string>();
+const warnedIndexes = new Map<string, Map<string, Set<string>>>();
 
 function instanceIndexName(indexName: string): string {
   return `${indexName}${INSTANCE_INDEX_SUFFIX}`;
@@ -63,6 +69,14 @@ function creationOptions(definition: IndexDefinition) {
 
 export function indexOptions(index?: string) {
   return index ? { index } : {};
+}
+
+function indexedFields(
+  indexName: string,
+  definition: IndexDefinition,
+): string[] {
+  const fields = definition.fields ?? [];
+  return fields.length > 0 ? fields : [indexName];
 }
 
 function buildIndexValue(
@@ -149,6 +163,23 @@ function buildGlobalIndexCreation(
 }
 
 /**
+ * Rejects declared index names that would collide with the generated
+ * `<name>__i` indexes.
+ */
+export function assertValidIndexNames(schema: SchemaDefinition) {
+  for (const [tableName, table] of Object.entries(schema)) {
+    const reserved = Object.keys(table.indexes).find((indexName) =>
+      indexName.endsWith(INSTANCE_INDEX_SUFFIX),
+    );
+    if (reserved !== undefined) {
+      throw new Error(
+        `Index '${reserved}' of table '${tableName}' ends with the reserved suffix '${INSTANCE_INDEX_SUFFIX}'; rename it`,
+      );
+    }
+  }
+}
+
+/**
  * Lists every physical index a table needs: `<name>__i` (led by the instance
  * field) for each declared index, `<name>` for cross-instance indexes, and the
  * instance field index itself.
@@ -180,34 +211,77 @@ export function buildInstanceScope(
   return [TermType.GET_ALL, [table, tenantId], { index: TENANT_ID_FIELD }];
 }
 
-export function warnUnindexedCrossInstance(
-  schemaId: string,
-  tableName: string,
-  indexName: string,
-) {
-  const key = JSON.stringify([schemaId, tableName, indexName]);
-  if (warnedIndexes.has(key)) {
+function warnedIndexNames(schemaId: string, tableName: string): Set<string> {
+  const tables = warnedIndexes.get(schemaId) ?? new Map<string, Set<string>>();
+  warnedIndexes.set(schemaId, tables);
+  const indexNames = tables.get(tableName) ?? new Set<string>();
+  tables.set(tableName, indexNames);
+  return indexNames;
+}
+
+export function warnUnindexedCrossInstance(index: DeclaredIndex) {
+  const indexNames = warnedIndexNames(index.schemaId, index.tableName);
+  if (indexNames.has(index.indexName)) {
     return;
   }
-  warnedIndexes.add(key);
+  indexNames.add(index.indexName);
   Logger.Warn(
-    `CROSS_INSTANCE query on index '${indexName}' of table '${schemaId}.${tableName}' runs without an index; declare the index with crossInstance: true to make it fast`,
+    `CROSS_INSTANCE query on index '${index.indexName}' of table '${index.schemaId}.${index.tableName}' runs without an index; declare the index with crossInstance: true to make it fast`,
   );
 }
 
 function buildIndexMatch(
   row: TermJson,
-  target: IndexedReadTarget,
+  index: DeclaredIndex,
   matches: TermBuilder,
 ): TermJson {
-  const value = buildIndexValue(row, target.indexName, target.definition);
-  if (!target.definition.multi) {
+  const value = buildIndexValue(row, index.indexName, index.definition);
+  if (!index.definition.multi) {
     return matches(value);
   }
   return [
     TermType.CONTAINS,
     [buildIndexEntries(value), buildFunction(matches)],
   ];
+}
+
+/**
+ * Builds a filter predicate matching the entries a declared index would hold,
+ * for cross-instance reads on an index that does not exist unprefixed.
+ */
+export function buildIndexScanPredicate(
+  index: DeclaredIndex,
+  matches: TermBuilder,
+): TermJson {
+  warnUnindexedCrossInstance(index);
+  return buildFunction((row) => buildIndexMatch(row, index, matches));
+}
+
+/**
+ * Streams the values a declared index would hold for each document, skipping
+ * documents missing an indexed field and null entries, as the index does.
+ */
+export function buildIndexScanValues(
+  source: TermJson,
+  index: DeclaredIndex,
+): TermJson {
+  warnUnindexedCrossInstance(index);
+  const { indexName, definition } = index;
+  const indexed: TermJson = [
+    TermType.HAS_FIELDS,
+    [source, ...indexedFields(indexName, definition)],
+  ];
+  const readValue = (row: TermJson) =>
+    buildIndexValue(row, indexName, definition);
+  if (!definition.multi) {
+    return [TermType.MAP, [indexed, buildFunction(readValue)]];
+  }
+  const entries: TermJson = [
+    TermType.CONCAT_MAP,
+    [indexed, buildFunction((row) => buildIndexEntries(readValue(row)))],
+  ];
+  const isPresent = buildFunction((entry) => [TermType.NE, [entry, null]]);
+  return [TermType.FILTER, [entries, isPresent]];
 }
 
 /**
@@ -231,13 +305,8 @@ export function buildIndexedRead(
       key: (value) => value,
     });
   }
-  warnUnindexedCrossInstance(
-    target.schemaId,
-    target.tableName,
-    target.indexName,
-  );
-  const predicate = buildFunction((row) =>
-    buildIndexMatch(row, target, read.matches),
-  );
-  return [TermType.FILTER, [target.source, predicate]];
+  return [
+    TermType.FILTER,
+    [target.source, buildIndexScanPredicate(target, read.matches)],
+  ];
 }
