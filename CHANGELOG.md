@@ -1,5 +1,33 @@
 # Changelog
 
+## v1.4.0
+
+[compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.3.0...v1.4.0)
+
+### 🚀 Enhancements
+
+- **indexes:** Add tenant-prefixed indexes and use them for scoped queries ([#32](https://github.com/AntelopeJS/rethinkdb/pull/32))
+
+### 📖 Documentation
+
+- **readme:** Remove social card image ([#26](https://github.com/AntelopeJS/rethinkdb/pull/26))
+
+### 🏡 Chore
+
+- Align community files with the organization defaults ([#25](https://github.com/AntelopeJS/rethinkdb/pull/25))
+- Remove .git-blame-ignore-revs ([#27](https://github.com/AntelopeJS/rethinkdb/pull/27))
+
+### 🤖 CI
+
+- Harden specialized npm release workflow ([#24](https://github.com/AntelopeJS/rethinkdb/pull/24))
+- **release:** Release next from a dedicated branch and restore requireCommits ([#28](https://github.com/AntelopeJS/rethinkdb/pull/28))
+- **release:** Use the shared release workflow with compose services ([#29](https://github.com/AntelopeJS/rethinkdb/pull/29))
+- Start test services from the shared compose file ([#30](https://github.com/AntelopeJS/rethinkdb/pull/30))
+
+### ❤️ Contributors
+
+- Antony Rizzitelli <rizzitelli.antony@pm.me>
+
 ## Unreleased
 
 ### 🚀 Enhancements
