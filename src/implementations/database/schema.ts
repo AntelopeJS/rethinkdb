@@ -1,9 +1,13 @@
 import assert from "node:assert";
 import { TermType } from "rethinkdb-ts/lib/proto/enums";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
-import type { SchemaDefinition } from "@antelopejs/interface-database/schema";
+import type {
+  IndexDefinition,
+  SchemaDefinition,
+} from "@antelopejs/interface-database/schema";
 
-import { executeTermJson, InitializeSchemaDatabase } from "../../connection";
+import { executeTermJson } from "../../connection";
+import { InitializeSchemaDatabase, retryWithBackoff } from "./initialize";
 import {
   INSTANCE_REGISTRY_FIELD,
   INSTANCE_REGISTRY_TABLE,
@@ -37,9 +41,11 @@ export const Schemas = {
   },
 };
 
-async function initializeSchema(schemaId: string, schema: SchemaDefinition) {
-  await InitializeSchemaDatabase(schemaId, schema);
-  await hydrateInstances(schemaId);
+function initializeSchema(schemaId: string, schema: SchemaDefinition) {
+  return retryWithBackoff(async () => {
+    await InitializeSchemaDatabase(schemaId, schema);
+    await hydrateInstances(schemaId);
+  });
 }
 
 async function hydrateInstances(schemaId: string) {
@@ -60,6 +66,10 @@ export function WaitForSchemaReady(schemaId: string): Promise<void> {
   return schemaReady[schemaId] ?? Promise.resolve();
 }
 
+export async function WaitForAllSchemasReady(): Promise<void> {
+  await Promise.allSettled(Object.values(schemaReady));
+}
+
 export function GetSchema(schemaId: string) {
   assert(schemaId in existingSchemas);
   return existingSchemas[schemaId].definition;
@@ -71,13 +81,13 @@ export function GetTable(schemaId: string, tableId: string) {
   return schema[tableId];
 }
 
-export function HasIndex(
+export function FindIndex(
   schemaId: string,
   tableId: string,
   indexId: string,
-): boolean {
+): IndexDefinition | undefined {
   const table = GetTable(schemaId, tableId);
-  return indexId in table.indexes;
+  return indexId in table.indexes ? table.indexes[indexId] : undefined;
 }
 
 export function GetIndex(

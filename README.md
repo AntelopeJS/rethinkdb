@@ -81,6 +81,48 @@ The module supports two connection methods:
 - Direct connection using `r.connect()` with `RConnectionOptions`
 - Connection pool using `r.connectPool()` with `RPoolConnectionOptions`
 
+## Indexes
+
+Every table has a `tenant_id` index. For each index declared in a schema, the
+module maintains:
+
+- `<name>__i`, led by the instance field: `[tenant_id, ...fields]` for compound
+  indexes, `[tenant_id, value]` for single-field indexes, and one
+  `[tenant_id, element]` entry per element for `multi` indexes. Scoped `getAll`
+  and `between` use it.
+- `<name>`, the unprefixed index, only when the index is declared with
+  `crossInstance: true`. `CROSS_INSTANCE` reads on the index use it.
+
+`CROSS_INSTANCE` `getAll`, `between` and `orderBy` on an index that is not
+declared with `crossInstance: true` still work, but scan the table instead of
+using an index. The module logs a warning the first time a process runs such a
+query for each schema, table and index. Plain filters never log a warning.
+
+Scoped `orderBy` does not use an index: an index would leave out documents
+that lack the sorted field, and scoped `orderBy` keeps returning them.
+
+Schema initialization creates databases, tables and indexes only when they are
+missing, and ignores "already exists" errors when another process booting at
+the same time creates them first. It
+retries a failed initialization up to five times with exponential backoff, and
+waits until every index is ready before the schema accepts queries. RethinkDB
+builds indexes in the background without blocking writes.
+
+### Upgrading from 1.3
+
+The first boot on an existing database adds the `<name>__i` indexes next to the
+existing ones, then waits for RethinkDB to build them before the schema accepts
+queries. Large tables therefore take longer to boot once.
+
+The module never drops or rebuilds an index. Existing unprefixed `<name>`
+indexes stay in place: they keep serving cross-instance queries for indexes
+declared with `crossInstance: true`, and are unused otherwise. Drop unused ones
+by hand to save storage and write time:
+
+```js
+r.db("<schema>").table("<table>").indexDrop("<name>");
+```
+
 ## Atomic single-record mutations
 
 `table.atomicMutation(key, request).run()` checks one primary key, its instance,

@@ -4,12 +4,14 @@ import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 
 // oxlint-disable-next-line import/no-cycle -- join and union right-hand sides are sub-queries; see expression.ts
 import { SelectionQuery } from "./selection";
-import { GetIndex, HasIndex } from "./schema";
+import { FindIndex, GetIndex } from "./schema";
+import { warnUnindexedCrossInstance } from "./indexes";
 // oxlint-disable-next-line import/no-cycle -- stream stages decode values; see expression.ts
 import { DecodeFunction, DecodeValue } from "./expression";
 import {
   allocateArgNumber,
   type DecodingContext,
+  PRIMARY_KEY_FIELD,
   type QueryStage,
 } from "./utils";
 
@@ -234,7 +236,10 @@ function handleLookup(
   ];
 
   let lookupResult: TermJson;
-  if (!rightQuery.isSimpleTable()) {
+  const hasUsableIndex =
+    rightQuery.isSimpleTable() &&
+    hasCrossInstanceIndex(rightQuery.schemaId, rightQuery.tableName, otherKey);
+  if (!hasUsableIndex) {
     const filterArgId = allocateArgNumber();
     const filterDoc: TermJson = [TermType.VAR, [filterArgId]];
     const filterFn: TermJson = [
@@ -343,6 +348,28 @@ function isTableTerm(term: TermJson): boolean {
   return Array.isArray(term) && term[0] === TermType.TABLE;
 }
 
+function hasCrossInstanceIndex(
+  schemaId: string,
+  tableName: string,
+  indexName: string,
+): boolean {
+  return (
+    indexName === PRIMARY_KEY_FIELD ||
+    FindIndex(schemaId, tableName, indexName)?.crossInstance === true
+  );
+}
+
+function canUseCrossInstanceIndex(
+  prev: TermJson,
+  schemaId: string,
+  tableName: string,
+  indexName: string,
+): boolean {
+  return (
+    isTableTerm(prev) && hasCrossInstanceIndex(schemaId, tableName, indexName)
+  );
+}
+
 function buildIndexedOrderBy(
   tableTerm: TermJson,
   indexName: string,
@@ -382,8 +409,13 @@ function handleOrderBy(
   const indexName = stage.options.index;
   const isDescending = stage.options.direction === "desc";
 
-  if (isTableTerm(prev) && HasIndex(schemaId, tableName, indexName)) {
-    return buildIndexedOrderBy(prev, indexName, isDescending);
+  const definition = FindIndex(schemaId, tableName, indexName);
+  // Scoped orderBy stays unindexed: an index would drop documents missing the field.
+  if (definition && isTableTerm(prev)) {
+    if (definition.crossInstance) {
+      return buildIndexedOrderBy(prev, indexName, isDescending);
+    }
+    warnUnindexedCrossInstance(schemaId, tableName, indexName);
   }
   return buildNonIndexedOrderBy(
     prev,
@@ -446,11 +478,13 @@ function handleCount(
   prev: TermJson,
   stage: QueryStage,
   _context: DecodingContext,
-  _schemaId: string,
-  _tableName: string,
+  schemaId: string,
+  tableName: string,
 ): TermJson {
   if (stage.options?.field) {
-    if (!isTableTerm(prev)) {
+    if (
+      !canUseCrossInstanceIndex(prev, schemaId, tableName, stage.options.field)
+    ) {
       return [TermType.COUNT, [buildMappedDistinct(prev, stage.options.field)]];
     }
     return [
@@ -495,11 +529,13 @@ function handleDistinct(
   prev: TermJson,
   stage: QueryStage,
   _context: DecodingContext,
-  _schemaId: string,
-  _tableName: string,
+  schemaId: string,
+  tableName: string,
 ): TermJson {
   if (stage.options?.field) {
-    if (!isTableTerm(prev)) {
+    if (
+      !canUseCrossInstanceIndex(prev, schemaId, tableName, stage.options.field)
+    ) {
       return buildMappedDistinct(prev, stage.options.field);
     }
     return [TermType.DISTINCT, [prev], { index: stage.options.field }];

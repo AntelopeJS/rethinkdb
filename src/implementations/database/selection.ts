@@ -8,7 +8,13 @@ import { applyStreamStages } from "./stream";
 import { executeTermJson } from "../../connection";
 // oxlint-disable-next-line import/no-cycle -- sub-query building decodes values; see expression.ts
 import { DecodeFunction, DecodeValue } from "./expression";
-import { IsValidInstance, WaitForSchemaReady } from "./schema";
+import { FindIndex, IsValidInstance, WaitForSchemaReady } from "./schema";
+import {
+  buildIndexedRead,
+  buildInstanceScope,
+  type IndexedRead,
+  indexOptions,
+} from "./indexes";
 import {
   allocateArgNumber,
   DecodingContext,
@@ -83,15 +89,10 @@ export class SelectionQuery {
       TermType.TABLE,
       [[TermType.DB, [database]], tableName],
     ];
-    if (this.tenant.kind === "scoped") {
-      this.term = [
-        TermType.GET_ALL,
-        [baseTerm, this.tenant.tenantId],
-        { index: TENANT_ID_FIELD },
-      ];
-    } else {
-      this.term = baseTerm;
-    }
+    this.term =
+      this.tenant.kind === "scoped"
+        ? buildInstanceScope(baseTerm, this.tenant.tenantId)
+        : baseTerm;
   }
 
   public static buildTermJson(
@@ -288,6 +289,43 @@ export class SelectionQuery {
     return [TermType.FILTER, [baseTerm, filterFn]];
   }
 
+  public selectByIndex(
+    indexName: string | undefined,
+    read: IndexedRead,
+  ): TermJson {
+    const definition =
+      indexName === undefined
+        ? undefined
+        : FindIndex(this.schemaId, this.tableName, indexName);
+    if (indexName === undefined || definition === undefined) {
+      return this.selectWithoutDeclaredIndex(indexName, read);
+    }
+    return buildIndexedRead(
+      {
+        schemaId: this.schemaId,
+        tableName: this.tableName,
+        indexName,
+        definition,
+        table: this.getTableTerm(),
+        source: this.term,
+        tenantId:
+          this.tenant.kind === "scoped" ? this.tenant.tenantId : undefined,
+      },
+      read,
+    );
+  }
+
+  private selectWithoutDeclaredIndex(
+    index: string | undefined,
+    read: IndexedRead,
+  ): TermJson {
+    const lookup = { index, key: (value: TermJson) => value };
+    if (!this.isScopedTenant()) {
+      return read.lookup(this.term, lookup);
+    }
+    return this.buildTenantFilterTerm(read.lookup(this.getTableTerm(), lookup));
+  }
+
   public isScopedTenant(): boolean {
     return this.tenant.kind === "scoped";
   }
@@ -370,40 +408,43 @@ const SELECTION_STAGES: Record<string, SelectionStageHandler> = {
   },
   getAll: (query, stage) => {
     query.resultType = "selection";
-    const baseTerm = query.isScopedTenant()
-      ? query.getTableTerm()
-      : query.buildTerm();
-    const index = stage.options?.index;
     const rawKeys = stage.args[0];
     const context = query.getContext();
-    const decodedKeys = Array.isArray(rawKeys)
+    const keys = Array.isArray(rawKeys)
       ? rawKeys.map((k) => DecodeValue(k, context))
       : [DecodeValue(rawKeys, context)];
-    const term: TermJson = [
-      TermType.GET_ALL,
-      [baseTerm, ...decodedKeys],
-      index ? { index } : {},
-    ];
-    query.setTerm(
-      query.isScopedTenant() ? query.buildTenantFilterTerm(term) : term,
-    );
+    const read: IndexedRead = {
+      lookup: (source, target) => [
+        TermType.GET_ALL,
+        [source, ...keys.map(target.key)],
+        indexOptions(target.index),
+      ],
+      matches: (value) => [
+        TermType.CONTAINS,
+        [[TermType.MAKE_ARRAY, keys], value],
+      ],
+    };
+    query.setTerm(query.selectByIndex(stage.options?.index, read));
   },
   between: (query, stage) => {
     query.resultType = "selection";
-    const baseTerm = query.isScopedTenant()
-      ? query.getTableTerm()
-      : query.buildTerm();
-    const index = stage.options?.index;
     const low = DecodeValue(stage.args[0], query.getContext());
     const high = DecodeValue(stage.args[1], query.getContext());
-    const term: TermJson = [
-      TermType.BETWEEN,
-      [baseTerm, low, high],
-      index ? { index } : {},
-    ];
-    query.setTerm(
-      query.isScopedTenant() ? query.buildTenantFilterTerm(term) : term,
-    );
+    const read: IndexedRead = {
+      lookup: (source, target) => [
+        TermType.BETWEEN,
+        [source, target.key(low), target.key(high)],
+        indexOptions(target.index),
+      ],
+      matches: (value) => [
+        TermType.AND,
+        [
+          [TermType.GE, [value, low]],
+          [TermType.LT, [value, high]],
+        ],
+      ],
+    };
+    query.setTerm(query.selectByIndex(stage.options?.index, read));
   },
   insert: (query, stage) => {
     query.resultType = "insert";

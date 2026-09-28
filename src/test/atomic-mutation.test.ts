@@ -13,6 +13,7 @@ import {
 import * as connection from "../connection";
 import { validateWriteResult } from "../write-result";
 import { RunQuery } from "../implementations/database/query";
+import { WaitForAllSchemasReady } from "../implementations/database/schema";
 import type { QueryStage } from "../implementations/database/utils";
 
 interface AtomicRecord {
@@ -55,6 +56,7 @@ async function insertRecord(): Promise<string> {
 
 describe("Atomic single-record mutations", () => {
   before(async () => {
+    await WaitForAllSchemasReady();
     await schema.createInstance("owner").run();
     await schema.createInstance("other").run();
     await schema.createInstance().run();

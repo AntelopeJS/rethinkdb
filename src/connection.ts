@@ -1,9 +1,7 @@
 import assert from "node:assert";
-import { TermType } from "rethinkdb-ts/lib/proto/enums";
 import type { Cursor } from "rethinkdb-ts/lib/response/cursor";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import { backtraceTerm } from "rethinkdb-ts/lib/error/term-backtrace";
-import type { SchemaDefinition } from "@antelopejs/interface-database/schema";
 import type { RethinkDBConnection } from "rethinkdb-ts/lib/connection/connection";
 import type { MasterConnectionPool } from "rethinkdb-ts/lib/connection/master-pool";
 import {
@@ -17,10 +15,6 @@ import {
 
 import { Logger } from "./utils/logger";
 import { validateWriteResult } from "./write-result";
-import {
-  INSTANCE_REGISTRY_TABLE,
-  TENANT_ID_FIELD,
-} from "./implementations/database/utils";
 
 let connection:
   | {
@@ -100,87 +94,4 @@ export async function executeTermJson(term: TermJson): Promise<any> {
     return await cursor.toArray();
   }
   return results;
-}
-
-export async function InitializeSchemaDatabase(
-  dbName: string,
-  schema: SchemaDefinition,
-) {
-  const dbList: string[] =
-    (await executeTermJson([TermType.DB_LIST, []])) ?? [];
-  if (!dbList.includes(dbName)) {
-    await executeTermJson([TermType.DB_CREATE, [dbName]]);
-  }
-  const db: TermJson = [TermType.DB, [dbName]];
-  const tableList: string[] =
-    (await executeTermJson([TermType.TABLE_LIST, [db]])) ?? [];
-
-  const userTables = Object.keys(schema);
-  const tablesToCreate = [...userTables, INSTANCE_REGISTRY_TABLE].filter(
-    (t) => !tableList.includes(t),
-  );
-  await Promise.all(
-    tablesToCreate.map((t) =>
-      executeTermJson([TermType.TABLE_CREATE, [db, t], { primary_key: "_id" }]),
-    ),
-  );
-
-  await Promise.all(
-    Object.entries(schema).map(([tableName, tableDef]) =>
-      initializeIndexes(db, tableName, tableDef.indexes),
-    ),
-  );
-}
-
-async function initializeIndexes(
-  db: TermJson,
-  tableName: string,
-  indexes: Record<string, any>,
-) {
-  const table: TermJson = [TermType.TABLE, [db, tableName]];
-  const existingIndexList: string[] =
-    (await executeTermJson([TermType.INDEX_LIST, [table]])) ?? [];
-
-  let created = false;
-  for (const [indexName, indexDef] of Object.entries(indexes)) {
-    if (existingIndexList.includes(indexName)) {
-      continue;
-    }
-    if (indexDef.fields && indexDef.fields.length > 0) {
-      const argId = 0;
-      const fields = indexDef.fields.map((f: string) => [
-        TermType.BRACKET,
-        [[TermType.VAR, [argId]], f],
-      ]);
-      await executeTermJson([
-        TermType.INDEX_CREATE,
-        [
-          table,
-          indexName,
-          [
-            TermType.FUNC,
-            [
-              [TermType.MAKE_ARRAY, [argId]],
-              [TermType.MAKE_ARRAY, fields],
-            ],
-          ],
-        ],
-        indexDef.multi ? { multi: true } : {},
-      ]);
-    } else {
-      await executeTermJson([
-        TermType.INDEX_CREATE,
-        [table, indexName],
-        indexDef.multi ? { multi: true } : {},
-      ]);
-    }
-    created = true;
-  }
-  if (!existingIndexList.includes(TENANT_ID_FIELD)) {
-    await executeTermJson([TermType.INDEX_CREATE, [table, TENANT_ID_FIELD]]);
-    created = true;
-  }
-  if (created) {
-    await executeTermJson([TermType.INDEX_WAIT, [table]]);
-  }
 }
