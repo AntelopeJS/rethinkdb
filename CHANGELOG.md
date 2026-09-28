@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+### 🚀 Enhancements
+
+- **indexes:** Every declared index gets an instance-prefixed `<name>__i` index. Scoped `getAll` and `between` use it instead of filtering the `tenant_id` index.
+- **indexes:** Indexes declared with `crossInstance: true` also keep the unprefixed `<name>` index, used by `CROSS_INSTANCE` queries. Other `CROSS_INSTANCE` index reads scan the table and log a warning once per schema, table and index.
+- **schema:** Initialization ignores "already exists" errors from concurrent boots, retries with backoff, and waits for the indexes it manages to be ready.
+- **schema:** Index names ending with the reserved `__i` suffix are rejected at initialization.
+
+### ⚠️ Upgrade notes
+
+- The first boot adds the `<name>__i` indexes to existing tables and waits until RethinkDB has built them.
+- Unprefixed `<name>` indexes of indexes that are not declared `crossInstance` are no longer used. They are not dropped automatically; drop them by hand with `indexDrop("<name>")`.
+
+### ⚠️ Behavior changes
+
+- `CROSS_INSTANCE` `orderBy` on an index that is not declared `crossInstance` now also returns documents missing the sorted field.
+- `CROSS_INSTANCE` `getAll`, `between` and `lookup` on an index that is not declared `crossInstance` return each matching document once, instead of once per matching key or `multi` entry.
+- Scoped `getAll` and `between` with a scalar key on a compound index now fail with an error instead of returning no documents.
+
 ## v1.3.0
 
 [compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.2.4...v1.3.0)

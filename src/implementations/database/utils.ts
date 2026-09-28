@@ -1,6 +1,7 @@
 import type { StagedObject } from "@antelopejs/interface-database/common";
 
 export const TENANT_ID_FIELD = "tenant_id";
+export const PRIMARY_KEY_FIELD = "_id";
 export const INSTANCE_REGISTRY_TABLE = "__instances__";
 export const INSTANCE_REGISTRY_FIELD = "instance_id";
 
