@@ -22,12 +22,12 @@ This module implements two key interfaces:
 - **RethinkDB Interface**: Provides direct RethinkDB operations and connection management
 - **Database Interface**: Offers a standardized database abstraction layer
 
-Both interfaces can be used independently or together depending on your application's needs. The interfaces are installed separately to maintain modularity and minimize dependencies.
+Both interfaces can be used independently or together depending on your application's needs. The interfaces are installed separately to maintain modularity and minimize dependencies: a module that uses one adds its interface package as a dependency and imports from it.
 
-| Name      | Install command                    |                                                                    |
-| --------- | ---------------------------------- | ------------------------------------------------------------------ |
-| RethinkDB | `ajs module imports add rethinkdb` | [Documentation](https://github.com/AntelopeJS/interface-rethinkdb) |
-| Database  | `ajs module imports add database`  | [Documentation](https://github.com/AntelopeJS/interface-database)  |
+| Name      | Install command                            |                                                                    |
+| --------- | ------------------------------------------ | ------------------------------------------------------------------ |
+| RethinkDB | `pnpm add @antelopejs/interface-rethinkdb` | [Documentation](https://github.com/AntelopeJS/interface-rethinkdb) |
+| Database  | `pnpm add @antelopejs/interface-database`  | [Documentation](https://github.com/AntelopeJS/interface-database)  |
 
 ## Overview
 
