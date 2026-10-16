@@ -1,172 +1,130 @@
 # @antelopejs/rethinkdb
 
 <div align="center">
-<a href="https://www.npmjs.com/package/@antelopejs/rethinkdb"><img alt="NPM version" src="https://img.shields.io/npm/v/@antelopejs/rethinkdb.svg?style=for-the-badge&labelColor=000000"></a>
-<a href="./LICENSE"><img alt="License" src="https://img.shields.io/npm/l/@antelopejs/rethinkdb.svg?style=for-the-badge&labelColor=000000"></a>
+<a href="https://www.npmjs.com/package/@antelopejs/rethinkdb"><img alt="npm" src="https://img.shields.io/npm/v/@antelopejs/rethinkdb?style=for-the-badge&labelColor=000000&color=000000"></a>
+<a href="./LICENSE"><img alt="License" src="https://img.shields.io/npm/l/@antelopejs/rethinkdb?style=for-the-badge&labelColor=000000&color=000000"></a>
 <a href="https://discord.gg/sjK28QHrA7"><img src="https://img.shields.io/badge/Discord-18181B?logo=discord&style=for-the-badge&color=000000" alt="Discord"></a>
-<a href="https://antelopejs.com/modules/rethinkdb"><img src="https://img.shields.io/badge/Docs-18181B?style=for-the-badge&color=000000" alt="Documentation"></a>
+<a href="https://interfaces.antelopejs.com/docs/database"><img src="https://img.shields.io/badge/Docs-18181B?style=for-the-badge&color=000000" alt="Documentation"></a>
 </div>
 
-A complete RethinkDB client module that implements the RethinkDB and Database interfaces for AntelopeJS.
+The RethinkDB backend of AntelopeJS: it runs the database interface's queries on RethinkDB with [`rethinkdb-ts`](https://github.com/rethinkdb/rethinkdb-ts), and exposes that driver to modules that need it directly.
 
-## Installation
+## Interfaces
+
+| Interface                                                                              | Documentation                                                              |
+| -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| [`@antelopejs/interface-database`](https://github.com/AntelopeJS/interface-database)   | [Database](https://interfaces.antelopejs.com/docs/database)                |
+| [`@antelopejs/interface-rethinkdb`](https://github.com/AntelopeJS/interface-rethinkdb) | [RethinkDB](https://interfaces.antelopejs.com/docs/rethinkdb/introduction) |
+
+Schemas, tables, queries, change feeds and atomic mutations are documented on the database interface pages.
+
+## Install
 
 ```bash
 ajs project modules add @antelopejs/rethinkdb
 ```
 
-## Interfaces
-
-This module implements two key interfaces:
-
-- **RethinkDB Interface**: Provides direct RethinkDB operations and connection management
-- **Database Interface**: Offers a standardized database abstraction layer
-
-Both interfaces can be used independently or together depending on your application's needs. The interfaces are installed separately to maintain modularity and minimize dependencies: a module that uses one adds its interface package as a dependency and imports from it.
-
-| Name      | Install command                            |                                                                    |
-| --------- | ------------------------------------------ | ------------------------------------------------------------------ |
-| RethinkDB | `pnpm add @antelopejs/interface-rethinkdb` | [Documentation](https://github.com/AntelopeJS/interface-rethinkdb) |
-| Database  | `pnpm add @antelopejs/interface-database`  | [Documentation](https://github.com/AntelopeJS/interface-database)  |
-
-## Overview
-
-The AntelopeJS RethinkDB module provides functionality for interacting with RethinkDB:
-
-- RethinkDB client connection management through the RethinkDB interface
-- Common database operations through the Database interface
+The command writes the module's default configuration: a connection pool to `127.0.0.1:28015` as `admin`.
 
 ## Configuration
 
-The RethinkDB module supports two types of connections, direct connection or connection pool, both using options from the `rethinkdb-ts` package:
+The module connects either through a connection pool (`pool`) or through a single connection (`connection`). When both are set, `pool` wins.
 
-### Direct Connection
+```typescript [antelope.config.ts]
+import { defineConfig } from "@antelopejs/interface-core/config";
+
+export default defineConfig({
+  name: "my-project",
+  modules: {
+    rethinkdb: {
+      source: {
+        type: "package",
+        package: "@antelopejs/rethinkdb",
+        version: "^1.4.0",
+      },
+      config: {
+        pool: {
+          host: "127.0.0.1",
+          port: 28015,
+          user: "admin",
+          password: "",
+          pool: true,
+          cursor: false,
+          silent: true,
+          discovery: true,
+        },
+      },
+    },
+  },
+});
+```
+
+For a single connection:
 
 ```typescript
-// Direct connection options (RConnectionOptions)
-{
-    host: "localhost",       // The host to connect to
-    port: 28015,             // The port to connect on
-    db: "test",              // The default database
-    user: "admin",           // The user account to connect as
-    password: "",            // The password for the user account
-    timeout: 20,             // Timeout period in seconds for the connection to be opened
-    ssl: false               // Use SSL for connection
-}
+config: {
+  connection: { host: "127.0.0.1", port: 28015, user: "admin", password: "" },
+},
 ```
 
-### Connection Pool
+| Key          | Description                                                                                                   |
+| ------------ | ------------------------------------------------------------------------------------------------------------- |
+| `pool`       | `rethinkdb-ts` pool options (`RPoolConnectionOptions`), passed to `r.connectPool()`.                          |
+| `connection` | `rethinkdb-ts` connection options (`RConnectionOptions`), passed to `r.connect()`. Used when `pool` is unset. |
 
-```typescript
-// Connection pool options (RPoolConnectionOptions)
-{
-    host: "localhost",       // The host to connect to
-    port: 28015,             // The port to connect on
-    db: "test",              // The default database
-    user: "admin",           // The user account to connect as
-    password: "",            // The password for the user account
-    timeout: 20,             // Timeout period in seconds
-    maxConnections: 10,      // Maximum number of connections in the pool
-    bufferSize: 50,          // Buffer size for the pool
-    maxBufferSize: 100,      // Maximum buffer size
-    discovery: false,        // Enable server discovery
-    servers: []              // Additional servers for connection
-}
+The module refuses to start when neither key is set. The option types come from [`rethinkdb-ts`](https://github.com/rethinkdb/rethinkdb-ts).
+
+## Quick start
+
+In the module that stores data, add the database interface:
+
+```bash
+pnpm add @antelopejs/interface-database
 ```
 
-### Configuration Details
+Then follow the [database interface guide](https://framework.antelopejs.com/docs/guides/database) to declare a schema and query it. The same code runs on [`@antelopejs/mongodb`](https://github.com/AntelopeJS/mongodb).
 
-The module supports two connection methods:
+To use the driver directly instead, add `@antelopejs/interface-rethinkdb` and read its [documentation](https://interfaces.antelopejs.com/docs/rethinkdb/introduction).
 
-- Direct connection using `r.connect()` with `RConnectionOptions`
-- Connection pool using `r.connectPool()` with `RPoolConnectionOptions`
+## Storage layout
 
-## Indexes
+- Each schema is a RethinkDB database, and each schema table is a table in it. Every table has a `tenant_id` index that scopes it to one instance.
+- Each declared index `<name>` becomes a `<name>__i` index led by the instance. An index declared with `crossInstance: true` also gets an unprefixed `<name>` index for `CROSS_INSTANCE` queries; without it, those queries scan the table and log a one-time warning. Index names ending in `__i` are reserved.
+- Schema initialization creates missing databases, tables and indexes, retries up to five times, and waits for the indexes before the schema accepts queries.
 
-Every table has a `tenant_id` index. For each index declared in a schema, the
-module maintains:
+Version 1.4 added the `<name>__i` indexes. The first boot after an upgrade builds them, which takes longer on large tables. The module never drops an index: drop the old ones you no longer need by hand, for example `r.db("<schema>").table("<table>").indexDrop("<name>")`.
 
-- `<name>__i`, led by the instance field: `[tenant_id, ...fields]` for compound
-  indexes, `[tenant_id, value]` for single-field indexes, and one
-  `[tenant_id, element]` entry per element for `multi` indexes. Scoped `getAll`
-  and `between` use it.
-- `<name>`, the unprefixed index, only when the index is declared with
-  `crossInstance: true`. `CROSS_INSTANCE` reads on the index use it.
+## Compatibility
 
-`CROSS_INSTANCE` `getAll`, `between`, `orderBy`, `count(field)`,
-`distinct(field)` and `lookup` on an index that is not declared with
-`crossInstance: true` still work, but scan the table instead of using an index.
-The module logs a warning the first time a process runs such a query for each
-schema, table and index. Plain filters never log a warning.
+| Package                           | Supported range  |
+| --------------------------------- | ---------------- |
+| `@antelopejs/interface-database`  | `^0.1.8`         |
+| `@antelopejs/interface-rethinkdb` | `>=0.0.5 <1.0.0` |
+| `@antelopejs/interface-core`      | `>=0.1.1 <1.0.0` |
 
-The scans return the same results as the index would, with two exceptions:
+The module is developed and tested against `@antelopejs/core` `^1.13.4` on Node.js 24, with `rethinkdb-ts` `^2.7.0` and RethinkDB 2.4.
 
-- `getAll`, `between` and `lookup` return each matching document once, while
-  the index returns a document once per matching key or `multi` entry.
-- `orderBy` also returns documents that lack the sorted field, like scoped
-  `orderBy`, while the index leaves them out.
+## Contributing
 
-Index names ending with `__i` are reserved for the instance-prefixed indexes:
-schema initialization rejects them.
+The tests need a RethinkDB server on `127.0.0.1:28015`. Start the one CI uses:
 
-Scoped `orderBy` does not use an index: an index would leave out documents
-that lack the sorted field, and scoped `orderBy` keeps returning them.
-
-Schema initialization creates databases, tables and indexes only when they are
-missing, and ignores "already exists" errors when another process booting at
-the same time creates them first. It retries a failed initialization up to five
-times with exponential backoff, and waits until the indexes it manages are
-ready before the schema accepts queries. RethinkDB builds indexes in the
-background without blocking writes.
-
-### Upgrading from 1.3
-
-The first boot on an existing database adds the `<name>__i` indexes next to the
-existing ones, then waits for RethinkDB to build them before the schema accepts
-queries. Large tables therefore take longer to boot once.
-
-The module never drops or rebuilds an index. Existing unprefixed `<name>`
-indexes stay in place: they keep serving cross-instance queries for indexes
-declared with `crossInstance: true`, and are unused otherwise. Drop unused ones
-by hand to save storage and write time:
-
-```js
-r.db("<schema>").table("<table>").indexDrop("<name>");
+```bash
+docker compose -f .github/release-services.yml up -d --wait
 ```
 
-## Atomic single-record mutations
+Then run the checks:
 
-`table.atomicMutation(key, request).run()` checks one primary key, its instance,
-and the requested condition inside a deterministic native RethinkDB `replace`
-function. It never inserts a missing record or retries a submitted mutation.
-`CROSS_INSTANCE` and selections are not supported.
+```bash
+pnpm install
+pnpm lint
+pnpm format:check
+pnpm typecheck
+pnpm knip
+pnpm test           # build, then ajs module test
+```
 
-Revision-based updates replace the supplied top-level fields, including complete
-nested objects, and install `nextRevision` in the same write. Revision-based
-deletes remove the matching record. The `{ kind: "missing" }` expected revision
-matches an absent field on an existing record, not a stored `null` value. Callers
-must use fresh revision tokens and must not reuse an identity across incarnations.
-
-`deleteIfEqual` checks one scalar field, including a `Date`, before deleting the
-record. It does not provide revision-based protection against a value changing
-and later changing back. Retention callers must keep their cutoff fixed and
-re-evaluate eligibility when they observe a different value.
-
-The result is `applied`, `not-applied`, or `unknown`. Missing records, wrong
-instances, and condition mismatches return `not-applied`. Lost acknowledgements,
-indeterminate driver errors, untyped write-result errors, and malformed
-acknowledgements return `unknown`; callers must reconcile them rather than infer
-that no write occurred. Invalid requests and definite typed query-validation
-errors throw. Ordinary insert/update/replace/delete operations reject write
-errors, including duplicate primary keys; a multi-record write may have partially
-succeeded before it reports an error.
-
-This implementation requires `@antelopejs/interface-database` version `0.1.6`
-or later within the supported range. Its shared real-backend conformance suite
-runs automatically through `ajs module test`, alongside this provider's native
-acknowledgement, storage, and fault tests. Install the published dependencies
-with `pnpm install --frozen-lockfile`; no local artifact is required.
+The tests also run the shared conformance suite of `@antelopejs/interface-database`. Read the [contribution guidelines](CONTRIBUTING.md) before opening a pull request.
 
 ## License
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+[Apache-2.0](LICENSE)
