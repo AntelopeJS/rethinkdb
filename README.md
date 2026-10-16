@@ -94,6 +94,12 @@ To use the driver directly instead, add `@antelopejs/interface-rethinkdb` and re
 
 Version 1.4 added the `<name>__i` indexes. The first boot after an upgrade builds them, which takes longer on large tables. The module never drops an index: drop the old ones you no longer need by hand, for example `r.db("<schema>").table("<table>").indexDrop("<name>")`.
 
+## Documentation
+
+- [Database](https://interfaces.antelopejs.com/docs/database): the `@antelopejs/interface-database` contract this module implements
+- [RethinkDB](https://interfaces.antelopejs.com/docs/rethinkdb/introduction): the `@antelopejs/interface-rethinkdb` contract this module implements
+- [Configuration](https://framework.antelopejs.com/docs/concepts/configuration): module sources, `config` blocks and config variables in `antelope.config.ts`
+
 ## Compatibility
 
 | Package                           | Supported range  |
