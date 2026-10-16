@@ -1,7 +1,7 @@
 {
   "name": "@antelopejs/rethinkdb",
   "version": "1.4.0",
-  "description": "RethinkDB module that implements the Database interface of antelopejs",
+  "description": "RethinkDB backend for AntelopeJS, implementing the Database and RethinkDB interfaces with rethinkdb-ts",
   "keywords": [
     "antelopejs",
     "database",
@@ -9,6 +9,10 @@
     "realtime",
     "rethinkdb"
   ],
+  "homepage": "https://interfaces.antelopejs.com/docs/database",
+  "bugs": {
+    "url": "https://github.com/AntelopeJS/rethinkdb/issues"
+  },
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
