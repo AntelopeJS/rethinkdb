@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.4.1
+
+[compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.4.0...v1.4.1)
+
+### 📖 Documentation
+
+- **readme:** Fix the outdated CLI commands in the README ([#34](https://github.com/AntelopeJS/rethinkdb/pull/34))
+- Rewrite the README ([#36](https://github.com/AntelopeJS/rethinkdb/pull/36))
+- **agents:** Simplify repository guidance ([#37](https://github.com/AntelopeJS/rethinkdb/pull/37))
+
+### ❤️ Contributors
+
+- Antony Rizzitelli <rizzitelli.antony@pm.me>
+
 ## v1.4.0
 
 [compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.3.0...v1.4.0)
