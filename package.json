@@ -1,6 +1,6 @@
 {
   "name": "@antelopejs/rethinkdb",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "RethinkDB backend for AntelopeJS, implementing the Database and RethinkDB interfaces with rethinkdb-ts",
   "keywords": [
     "antelopejs",

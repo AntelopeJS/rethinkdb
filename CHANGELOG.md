@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.5.0
+
+[compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.4.1...v1.5.0)
+
+### 🚀 Enhancements
+
+- **errors:** Throw DuplicateKeyError on duplicate primary keys ([#39](https://github.com/AntelopeJS/rethinkdb/pull/39))
+
+### ❤️ Contributors
+
+- Antony Rizzitelli <rizzitelli.antony@pm.me>
+
 ## v1.4.1
 
 [compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.4.0...v1.4.1)
