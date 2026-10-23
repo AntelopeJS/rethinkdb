@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { Schema } from "@antelopejs/interface-database";
+import { IsDuplicateKeyError, Schema } from "@antelopejs/interface-database";
 
 interface WriteRecord {
   _id: string;
@@ -30,19 +30,31 @@ describe("Write acknowledgements and scoped primary keys", () => {
     await schema.destroyInstance("other").run();
   });
 
-  it("rejects duplicate primary keys", rejectDuplicate);
+  it(
+    "rejects duplicate primary keys with a DuplicateKeyError",
+    rejectDuplicate,
+  );
   it("rejects cross-instance duplicates", rejectCrossInstanceDuplicate);
   it("isolates scoped get writes and reads", isolateScopedGet);
   it("preserves ordinary write-error fields", readErrorFields);
   it("propagates update errors", rejectUpdate);
 });
 
+function isPrimaryKeyDuplicate(error: unknown): boolean {
+  return (
+    IsDuplicateKeyError(error) &&
+    error.index === "_id" &&
+    error.fields.length === 1 &&
+    error.fields[0] === "_id"
+  );
+}
+
 async function rejectDuplicate() {
   const key = randomUUID();
   await owner.insert({ _id: key, value: "original" }).run();
   await assert.rejects(
     owner.insert({ _id: key, value: "duplicate" }).run(),
-    /Duplicate primary key/,
+    isPrimaryKeyDuplicate,
   );
   assert.equal((await owner.get(key).run()).value, "original");
 }
@@ -52,7 +64,7 @@ async function rejectCrossInstanceDuplicate() {
   await owner.insert({ _id: key, value: "private" }).run();
   await assert.rejects(
     other.insert({ _id: key, value: "intruder" }).run(),
-    /Duplicate primary key/,
+    isPrimaryKeyDuplicate,
   );
   assert.equal(await other.get(key).run(), undefined);
   assert.equal((await owner.get(key).run()).value, "private");

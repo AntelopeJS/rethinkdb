@@ -1,5 +1,8 @@
 import { TermType } from "rethinkdb-ts/lib/proto/enums";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
+import { DuplicateKeyError } from "@antelopejs/interface-database";
+
+import { PRIMARY_KEY_FIELD } from "./implementations/database/utils";
 
 const WRITE_TERMS = new Set([
   TermType.INSERT,
@@ -8,11 +11,26 @@ const WRITE_TERMS = new Set([
   TermType.DELETE,
 ]);
 
+// RethinkDB reports a primary key collision as a per-row write error, not as
+// a query error: `errors > 0` with this prefix in `first_error`.
+const DUPLICATE_PRIMARY_KEY_PATTERN = /^Duplicate primary key/;
+
+function toWriteError(firstError: string | undefined): Error {
+  if (firstError && DUPLICATE_PRIMARY_KEY_PATTERN.test(firstError)) {
+    return new DuplicateKeyError(PRIMARY_KEY_FIELD, [PRIMARY_KEY_FIELD]);
+  }
+  return new Error(firstError ?? "RethinkDB write failed");
+}
+
+/**
+ * Throws when a write result reports row errors, as a `DuplicateKeyError` on
+ * `_id` when the first one is a primary key collision.
+ */
 export function validateWriteResult(term: TermJson, result: any): void {
   if (!Array.isArray(term) || !WRITE_TERMS.has(term[0])) {
     return;
   }
   if (result?.errors > 0) {
-    throw new Error(result.first_error ?? "RethinkDB write failed");
+    throw toWriteError(result.first_error);
   }
 }
