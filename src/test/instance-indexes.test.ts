@@ -55,6 +55,7 @@ interface Selectable {
 const SCHEMA_ID = "test-instance-indexes";
 const CONCURRENT_SCHEMA_ID = "test-instance-indexes-concurrent";
 const RESERVED_SCHEMA_ID = "test-instance-indexes-reserved";
+const UNIQUE_SCHEMA_ID = "test-instance-indexes-unique";
 const CONCURRENT_BOOTS = 4;
 const SLOW_TEST_TIMEOUT_MS = 120000;
 const TABLE = "items";
@@ -227,6 +228,7 @@ describe("Instance-prefixed indexes", function () {
     crossInstanceLookup,
   );
   it("rejects index names with the reserved suffix", reservedIndexSuffix);
+  it("rejects unique secondary indexes", uniqueSecondaryIndex);
   it(
     "creates the database and indexes from concurrent boots",
     concurrentInitialization,
@@ -429,6 +431,16 @@ async function reservedIndexSuffix() {
   await assert.rejects(
     Schemas.register(RESERVED_SCHEMA_ID, reserved),
     /Index 'status__i' of table 'items' ends with the reserved suffix '__i'/,
+  );
+}
+
+async function uniqueSecondaryIndex() {
+  const unique: SchemaDefinition = {
+    [TABLE]: { fields: {}, indexes: { status: { unique: true } } },
+  };
+  await assert.rejects(
+    Schemas.register(UNIQUE_SCHEMA_ID, unique),
+    /Index 'status' of table 'test-instance-indexes-unique\.items' is declared unique: true, but RethinkDB cannot enforce unique secondary indexes/,
   );
 }
 

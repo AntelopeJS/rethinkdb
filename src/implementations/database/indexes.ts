@@ -180,6 +180,27 @@ export function assertValidIndexNames(schema: SchemaDefinition) {
 }
 
 /**
+ * Rejects secondary indexes declared with `unique: true`: RethinkDB only
+ * enforces uniqueness on the primary key, and emulating it with a read before
+ * each write would race, so the declaration fails instead of being dropped.
+ */
+export function assertNoUniqueIndexes(
+  schemaId: string,
+  schema: SchemaDefinition,
+) {
+  for (const [tableName, table] of Object.entries(schema)) {
+    const unique = Object.keys(table.indexes).find(
+      (indexName) => table.indexes[indexName].unique,
+    );
+    if (unique !== undefined) {
+      throw new Error(
+        `Index '${unique}' of table '${schemaId}.${tableName}' is declared unique: true, but RethinkDB cannot enforce unique secondary indexes; remove the option or use the primary key`,
+      );
+    }
+  }
+}
+
+/**
  * Lists every physical index a table needs: `<name>__i` (led by the instance
  * field) for each declared index, `<name>` for cross-instance indexes, and the
  * instance field index itself.

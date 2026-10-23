@@ -90,6 +90,8 @@ To use the driver directly instead, add `@antelopejs/interface-rethinkdb` and re
 
 - Each schema is a RethinkDB database, and each schema table is a table in it. Every table has a `tenant_id` index that scopes it to one instance.
 - Each declared index `<name>` becomes a `<name>__i` index led by the instance. An index declared with `crossInstance: true` also gets an unprefixed `<name>` index for `CROSS_INSTANCE` queries; without it, those queries scan the table and log a one-time warning. Index names ending in `__i` are reserved.
+- The primary key is the `_id` field, shared by all instances of a table: inserting an `_id` that any instance already uses throws a `DuplicateKeyError` on `_id`.
+- RethinkDB cannot enforce unique secondary indexes, so schema initialization refuses a table that declares an index with `unique: true` and names the schema, table and index.
 - Schema initialization creates missing databases, tables and indexes, retries up to five times, and waits for the indexes before the schema accepts queries.
 
 Version 1.4 added the `<name>__i` indexes. The first boot after an upgrade builds them, which takes longer on large tables. The module never drops an index: drop the old ones you no longer need by hand, for example `r.db("<schema>").table("<table>").indexDrop("<name>")`.

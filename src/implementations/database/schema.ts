@@ -8,7 +8,7 @@ import type {
 
 import { executeTermJson } from "../../connection";
 import { InitializeSchemaDatabase, retryWithBackoff } from "./initialize";
-import { assertValidIndexNames } from "./indexes";
+import { assertNoUniqueIndexes, assertValidIndexNames } from "./indexes";
 import {
   INSTANCE_REGISTRY_FIELD,
   INSTANCE_REGISTRY_TABLE,
@@ -44,6 +44,7 @@ export const Schemas = {
 
 async function initializeSchema(schemaId: string, schema: SchemaDefinition) {
   assertValidIndexNames(schema);
+  assertNoUniqueIndexes(schemaId, schema);
   await retryWithBackoff(async () => {
     await InitializeSchemaDatabase(schemaId, schema);
     await hydrateInstances(schemaId);
