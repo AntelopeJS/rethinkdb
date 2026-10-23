@@ -4,6 +4,12 @@
 
 [compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.4.1...v1.5.0)
 
+### Upgrade notes
+
+- Implements `@antelopejs/interface-database` `>=0.1.11 <0.2.0` ([#39](https://github.com/AntelopeJS/rethinkdb/pull/39)).
+- **Behavior change:** a duplicate primary key now throws `DuplicateKeyError("_id", ["_id"])` instead of a plain `Error`. `_id` is shared by every instance of a table, so an `_id` used by another instance is refused too.
+- **Breaking for schemas with unique secondary indexes:** RethinkDB cannot enforce them, so schema initialization refuses a table declaring `unique: true` on a secondary index (the error names schema, table and index). Use MongoDB or PostgreSQL for such schemas.
+
 ### 🚀 Enhancements
 
 - **errors:** Throw DuplicateKeyError on duplicate primary keys ([#39](https://github.com/AntelopeJS/rethinkdb/pull/39))
