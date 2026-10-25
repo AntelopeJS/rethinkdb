@@ -15,7 +15,7 @@ importers:
         specifier: '>=0.1.11 <0.2.0'
         version: 0.1.11(@antelopejs/interface-core@0.2.4)
       '@antelopejs/interface-rethinkdb':
-        specifier: '>=0.0.6 <1.0.0'
+        specifier: '>=0.0.6 <0.1.0'
         version: 0.0.6(@antelopejs/interface-core@0.2.4)
       chai:
         specifier: ^4.5.0
