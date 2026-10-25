@@ -107,7 +107,7 @@ Version 1.4 added the `<name>__i` indexes. The first boot after an upgrade build
 | Package                           | Supported range  |
 | --------------------------------- | ---------------- |
 | `@antelopejs/interface-database`  | `^0.1.8`         |
-| `@antelopejs/interface-rethinkdb` | `>=0.0.5 <1.0.0` |
+| `@antelopejs/interface-rethinkdb` | `>=0.0.6 <0.1.0` |
 | `@antelopejs/interface-core`      | `>=0.1.1 <1.0.0` |
 
 The module is developed and tested against `@antelopejs/core` `^1.13.4` on Node.js 24, with `rethinkdb-ts` `^2.7.0` and RethinkDB 2.4.

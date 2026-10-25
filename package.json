@@ -30,7 +30,7 @@
     "build": "rimraf dist && tsc",
     "format": "oxfmt .",
     "lint:fix": "oxlint --fix",
-    "lint": "oxlint",
+    "lint": "oxlint && antelopejs-check-interface-ranges",
     "prepack": "pnpm run build",
     "release": "pnpm run lint && pnpm run test && pnpm run prepack && release-it",
     "typecheck": "tsc --noEmit",
@@ -48,7 +48,7 @@
   "dependencies": {
     "@antelopejs/interface-core": ">=0.2.4 <1.0.0",
     "@antelopejs/interface-database": ">=0.1.11 <0.2.0",
-    "@antelopejs/interface-rethinkdb": ">=0.0.6 <1.0.0",
+    "@antelopejs/interface-rethinkdb": ">=0.0.6 <0.1.0",
     "chai": "^4.5.0",
     "reflect-metadata": "^0.2.2",
     "rethinkdb-ts": "^2.7.0"
