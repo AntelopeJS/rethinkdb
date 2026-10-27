@@ -1,12 +1,12 @@
 # rethinkdb
 
-The RethinkDB backend for AntelopeJS, published as `@antelopejs/rethinkdb`. It implements `@antelopejs/interface-database` and `@antelopejs/interface-rethinkdb` on top of `rethinkdb-ts`.
+The RethinkDB backend for AntelopeJS, published as `@antelopejs/rethinkdb`. It implements `@antelopejs/interface-database`, `@antelopejs/interface-database-catalog` and `@antelopejs/interface-rethinkdb` on top of `rethinkdb-ts`.
 
 ## Layout
 
-- `src/index.ts` holds the module config types and lifecycle; `src/connection.ts` opens the pool or direct connection.
-- `src/implementations/database/` implements the `query` and `schema` namespaces of `@antelopejs/interface-database`; `src/implementations/rethinkdb/` implements `@antelopejs/interface-rethinkdb`.
-- `src/test/antelope.test.ts` is the `ajs module test` project. It loads the module from `.` and runs the compiled suites in `dist/test`.
+- `src/index.ts` holds the module lifecycle and `src/config.ts` its config, including `mode`: an `owned` instance creates and scopes its tables, an `external` one serves a database it did not create (`docs/external-mode.md`); `src/connection.ts` opens the pool or direct connection, and the per-read connections of an external instance.
+- `src/implementations/database/` implements the `query` and `schema` namespaces of `@antelopejs/interface-database`; `src/implementations/rethinkdb/` implements `@antelopejs/interface-rethinkdb`. The `external-*.ts` files are the external mode; `src/implementations/catalog/` implements the catalog interface for an external instance.
+- `src/test/antelope.test.ts` is the `ajs module test` project. It loads the module from `.` and runs the compiled suites in `dist/test`. `src/test-external/` holds the external-mode suites and the client database fixture they read.
 
 ## Versioning
 
@@ -18,6 +18,7 @@ The RethinkDB backend for AntelopeJS, published as `@antelopejs/rethinkdb`. It i
 
 - Every test needs a RethinkDB 2.4 server on `127.0.0.1:28015`, including `pnpm run checks`. Start it with `docker compose -f .github/release-services.yml up -d --wait`.
 - `pnpm test` builds once (`pnpm run build`), then runs `ajs module test .`: the other suites in `src/test/`, compiled to `dist/test`, followed by the shared conformance suites of `@antelopejs/interface-database`. Those suites `require("chai")` from this package, which is why `knip.config.ts` ignores `chai`, `@types/chai` and `@types/mocha`.
+- `pnpm test` then runs the external-mode suites in `dist/test-external` with `RETHINK_TEST_MODE=external`: the test project seeds the client database `erp_test` as admin, with `erp_reader` and `erp_writer` accounts, and constructs the module as `erp_writer`. `pnpm test:external` runs only those suites.
 - `pnpm run checks` runs every test; there is no separate suite.
 
 <!-- antelopejs-guardrails:start -->

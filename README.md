@@ -11,10 +11,11 @@ The RethinkDB backend of AntelopeJS: it runs the database interface's queries on
 
 ## Interfaces
 
-| Interface                                                                              | Documentation                                                              |
-| -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| [`@antelopejs/interface-database`](https://github.com/AntelopeJS/interface-database)   | [Database](https://interfaces.antelopejs.com/docs/database)                |
-| [`@antelopejs/interface-rethinkdb`](https://github.com/AntelopeJS/interface-rethinkdb) | [RethinkDB](https://interfaces.antelopejs.com/docs/rethinkdb/introduction) |
+| Interface                                                                                            | Documentation                                                              |
+| ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| [`@antelopejs/interface-database`](https://github.com/AntelopeJS/interface-database)                 | [Database](https://interfaces.antelopejs.com/docs/database)                |
+| [`@antelopejs/interface-rethinkdb`](https://github.com/AntelopeJS/interface-rethinkdb)               | [RethinkDB](https://interfaces.antelopejs.com/docs/rethinkdb/introduction) |
+| [`@antelopejs/interface-database-catalog`](https://github.com/AntelopeJS/interface-database-catalog) | [External mode](docs/external-mode.md#the-catalog)                         |
 
 Schemas, tables, queries, change feeds and atomic mutations are documented on the database interface pages.
 
@@ -67,12 +68,16 @@ config: {
 },
 ```
 
-| Key          | Description                                                                                                   |
-| ------------ | ------------------------------------------------------------------------------------------------------------- |
-| `pool`       | `rethinkdb-ts` pool options (`RPoolConnectionOptions`), passed to `r.connectPool()`.                          |
-| `connection` | `rethinkdb-ts` connection options (`RConnectionOptions`), passed to `r.connect()`. Used when `pool` is unset. |
+| Key                  | Description                                                                                                                                                                               |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pool`               | `rethinkdb-ts` pool options (`RPoolConnectionOptions`), passed to `r.connectPool()`.                                                                                                      |
+| `connection`         | `rethinkdb-ts` connection options (`RConnectionOptions`), passed to `r.connect()`. Used when `pool` is unset.                                                                             |
+| `url`                | `rethinkdb://user:password@host:port/database`, parsed into pool options. Required in external mode.                                                                                      |
+| `mode`               | `owned` (default): the module creates a database per schema and scopes rows to instances. `external`: it serves a database it did not create, see [External mode](docs/external-mode.md). |
+| `statementTimeoutMs` | Time limit of each read of an external instance, enforced by closing that read's connection.                                                                                              |
+| `catalog`            | `{ enabled?: boolean }`: whether an external instance answers the catalog outside development.                                                                                            |
 
-The module refuses to start when neither key is set. The option types come from [`rethinkdb-ts`](https://github.com/rethinkdb/rethinkdb-ts).
+The module refuses to start when none of `url`, `pool` and `connection` is set. The option types come from [`rethinkdb-ts`](https://github.com/rethinkdb/rethinkdb-ts).
 
 ## Quick start
 
@@ -100,15 +105,17 @@ Version 1.4 added the `<name>__i` indexes. The first boot after an upgrade build
 
 - [Database](https://interfaces.antelopejs.com/docs/database): the `@antelopejs/interface-database` contract this module implements
 - [RethinkDB](https://interfaces.antelopejs.com/docs/rethinkdb/introduction): the `@antelopejs/interface-rethinkdb` contract this module implements
+- [External mode](docs/external-mode.md): serving a database the module did not create, and its catalog
 - [Configuration](https://framework.antelopejs.com/docs/concepts/configuration): module sources, `config` blocks and config variables in `antelope.config.ts`
 
 ## Compatibility
 
-| Package                           | Supported range   |
-| --------------------------------- | ----------------- |
-| `@antelopejs/interface-database`  | `>=0.1.11 <0.2.0` |
-| `@antelopejs/interface-rethinkdb` | `>=0.0.6 <0.1.0`  |
-| `@antelopejs/interface-core`      | `>=0.2.4 <1.0.0`  |
+| Package                                  | Supported range   |
+| ---------------------------------------- | ----------------- |
+| `@antelopejs/interface-database`         | `>=0.1.11 <0.2.0` |
+| `@antelopejs/interface-rethinkdb`        | `>=0.0.6 <0.1.0`  |
+| `@antelopejs/interface-database-catalog` | `>=0.0.3 <0.1.0`  |
+| `@antelopejs/interface-core`             | `>=0.2.4 <1.0.0`  |
 
 The module is developed and tested against `@antelopejs/core` `^1.13.4` on Node.js 24, with `rethinkdb-ts` `^2.7.0` and RethinkDB 2.4.
 
