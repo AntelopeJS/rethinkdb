@@ -7,6 +7,11 @@ import type {
 } from "@antelopejs/interface-database/schema";
 
 import { executeTermJson } from "../../connection";
+import { IsExternal } from "../../config";
+import {
+  type ExternalTable,
+  RegisterExternalSchema,
+} from "./external-registration";
 import { InitializeSchemaDatabase, retryWithBackoff } from "./initialize";
 import { assertNoUniqueIndexes, assertValidIndexNames } from "./indexes";
 import {
@@ -21,9 +26,39 @@ const schemaReady: Record<string, Promise<void>> = {};
 
 const existingInstances: Record<string, Set<string>> = {};
 
+const externalTables = new Map<string, Record<string, ExternalTable>>();
+
+/**
+ * Registers an external schema: its gate keeps a failure, so every query on the schema rethrows
+ * the message registration failed with, as a schema that never registered would not.
+ */
+async function registerExternal(schemaId: string, schema: SchemaDefinition) {
+  const registration = RegisterExternalSchema(schemaId, schema).then(
+    (tables) => {
+      externalTables.set(schemaId, tables);
+    },
+  );
+  schemaReady[schemaId] = registration;
+  registration.catch(() => undefined);
+  await registration;
+}
+
+/** The table an external schema's table reads, as its registration described it. */
+export function GetExternalTable(
+  schemaId: string,
+  tableId: string,
+): ExternalTable {
+  const table = externalTables.get(schemaId)?.[tableId];
+  assert(table, `Table '${schemaId}.${tableId}' is not registered`);
+  return table;
+}
+
 export const Schemas = {
   async register(schemaId: string, schema: SchemaDefinition) {
     existingSchemas[schemaId] = { definition: schema };
+    if (IsExternal()) {
+      return registerExternal(schemaId, schema);
+    }
     const ready = initializeSchema(schemaId, schema);
     schemaReady[schemaId] = ready;
     try {
@@ -36,6 +71,7 @@ export const Schemas = {
     }
   },
   unregister(schemaId: string) {
+    externalTables.delete(schemaId);
     delete existingSchemas[schemaId];
     delete schemaReady[schemaId];
     delete existingInstances[schemaId];

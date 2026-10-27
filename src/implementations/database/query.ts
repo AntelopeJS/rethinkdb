@@ -1,10 +1,20 @@
 import assert from "node:assert";
 import type { Cursor } from "rethinkdb-ts/lib/response/cursor";
+import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import { ValidateAtomicMutationTable } from "@antelopejs/interface-database/atomic";
 
 import { Logger } from "../../utils/logger";
-import { SendQuery } from "../../connection";
+import {
+  OpenBoundedCursor,
+  QueryTimeoutError,
+  SendQuery,
+} from "../../connection";
 import { SelectionQuery } from "./selection";
+import { GetOptions, IsExternal } from "../../config";
+import {
+  ExternalAtomicRefusal,
+  ExternalInstanceRefusal,
+} from "./external-selection";
 import { runAtomicMutation } from "./atomic";
 import { DecodingContext, type QueryStage } from "./utils";
 import {
@@ -19,10 +29,31 @@ type SchemaStageHandler = (
   stages: QueryStage[],
 ) => Promise<any>;
 
+/**
+ * The lifecycle stages on an external instance, whose tables have no instances: creating or
+ * destroying one is refused rather than recorded nowhere, and the list of them is empty.
+ */
+const EXTERNAL_LIFECYCLE_HANDLERS = new Map<string, SchemaStageHandler>([
+  [
+    "createInstance",
+    (_schemaId, stages) =>
+      Promise.reject(ExternalInstanceRefusal(stages[1].stage)),
+  ],
+  [
+    "destroyInstance",
+    (_schemaId, stages) =>
+      Promise.reject(ExternalInstanceRefusal(stages[1].stage)),
+  ],
+  ["listInstances", () => Promise.resolve([])],
+]);
+
 const SCHEMA_STAGE_HANDLERS: Record<string, SchemaStageHandler> = {
   instance: async (schemaId, stages) => {
     await WaitForSchemaReady(schemaId);
     if (stages.some((stage) => stage.stage === "atomicMutation")) {
+      if (IsExternal()) {
+        throw ExternalAtomicRefusal(stages[2]?.options?.id);
+      }
       return runAtomicStages(stages);
     }
     const context = new DecodingContext();
@@ -41,7 +72,9 @@ export async function RunQuery(stages: QueryStage[]) {
   assert(schemaId, "Unknown schema");
 
   const next = stages[1]?.stage;
-  const handler = next ? SCHEMA_STAGE_HANDLERS[next] : undefined;
+  const external =
+    IsExternal() && next ? EXTERNAL_LIFECYCLE_HANDLERS.get(next) : undefined;
+  const handler = external ?? (next ? SCHEMA_STAGE_HANDLERS[next] : undefined);
   assert(handler, `Unknown schema stage '${next}'`);
   return handler(schemaId, stages);
 }
@@ -75,6 +108,32 @@ interface OpenCursor {
   cursor: Cursor;
   iterator: AsyncIterableIterator<any>;
   isChangeStream: boolean;
+  arm?: () => void;
+  disarm?: () => void;
+  release?: () => void;
+  expired?: () => boolean;
+  timeoutMs?: number;
+}
+
+/** The cursor of a read: on an external instance with a time limit, on a connection of its own. */
+async function Opened(
+  query: SelectionQuery,
+  term: TermJson,
+): Promise<Omit<OpenCursor, "iterator" | "isChangeStream">> {
+  const timeoutMs = query.external
+    ? GetOptions().statementTimeoutMs
+    : undefined;
+  if (timeoutMs === undefined) {
+    const cursor = await SendQuery(term);
+    assert(cursor, "Query returned no cursor.");
+    return { cursor };
+  }
+  return { ...(await OpenBoundedCursor(term, timeoutMs)), timeoutMs };
+}
+
+function Release(reqId: number) {
+  openCursors.get(reqId)?.release?.();
+  openCursors.delete(reqId);
 }
 
 const openCursors = new Map<number, OpenCursor>();
@@ -89,27 +148,45 @@ export async function ReadCursor(reqId: number, stages: QueryStage[]) {
     const query = SelectionQuery.decode(stages, context);
     const term = query.buildTerm();
     Logger.Debug("Opening cursor #", reqId);
-    const cursor = await SendQuery(term);
-    assert(cursor, "Query returned no cursor.");
+    const opened = await Opened(query, term);
+    const { cursor } = opened;
     const entry: OpenCursor = {
-      cursor,
+      ...opened,
       iterator: cursor[Symbol.asyncIterator](),
       isChangeStream: query.isChangeStream,
     };
     openCursors.set(reqId, entry);
     cursor.on("close", () => {
       Logger.Debug("Cursor #", reqId, "closed by server");
-      openCursors.delete(reqId);
+      if (!entry.expired?.()) {
+        Release(reqId);
+      }
     });
     cursor.init();
   }
 
   const entry = openCursors.get(reqId);
   assert(entry, `Cursor #${reqId} not found.`);
-  const result = await entry.iterator.next();
+  if (entry.expired?.()) {
+    Release(reqId);
+    throw new QueryTimeoutError(entry.timeoutMs ?? 0);
+  }
+  entry.arm?.();
+  const result = await entry.iterator
+    .next()
+    .finally(() => entry.disarm?.())
+    .catch((error: Error) => {
+      const expired = entry.expired?.() ?? false;
+      Release(reqId);
+      throw expired ? new QueryTimeoutError(entry.timeoutMs ?? 0) : error;
+    });
 
   if (result.done) {
-    openCursors.delete(reqId);
+    const expired = entry.expired?.() ?? false;
+    Release(reqId);
+    if (expired) {
+      throw new QueryTimeoutError(entry.timeoutMs ?? 0);
+    }
     return { done: true, value: undefined };
   }
 
@@ -139,7 +216,8 @@ export async function CloseCursor(reqId: number) {
   if (entry) {
     Logger.Debug("Closing cursor #", reqId);
     openCursors.delete(reqId);
-    await entry.cursor.close();
+    await entry.cursor.close().catch(() => undefined);
+    entry.release?.();
   }
 }
 

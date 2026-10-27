@@ -1,6 +1,7 @@
 import { antelopeKnipConfig } from "@antelopejs/tooling-configs/knip";
 
 export default antelopeKnipConfig({
+  entry: ["src/test-external/**/*.test.ts"],
   ignoreDependencies: [
     // The database conformance suites ship compiled inside
     // @antelopejs/interface-database and `require("chai")` out of this module's

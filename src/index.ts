@@ -1,27 +1,32 @@
 import "reflect-metadata";
 import { ImplementInterface } from "@antelopejs/interface-core";
-import type { RConnectionOptions, RPoolConnectionOptions } from "rethinkdb-ts";
 
-import { ConnectDirect, ConnectPool, Disconnect } from "./connection";
+import { IsExternal, type Options, SetOptions } from "./config";
+import {
+  ConnectDirect,
+  ConnectPool,
+  Disconnect,
+  SetDirectOptions,
+} from "./connection";
 
-interface Options {
-  connection?: RConnectionOptions;
-  pool?: RPoolConnectionOptions;
-}
+export type { CatalogOptions, Mode, Options } from "./config";
 
-export async function construct(options: Options) {
-  if (options?.pool) {
-    await ConnectPool(options.pool);
-  } else if (options?.connection) {
-    await ConnectDirect(options.connection);
-  } else {
-    throw new Error("Invalid RethinkDB options");
+export async function construct(options?: Options) {
+  const resolved = SetOptions(options);
+  if (resolved.pool) {
+    await ConnectPool(resolved.pool);
+    SetDirectOptions(resolved.pool);
+  } else if (resolved.connection) {
+    await ConnectDirect(resolved.connection);
+    SetDirectOptions(resolved.connection);
   }
 
-  void ImplementInterface(
-    await import("@antelopejs/interface-rethinkdb"),
-    await import("./implementations/rethinkdb"),
-  );
+  if (!IsExternal()) {
+    void ImplementInterface(
+      await import("@antelopejs/interface-rethinkdb"),
+      await import("./implementations/rethinkdb"),
+    );
+  }
   void ImplementInterface(
     await import("@antelopejs/interface-database/query"),
     await import("./implementations/database/query"),
@@ -29,6 +34,10 @@ export async function construct(options: Options) {
   void ImplementInterface(
     await import("@antelopejs/interface-database/schema"),
     await import("./implementations/database/schema"),
+  );
+  void ImplementInterface(
+    await import("@antelopejs/interface-database-catalog"),
+    await import("./implementations/catalog"),
   );
 }
 

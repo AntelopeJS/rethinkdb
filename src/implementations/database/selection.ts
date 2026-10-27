@@ -5,15 +5,17 @@ import { CROSS_INSTANCE } from "@antelopejs/interface-database/schema";
 
 // oxlint-disable-next-line import/no-cycle -- sub-query building applies stream stages; see expression.ts
 import { applyStreamStages } from "./stream";
-import { executeTermJson } from "../../connection";
-// oxlint-disable-next-line import/no-cycle -- sub-query building decodes values; see expression.ts
-import { DecodeFunction, DecodeValue } from "./expression";
+import { executeBounded, executeTermJson } from "../../connection";
+// oxlint-disable-next-line import/no-cycle -- the stage handlers build this query's terms
+import { SelectionStageHandlerOf } from "./selection-stages";
+import { ExternalDatabaseName, GetOptions, IsExternal } from "../../config";
+import { ExternalReads } from "./external-selection";
+import { RunExternalWrite } from "./external-writes";
 import { FindIndex, IsValidInstance, WaitForSchemaReady } from "./schema";
 import {
   buildIndexedRead,
   buildInstanceScope,
   type IndexedRead,
-  indexOptions,
 } from "./indexes";
 import {
   allocateArgNumber,
@@ -76,6 +78,10 @@ export class SelectionQuery {
   private term: TermJson;
   private readonly tenant: TenantContext;
   private scopedGet = false;
+  /** The reads of an external instance's table; undefined on an owned instance. */
+  public readonly external?: ExternalReads;
+  private streamStages: QueryStage[] = [];
+  private rawTarget?: TermJson;
 
   public constructor(
     public readonly schemaId: string,
@@ -84,10 +90,16 @@ export class SelectionQuery {
     public readonly database: string,
     private context: DecodingContext,
   ) {
-    this.tenant = resolveTenantContext(schemaId, tableName, instanceId);
+    if (IsExternal()) {
+      this.external = new ExternalReads(schemaId, tableName, instanceId);
+      this.database = ExternalDatabaseName();
+    }
+    this.tenant = this.external
+      ? { kind: "cross" }
+      : resolveTenantContext(schemaId, tableName, instanceId);
     const baseTerm: TermJson = [
       TermType.TABLE,
-      [[TermType.DB, [database]], tableName],
+      [[TermType.DB, [this.database]], tableName],
     ];
     this.term =
       this.tenant.kind === "scoped"
@@ -136,7 +148,7 @@ export class SelectionQuery {
     }
 
     const preStreamStages: QueryStage[] = [];
-    const streamStages: QueryStage[] = [];
+    let streamStages: QueryStage[] = [];
 
     for (const stage of stages) {
       if (PRE_STREAM_STAGES.has(stage.stage) && streamStages.length === 0) {
@@ -153,6 +165,22 @@ export class SelectionQuery {
     if (this.scopedGet && !writeStage && streamStages[0]?.stage !== "changes") {
       this.term = [TermType.DEFAULT, [[TermType.NTH, [this.term, 0]], null]];
     }
+
+    this.external?.refuseFeed(streamStages);
+    this.rawTarget = this.term;
+    if (this.external && (!writeStage || streamStages.length > 0)) {
+      const ordered = this.external.indexedOrder(
+        this.schemaId,
+        this.term,
+        streamStages[0],
+      );
+      this.term = this.external.normalized(
+        ordered ?? this.term,
+        this.singleElement,
+      );
+      streamStages = ordered ? streamStages.slice(1) : streamStages;
+    }
+    this.streamStages = streamStages;
 
     if (streamStages.length > 0) {
       const result = applyStreamStages(
@@ -176,7 +204,7 @@ export class SelectionQuery {
   }
 
   private applySelectionStage(stage: QueryStage) {
-    const handler = SELECTION_STAGES[stage.stage];
+    const handler = SelectionStageHandlerOf(stage.stage);
     if (handler) {
       handler(this, stage);
     }
@@ -196,11 +224,28 @@ export class SelectionQuery {
     };
 
     const handler = RUN_HANDLERS[this.resultType];
+    if (this.external && this.resultType in RUN_HANDLERS) {
+      return RunExternalWrite(this.database, this.external.table, {
+        kind: this.resultType,
+        value: this.insertRawArgs,
+        target: await this.external.writeTarget(
+          this.streamStages.length > 0 ? this.term : undefined,
+          this.rawTarget ?? this.term,
+        ),
+        conflict: this.conflictMode,
+      });
+    }
     if (handler) {
       return handler();
     }
 
-    const result = await executeTermJson(this.term);
+    const timeoutMs = this.external
+      ? GetOptions().statementTimeoutMs
+      : undefined;
+    const result =
+      timeoutMs === undefined
+        ? await executeTermJson(this.term)
+        : await executeBounded(this.term, timeoutMs);
     if (result === null && this.singleElement) {
       return undefined;
     }
@@ -330,8 +375,30 @@ export class SelectionQuery {
     return this.tenant.kind === "scoped";
   }
 
+  /**
+   * The rows a lookup into this external table matches, by primary key or a native index, with
+   * this query's own stream stages applied after them; undefined when no index serves it.
+   */
+  public externalLookup(
+    otherKey: string,
+    local: TermJson,
+  ): TermJson | undefined {
+    const source = this.external?.lookup(this.schemaId, otherKey, local);
+    if (!source || this.resultType !== "table") {
+      return undefined;
+    }
+    return applyStreamStages(
+      source,
+      this.streamStages,
+      this.context,
+      this.schemaId,
+      this.tableName,
+    ).term;
+  }
+
   public isSimpleTable(): boolean {
     return (
+      !this.external &&
       !this.isScopedTenant() &&
       Array.isArray(this.term) &&
       this.term[0] === TermType.TABLE
@@ -398,81 +465,3 @@ export class SelectionQuery {
     this.insertRawArgs = args;
   }
 }
-
-type SelectionStageHandler = (query: SelectionQuery, stage: QueryStage) => void;
-
-const SELECTION_STAGES: Record<string, SelectionStageHandler> = {
-  get: (query, stage) => {
-    const key = DecodeValue(stage.args[0], query.getContext());
-    query.setGet(key);
-  },
-  getAll: (query, stage) => {
-    query.resultType = "selection";
-    const rawKeys = stage.args[0];
-    const context = query.getContext();
-    const keys = Array.isArray(rawKeys)
-      ? rawKeys.map((k) => DecodeValue(k, context))
-      : [DecodeValue(rawKeys, context)];
-    const read: IndexedRead = {
-      lookup: (source, target) => [
-        TermType.GET_ALL,
-        [source, ...keys.map(target.key)],
-        indexOptions(target.index),
-      ],
-      matches: (value) => [
-        TermType.CONTAINS,
-        [[TermType.MAKE_ARRAY, keys], value],
-      ],
-    };
-    query.setTerm(query.selectByIndex(stage.options?.index, read));
-  },
-  between: (query, stage) => {
-    query.resultType = "selection";
-    const low = DecodeValue(stage.args[0], query.getContext());
-    const high = DecodeValue(stage.args[1], query.getContext());
-    const read: IndexedRead = {
-      lookup: (source, target) => [
-        TermType.BETWEEN,
-        [source, target.key(low), target.key(high)],
-        indexOptions(target.index),
-      ],
-      matches: (value) => [
-        TermType.AND,
-        [
-          [TermType.GE, [value, low]],
-          [TermType.LT, [value, high]],
-        ],
-      ],
-    };
-    query.setTerm(query.selectByIndex(stage.options?.index, read));
-  },
-  insert: (query, stage) => {
-    query.resultType = "insert";
-    query.setNewValue(DecodeValue(stage.args[0], new DecodingContext()));
-    query.setConflictMode(stage.options?.conflict);
-    query.setInsertRawArgs(stage.args[0]);
-  },
-  update: (query, stage) => {
-    query.resultType = "update";
-    if (stage.args[0]?.stage === "func") {
-      const argId = allocateArgNumber();
-      const docVar: TermJson = [TermType.VAR, [argId]];
-      const body = DecodeFunction(stage.args[0], new DecodingContext(), [
-        docVar,
-      ]);
-      query.setNewValue([
-        TermType.FUNC,
-        [[TermType.MAKE_ARRAY, [argId]], body],
-      ]);
-    } else {
-      query.setNewValue(DecodeValue(stage.args[0], new DecodingContext()));
-    }
-  },
-  replace: (query, stage) => {
-    query.resultType = "replace";
-    query.setNewValue(DecodeValue(stage.args[0], new DecodingContext()));
-  },
-  delete: (query) => {
-    query.resultType = "delete";
-  },
-};
