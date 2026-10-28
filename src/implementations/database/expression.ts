@@ -9,7 +9,7 @@ import { SelectionQuery } from "./selection";
 import {
   allocateArgNumber,
   type DecodingContext,
-  HasOwnKey,
+  HasKey,
   IsObject,
   type QueryStage,
 } from "./utils";
@@ -192,20 +192,18 @@ function decodeExpression(
   for (const stage of stages) {
     builder.options = stage.options;
     const name = stage.stage;
-    if (HasOwnKey(FUNC_STAGE_MAP, name)) {
-      builder.value = FUNC_STAGE_MAP[name](builder, stage);
+    if (HasKey(FUNC_STAGE_MAP, name)) {
+      const funcHandler = FUNC_STAGE_MAP[name];
+      builder.value = funcHandler(builder, stage);
       continue;
     }
     const decodedArgs = stage.args.map((arg) => DecodeValue(arg, context));
-    if (HasOwnKey(SIMPLE_STAGE_MAP, name)) {
-      builder.value = applySimpleStage(
-        builder.value,
-        SIMPLE_STAGE_MAP[name],
-        decodedArgs,
-      );
+    if (HasKey(SIMPLE_STAGE_MAP, name)) {
+      const simpleType = SIMPLE_STAGE_MAP[name];
+      builder.value = applySimpleStage(builder.value, simpleType, decodedArgs);
       continue;
     }
-    if (HasOwnKey(COMPLEX_STAGE_MAP, name)) {
+    if (HasKey(COMPLEX_STAGE_MAP, name)) {
       const complexHandler: StageHandler = COMPLEX_STAGE_MAP[name];
       builder.value = complexHandler(builder, ...decodedArgs);
       continue;

@@ -9,12 +9,12 @@ export type QueryStage = StagedObject["stages"][number];
 
 export type ArgumentProvider = (subQuery: QueryStage[]) => any;
 
-/** Whether `key` names an own entry of the lookup table `map`, not an inherited one. */
-export function HasOwnKey<T extends object>(
+/** Whether `key` names a property of the lookup table `map`, own or inherited, as the `in` operator does. */
+export function HasKey<T extends object>(
   map: T,
   key: PropertyKey,
 ): key is keyof T {
-  return Object.prototype.hasOwnProperty.call(map, key);
+  return key in map;
 }
 
 /** Whether `value` is a non-null object, arrays included. */

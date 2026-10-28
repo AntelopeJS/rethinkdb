@@ -17,7 +17,7 @@ import {
   ExternalInstanceRefusal,
 } from "./external-selection";
 import { runAtomicMutation } from "./atomic";
-import { DecodingContext, HasOwnKey, type QueryStage } from "./utils";
+import { DecodingContext, HasKey, type QueryStage } from "./utils";
 import {
   CreateInstance,
   DestroyInstance,
@@ -77,7 +77,7 @@ export async function RunQuery(stages: QueryStage[]) {
     IsExternal() && next ? EXTERNAL_LIFECYCLE_HANDLERS.get(next) : undefined;
   const handler =
     external ??
-    (next && HasOwnKey(SCHEMA_STAGE_HANDLERS, next)
+    (next && HasKey(SCHEMA_STAGE_HANDLERS, next)
       ? SCHEMA_STAGE_HANDLERS[next]
       : undefined);
   assert(handler, `Unknown schema stage '${next}'`);

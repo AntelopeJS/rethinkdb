@@ -16,7 +16,7 @@ import { DecodeFunction, DecodeValue } from "./expression";
 import {
   allocateArgNumber,
   type DecodingContext,
-  HasOwnKey,
+  HasKey,
   PRIMARY_KEY_FIELD,
   type QueryStage,
   TENANT_ID_FIELD,
@@ -82,7 +82,7 @@ export function applyStreamStages(
       term = handleMapSingle(term, stage, context);
       continue;
     }
-    if (!HasOwnKey(STREAM_STAGE_MAP, stage.stage)) {
+    if (!HasKey(STREAM_STAGE_MAP, stage.stage)) {
       throw new Error(`Unimplemented stream stage: ${stage.stage}`);
     }
     const handler = STREAM_STAGE_MAP[stage.stage];
