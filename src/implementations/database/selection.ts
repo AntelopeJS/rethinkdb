@@ -48,10 +48,11 @@ const PRE_STREAM_STAGES = new Set([
   "delete",
 ]);
 
-function assertInstanceId(
+/** Throws unless `instanceId` is a string, `CROSS_INSTANCE` or undefined, whatever a JavaScript caller passed. */
+function assertInstanceId<Value>(
   tableName: string,
-  instanceId: unknown,
-): asserts instanceId is InstanceId {
+  instanceId: Value,
+): asserts instanceId is Value & InstanceId {
   if (
     instanceId !== CROSS_INSTANCE &&
     instanceId !== undefined &&
@@ -71,6 +72,7 @@ function resolveTenantContext(
   if (instanceId === CROSS_INSTANCE) {
     return { kind: "cross" };
   }
+  assertInstanceId(tableName, instanceId);
   const tenantId = instanceId ?? "";
   if (!IsValidInstance(schemaId, tenantId)) {
     throw new Error(
@@ -139,9 +141,6 @@ export class SelectionQuery {
     const instanceId = stages[1].options?.id;
     assert(stages[2]?.stage === "table", "Expected table stage");
     const tableName = stages[2].options.id;
-    if (!IsExternal()) {
-      assertInstanceId(tableName, instanceId);
-    }
 
     const query = new SelectionQuery(
       schemaId,
