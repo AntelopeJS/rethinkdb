@@ -202,8 +202,7 @@ export class SelectionQuery {
         this.term,
         streamStages,
         this.context,
-        this.schemaId,
-        this.tableName,
+        { schemaId: this.schemaId, tableName: this.tableName },
         this.singleElement,
       );
       this.term = result.term;
@@ -402,13 +401,10 @@ export class SelectionQuery {
     if (!source || this.resultType !== "table") {
       return undefined;
     }
-    return applyStreamStages(
-      source,
-      this.streamStages,
-      this.context,
-      this.schemaId,
-      this.tableName,
-    ).term;
+    return applyStreamStages(source, this.streamStages, this.context, {
+      schemaId: this.schemaId,
+      tableName: this.tableName,
+    }).term;
   }
 
   public isSimpleTable(): boolean {

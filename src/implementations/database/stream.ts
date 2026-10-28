@@ -8,6 +8,7 @@ import { FindIndex, GetIndex } from "./schema";
 import {
   buildIndexScanPredicate,
   buildIndexScanValues,
+  type DeclaredIndex,
   warnUnindexedCrossInstance,
 } from "./indexes";
 // oxlint-disable-next-line import/no-cycle -- stream stages decode values; see expression.ts
@@ -15,6 +16,7 @@ import { DecodeFunction, DecodeValue } from "./expression";
 import {
   allocateArgNumber,
   type DecodingContext,
+  HasOwnKey,
   PRIMARY_KEY_FIELD,
   type QueryStage,
   TENANT_ID_FIELD,
@@ -22,16 +24,18 @@ import {
 
 const ALWAYS_INDEXED_FIELDS = new Set([PRIMARY_KEY_FIELD, TENANT_ID_FIELD]);
 
+/** The table a stream's stages read, by schema and table name. */
+type StreamTable = Pick<DeclaredIndex, "schemaId" | "tableName">;
+
 type StreamStageHandler = (
   prev: TermJson,
   stage: QueryStage,
   context: DecodingContext,
-  schemaId: string,
-  tableName: string,
+  table: StreamTable,
   singleElement: boolean,
 ) => TermJson;
 
-const STREAM_STAGE_MAP: Record<string, StreamStageHandler> = {
+const STREAM_STAGE_MAP = {
   changes: handleChanges,
   key: handleKey,
   default: handleDefault,
@@ -52,7 +56,7 @@ const STREAM_STAGE_MAP: Record<string, StreamStageHandler> = {
   min: handleMin,
   max: handleMax,
   distinct: handleDistinct,
-};
+} satisfies Record<string, StreamStageHandler>;
 
 const REDUCTION_STAGES = new Set(["nth", "count", "sum", "avg", "min", "max"]);
 
@@ -60,10 +64,9 @@ export function applyStreamStages(
   prev: TermJson,
   stages: QueryStage[],
   context: DecodingContext,
-  schemaId: string,
-  tableName: string,
+  table: StreamTable,
   initialSingleElement = false,
-): { term: TermJson; isChangeStream: boolean; singleElement: boolean } {
+) {
   let term = prev;
   let isChangeStream = false;
   let singleElement = initialSingleElement;
@@ -79,11 +82,11 @@ export function applyStreamStages(
       term = handleMapSingle(term, stage, context);
       continue;
     }
-    const handler = STREAM_STAGE_MAP[stage.stage];
-    if (!handler) {
+    if (!HasOwnKey(STREAM_STAGE_MAP, stage.stage)) {
       throw new Error(`Unimplemented stream stage: ${stage.stage}`);
     }
-    term = handler(term, stage, context, schemaId, tableName, singleElement);
+    const handler = STREAM_STAGE_MAP[stage.stage];
+    term = handler(term, stage, context, table, singleElement);
   }
 
   return { term, isChangeStream, singleElement };
@@ -229,8 +232,7 @@ function handleLookup(
   prev: TermJson,
   stage: QueryStage,
   context: DecodingContext,
-  _schemaId: string,
-  _tableName: string,
+  _table: StreamTable,
   singleElement: boolean,
 ): TermJson {
   const rightStages = (stage.args[0] as Stream<any>).build();
@@ -322,8 +324,7 @@ function handleGroup(
   prev: TermJson,
   stage: QueryStage,
   context: DecodingContext,
-  schemaId: string,
-  tableName: string,
+  table: StreamTable,
 ): TermJson {
   const field = stage.options.index;
   const func = stage.args[0];
@@ -341,13 +342,8 @@ function handleGroup(
     if (subQuery.length <= 1) {
       return reductionAccess;
     }
-    return applyStreamStages(
-      reductionAccess,
-      subQuery.slice(1),
-      context,
-      schemaId,
-      tableName,
-    ).term;
+    return applyStreamStages(reductionAccess, subQuery.slice(1), context, table)
+      .term;
   };
   context.args[argNumbers[1]] = () => groupAccess;
 
@@ -428,8 +424,7 @@ function handleOrderBy(
   prev: TermJson,
   stage: QueryStage,
   _context: DecodingContext,
-  schemaId: string,
-  tableName: string,
+  { schemaId, tableName }: StreamTable,
 ): TermJson {
   const indexName = stage.options.index;
   const isDescending = stage.options.direction === "desc";
@@ -511,8 +506,7 @@ function handleCount(
   prev: TermJson,
   stage: QueryStage,
   _context: DecodingContext,
-  schemaId: string,
-  tableName: string,
+  { schemaId, tableName }: StreamTable,
 ): TermJson {
   const field = stage.options?.field;
   if (!field) {
@@ -558,8 +552,7 @@ function handleDistinct(
   prev: TermJson,
   stage: QueryStage,
   _context: DecodingContext,
-  schemaId: string,
-  tableName: string,
+  { schemaId, tableName }: StreamTable,
 ): TermJson {
   const field = stage.options?.field;
   if (!field) {

@@ -1,8 +1,6 @@
 {
   "rules": {
-    "anti-slop/no-known-value-widening": 2,
-    "anti-slop/require-safety-comment-for-type-assertion": 8,
-    "eslint/max-params": 3
+    "anti-slop/require-safety-comment-for-type-assertion": 8
   },
   "oversizeFiles": {}
 }
