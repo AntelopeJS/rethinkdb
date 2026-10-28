@@ -16,7 +16,6 @@ import { DecodeFunction, DecodeValue } from "./expression";
 import {
   allocateArgNumber,
   type DecodingContext,
-  HasKey,
   PRIMARY_KEY_FIELD,
   type QueryStage,
   TENANT_ID_FIELD,
@@ -35,7 +34,7 @@ type StreamStageHandler = (
   singleElement: boolean,
 ) => TermJson;
 
-const STREAM_STAGE_MAP = {
+const STREAM_STAGE_MAP: Record<string, StreamStageHandler> = {
   changes: handleChanges,
   key: handleKey,
   default: handleDefault,
@@ -56,7 +55,7 @@ const STREAM_STAGE_MAP = {
   min: handleMin,
   max: handleMax,
   distinct: handleDistinct,
-} satisfies Record<string, StreamStageHandler>;
+};
 
 const REDUCTION_STAGES = new Set(["nth", "count", "sum", "avg", "min", "max"]);
 
@@ -82,10 +81,10 @@ export function applyStreamStages(
       term = handleMapSingle(term, stage, context);
       continue;
     }
-    if (!HasKey(STREAM_STAGE_MAP, stage.stage)) {
+    const handler = STREAM_STAGE_MAP[stage.stage];
+    if (!handler) {
       throw new Error(`Unimplemented stream stage: ${stage.stage}`);
     }
-    const handler = STREAM_STAGE_MAP[stage.stage];
     term = handler(term, stage, context, table, singleElement);
   }
 

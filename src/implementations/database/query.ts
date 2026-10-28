@@ -17,7 +17,7 @@ import {
   ExternalInstanceRefusal,
 } from "./external-selection";
 import { runAtomicMutation } from "./atomic";
-import { DecodingContext, HasKey, type QueryStage } from "./utils";
+import { DecodingContext, type QueryStage } from "./utils";
 import {
   CreateInstance,
   DestroyInstance,
@@ -48,7 +48,7 @@ const EXTERNAL_LIFECYCLE_HANDLERS = new Map<string, SchemaStageHandler>([
   ["listInstances", () => Promise.resolve([])],
 ]);
 
-const SCHEMA_STAGE_HANDLERS = {
+const SCHEMA_STAGE_HANDLERS: Record<string, SchemaStageHandler> = {
   instance: async (schemaId, stages) => {
     await WaitForSchemaReady(schemaId);
     if (stages.some((stage) => stage.stage === "atomicMutation")) {
@@ -65,7 +65,7 @@ const SCHEMA_STAGE_HANDLERS = {
   destroyInstance: (schemaId, stages) =>
     DestroyInstance(schemaId, stages[1]?.options?.id),
   listInstances: (schemaId) => ListInstances(schemaId),
-} satisfies Record<string, SchemaStageHandler>;
+};
 
 export async function RunQuery(stages: QueryStage[]) {
   assert(stages[0]?.stage === "schema", "Expected schema stage");
@@ -75,11 +75,7 @@ export async function RunQuery(stages: QueryStage[]) {
   const next = stages[1]?.stage;
   const external =
     IsExternal() && next ? EXTERNAL_LIFECYCLE_HANDLERS.get(next) : undefined;
-  const handler =
-    external ??
-    (next && HasKey(SCHEMA_STAGE_HANDLERS, next)
-      ? SCHEMA_STAGE_HANDLERS[next]
-      : undefined);
+  const handler = external ?? (next ? SCHEMA_STAGE_HANDLERS[next] : undefined);
   assert(handler, `Unknown schema stage '${next}'`);
   return handler(schemaId, stages);
 }

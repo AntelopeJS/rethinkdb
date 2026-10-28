@@ -9,7 +9,6 @@ import { SelectionQuery } from "./selection";
 import {
   allocateArgNumber,
   type DecodingContext,
-  HasKey,
   IsObject,
   type QueryStage,
 } from "./utils";
@@ -22,7 +21,7 @@ interface ExpressionBuilder {
   options?: QueryStage["options"];
 }
 
-const SIMPLE_STAGE_MAP = {
+const SIMPLE_STAGE_MAP: Record<string, number> = {
   default: TermType.DEFAULT,
   and: TermType.AND,
   or: TermType.OR,
@@ -71,9 +70,9 @@ const SIMPLE_STAGE_MAP = {
   date_seconds: TermType.SECONDS,
   date_epoch: TermType.TO_EPOCH_TIME,
   date_during: TermType.DURING,
-} satisfies Record<string, TermType>;
+};
 
-const COMPLEX_STAGE_MAP = {
+const COMPLEX_STAGE_MAP: Record<string, StageHandler> = {
   arg: (expr, num: number) => {
     const provider = expr.context.args[num];
     if (provider) {
@@ -137,14 +136,14 @@ const COMPLEX_STAGE_MAP = {
     }
     return bracket;
   },
-} satisfies Record<string, StageHandler>;
+};
 
 type FuncStageHandler = (
   expr: ExpressionBuilder,
   stage: QueryStage,
 ) => TermJson;
 
-const FUNC_STAGE_MAP = {
+const FUNC_STAGE_MAP: Record<string, FuncStageHandler> = {
   obj_has: (expr, stage) => {
     const fields = stage.args[0] as string[];
     return [TermType.HAS_FIELDS, [expr.value, ...fields]];
@@ -169,7 +168,7 @@ const FUNC_STAGE_MAP = {
       [expr.value, [TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], body]]],
     ];
   },
-} satisfies Record<string, FuncStageHandler>;
+};
 
 function applySimpleStage(
   prev: TermJson,
@@ -191,20 +190,19 @@ function decodeExpression(
 
   for (const stage of stages) {
     builder.options = stage.options;
-    const name = stage.stage;
-    if (HasKey(FUNC_STAGE_MAP, name)) {
-      const funcHandler = FUNC_STAGE_MAP[name];
+    const funcHandler = FUNC_STAGE_MAP[stage.stage];
+    if (funcHandler) {
       builder.value = funcHandler(builder, stage);
       continue;
     }
     const decodedArgs = stage.args.map((arg) => DecodeValue(arg, context));
-    if (HasKey(SIMPLE_STAGE_MAP, name)) {
-      const simpleType = SIMPLE_STAGE_MAP[name];
+    const simpleType = SIMPLE_STAGE_MAP[stage.stage];
+    if (simpleType !== undefined) {
       builder.value = applySimpleStage(builder.value, simpleType, decodedArgs);
       continue;
     }
-    if (HasKey(COMPLEX_STAGE_MAP, name)) {
-      const complexHandler: StageHandler = COMPLEX_STAGE_MAP[name];
+    const complexHandler = COMPLEX_STAGE_MAP[stage.stage];
+    if (complexHandler) {
       builder.value = complexHandler(builder, ...decodedArgs);
       continue;
     }

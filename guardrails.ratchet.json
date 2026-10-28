@@ -1,5 +1,6 @@
 {
   "rules": {
+    "anti-slop/no-known-value-widening": 5,
     "anti-slop/require-safety-comment-for-type-assertion": 8
   },
   "oversizeFiles": {}
