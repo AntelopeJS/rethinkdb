@@ -137,9 +137,13 @@ function handleMapSingle(
   const row: TermJson = [TermType.VAR, [argId]];
 
   const body = DecodeFunction(func, context, [row]);
+  const found: TermJson = [
+    TermType.BRANCH,
+    [[TermType.EQ, [row, null]], null, body],
+  ];
   const funcTerm: TermJson = [
     TermType.FUNC,
-    [[TermType.MAKE_ARRAY, [argId]], body],
+    [[TermType.MAKE_ARRAY, [argId]], found],
   ];
   return [TermType.FUNCALL, [funcTerm, prev]];
 }
@@ -242,12 +246,9 @@ function handleLookup(
     [[TermType.BRACKET, [row, localKey]], ""],
   ];
 
-  const lookupResult = buildLookupSelection(
-    rightQuery,
-    rightTerm,
-    otherKey,
-    localField,
-  );
+  const lookupResult =
+    rightQuery.externalLookup(otherKey, localField) ??
+    buildLookupSelection(rightQuery, rightTerm, otherKey, localField);
   const coerced: TermJson = [TermType.COERCE_TO, [lookupResult, "array"]];
 
   const isArray: TermJson = [TermType.TYPE_OF, [localField]];
@@ -266,9 +267,13 @@ function handleLookup(
   ];
 
   if (singleElement) {
+    const found: TermJson = [
+      TermType.BRANCH,
+      [[TermType.EQ, [row, null]], null, merged],
+    ];
     return [
       TermType.FUNCALL,
-      [[TermType.FUNC, [[TermType.MAKE_ARRAY, [mapArgId]], merged]], prev],
+      [[TermType.FUNC, [[TermType.MAKE_ARRAY, [mapArgId]], found]], prev],
     ];
   } else {
     return [

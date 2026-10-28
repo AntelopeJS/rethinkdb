@@ -34,7 +34,9 @@
     "prepack": "pnpm run build",
     "release": "pnpm run lint && pnpm run test && pnpm run prepack && release-it",
     "typecheck": "tsc --noEmit",
-    "test": "pnpm run build && ajs module test .",
+    "test": "pnpm run build && ajs module test . && pnpm run test:external:run",
+    "test:external": "pnpm run build && pnpm run test:external:run",
+    "test:external:run": "RETHINK_TEST_MODE=external ajs module test . $(for file in dist/test-external/*.test.js; do printf -- '-f %s ' \"$file\"; done)",
     "format:check": "oxfmt --check .",
     "knip": "knip",
     "prepare": "if git rev-parse --is-inside-work-tree >/dev/null 2>&1 && command -v lefthook >/dev/null 2>&1; then lefthook install; fi",
@@ -48,7 +50,7 @@
   "dependencies": {
     "@antelopejs/interface-core": ">=0.2.4 <1.0.0",
     "@antelopejs/interface-database": ">=0.1.11 <0.2.0",
-    "@antelopejs/interface-rethinkdb": ">=0.0.6 <0.1.0",
+    "@antelopejs/interface-database-catalog": ">=0.0.3 <0.1.0",
     "chai": "^4.5.0",
     "reflect-metadata": "^0.2.2",
     "rethinkdb-ts": "^2.7.0"
@@ -71,10 +73,14 @@
     "rimraf": "^6.1.3",
     "typescript": "^5.9.3"
   },
+  "optionalDependencies": {
+    "@antelopejs/interface-rethinkdb": ">=0.0.6 <0.1.0"
+  },
   "packageManager": "pnpm@10.6.5",
   "antelopeJs": {
     "implements": [
       "@antelopejs/interface-database",
+      "@antelopejs/interface-database-catalog",
       "@antelopejs/interface-rethinkdb"
     ],
     "test": "src/test/antelope.test.ts",
