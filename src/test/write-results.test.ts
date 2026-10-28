@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { IsDuplicateKeyError, Schema } from "@antelopejs/interface-database";
+import {
+  type DuplicateKeyError,
+  IsDuplicateKeyError,
+  Schema,
+} from "@antelopejs/interface-database";
 
 interface WriteRecord {
   _id: string;
@@ -40,7 +44,7 @@ describe("Write acknowledgements and scoped primary keys", () => {
   it("propagates update errors", rejectUpdate);
 });
 
-function isPrimaryKeyDuplicate(error: unknown): boolean {
+function isPrimaryKeyDuplicate(error: unknown): error is DuplicateKeyError {
   return (
     IsDuplicateKeyError(error) &&
     error.index === "_id" &&

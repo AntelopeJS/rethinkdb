@@ -2,6 +2,7 @@ import assert from "node:assert";
 import type { Cursor } from "rethinkdb-ts/lib/response/cursor";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import { ValidateAtomicMutationTable } from "@antelopejs/interface-database/atomic";
+import { CROSS_INSTANCE } from "@antelopejs/interface-database/schema";
 
 import { Logger } from "../../utils/logger";
 import {
@@ -16,7 +17,7 @@ import {
   ExternalInstanceRefusal,
 } from "./external-selection";
 import { runAtomicMutation } from "./atomic";
-import { DecodingContext, type QueryStage } from "./utils";
+import { DecodingContext, HasOwnKey, type QueryStage } from "./utils";
 import {
   CreateInstance,
   DestroyInstance,
@@ -47,7 +48,7 @@ const EXTERNAL_LIFECYCLE_HANDLERS = new Map<string, SchemaStageHandler>([
   ["listInstances", () => Promise.resolve([])],
 ]);
 
-const SCHEMA_STAGE_HANDLERS: Record<string, SchemaStageHandler> = {
+const SCHEMA_STAGE_HANDLERS = {
   instance: async (schemaId, stages) => {
     await WaitForSchemaReady(schemaId);
     if (stages.some((stage) => stage.stage === "atomicMutation")) {
@@ -64,7 +65,7 @@ const SCHEMA_STAGE_HANDLERS: Record<string, SchemaStageHandler> = {
   destroyInstance: (schemaId, stages) =>
     DestroyInstance(schemaId, stages[1]?.options?.id),
   listInstances: (schemaId) => ListInstances(schemaId),
-};
+} satisfies Record<string, SchemaStageHandler>;
 
 export async function RunQuery(stages: QueryStage[]) {
   assert(stages[0]?.stage === "schema", "Expected schema stage");
@@ -74,7 +75,11 @@ export async function RunQuery(stages: QueryStage[]) {
   const next = stages[1]?.stage;
   const external =
     IsExternal() && next ? EXTERNAL_LIFECYCLE_HANDLERS.get(next) : undefined;
-  const handler = external ?? (next ? SCHEMA_STAGE_HANDLERS[next] : undefined);
+  const handler =
+    external ??
+    (next && HasOwnKey(SCHEMA_STAGE_HANDLERS, next)
+      ? SCHEMA_STAGE_HANDLERS[next]
+      : undefined);
   assert(handler, `Unknown schema stage '${next}'`);
   return handler(schemaId, stages);
 }
@@ -92,10 +97,7 @@ function runAtomicStages(stages: QueryStage[]) {
   const prefix = stages.slice(0, -1);
   ValidateAtomicMutationTable(prefix);
   const query = SelectionQuery.decode(prefix, new DecodingContext());
-  assert(
-    typeof query.instanceId !== "symbol",
-    "Atomic mutation must be scoped",
-  );
+  assert(query.instanceId !== CROSS_INSTANCE, "Atomic mutation must be scoped");
   return runAtomicMutation(
     query.getTableTerm(),
     query.instanceId ?? "",

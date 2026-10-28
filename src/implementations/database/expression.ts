@@ -9,20 +9,20 @@ import { SelectionQuery } from "./selection";
 import {
   allocateArgNumber,
   type DecodingContext,
+  HasOwnKey,
+  IsObject,
   type QueryStage,
 } from "./utils";
 
-type StageHandler =
-  | number
-  | ((expr: ExpressionBuilder, ...args: any[]) => TermJson);
+type StageHandler = (expr: ExpressionBuilder, ...args: any[]) => TermJson;
 
 interface ExpressionBuilder {
   value: TermJson;
   context: DecodingContext;
-  options?: Record<string, any>;
+  options?: QueryStage["options"];
 }
 
-const SIMPLE_STAGE_MAP: Record<string, number> = {
+const SIMPLE_STAGE_MAP = {
   default: TermType.DEFAULT,
   and: TermType.AND,
   or: TermType.OR,
@@ -71,9 +71,9 @@ const SIMPLE_STAGE_MAP: Record<string, number> = {
   date_seconds: TermType.SECONDS,
   date_epoch: TermType.TO_EPOCH_TIME,
   date_during: TermType.DURING,
-};
+} satisfies Record<string, TermType>;
 
-const COMPLEX_STAGE_MAP: Record<string, StageHandler> = {
+const COMPLEX_STAGE_MAP = {
   arg: (expr, num: number) => {
     const provider = expr.context.args[num];
     if (provider) {
@@ -137,14 +137,14 @@ const COMPLEX_STAGE_MAP: Record<string, StageHandler> = {
     }
     return bracket;
   },
-};
+} satisfies Record<string, StageHandler>;
 
 type FuncStageHandler = (
   expr: ExpressionBuilder,
   stage: QueryStage,
 ) => TermJson;
 
-const FUNC_STAGE_MAP: Record<string, FuncStageHandler> = {
+const FUNC_STAGE_MAP = {
   obj_has: (expr, stage) => {
     const fields = stage.args[0] as string[];
     return [TermType.HAS_FIELDS, [expr.value, ...fields]];
@@ -169,7 +169,7 @@ const FUNC_STAGE_MAP: Record<string, FuncStageHandler> = {
       [expr.value, [TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], body]]],
     ];
   },
-};
+} satisfies Record<string, FuncStageHandler>;
 
 function applySimpleStage(
   prev: TermJson,
@@ -191,20 +191,23 @@ function decodeExpression(
 
   for (const stage of stages) {
     builder.options = stage.options;
-    const funcHandler = FUNC_STAGE_MAP[stage.stage];
-    if (funcHandler) {
-      builder.value = funcHandler(builder, stage);
+    const name = stage.stage;
+    if (HasOwnKey(FUNC_STAGE_MAP, name)) {
+      builder.value = FUNC_STAGE_MAP[name](builder, stage);
       continue;
     }
     const decodedArgs = stage.args.map((arg) => DecodeValue(arg, context));
-    const simpleType = SIMPLE_STAGE_MAP[stage.stage];
-    if (simpleType !== undefined) {
-      builder.value = applySimpleStage(builder.value, simpleType, decodedArgs);
+    if (HasOwnKey(SIMPLE_STAGE_MAP, name)) {
+      builder.value = applySimpleStage(
+        builder.value,
+        SIMPLE_STAGE_MAP[name],
+        decodedArgs,
+      );
       continue;
     }
-    const complexHandler = COMPLEX_STAGE_MAP[stage.stage];
-    if (complexHandler) {
-      builder.value = (complexHandler as any)(builder, ...decodedArgs);
+    if (HasOwnKey(COMPLEX_STAGE_MAP, name)) {
+      const complexHandler: StageHandler = COMPLEX_STAGE_MAP[name];
+      builder.value = complexHandler(builder, ...decodedArgs);
       continue;
     }
     throw new Error(`Unimplemented expression stage: ${stage.stage}`);
@@ -226,12 +229,12 @@ export function DecodeValue(
     return decodeSubquery(value.build(), context);
   }
 
-  if (value && typeof value === "object") {
+  if (IsObject(value)) {
     if (Array.isArray(value)) {
       return [
         TermType.MAKE_ARRAY,
         value.map((val) => DecodeValue(val, context)),
-      ] as TermJson;
+      ];
     }
     if (value instanceof Date) {
       return dateToReql(value);
@@ -250,7 +253,7 @@ export function DecodeValue(
     return undefined as any;
   }
 
-  return value as TermJson;
+  return value;
 }
 
 function dateToReql(date: Date): TermJson {
@@ -285,7 +288,7 @@ export function DecodeFunction(
   argTerms: TermJson[],
 ): TermJson {
   const argNumbers: number[] = func.args[0];
-  const oldArgs: Record<number, any> = {};
+  const oldArgs: DecodingContext["args"] = {};
   for (let i = 0; i < argNumbers.length; ++i) {
     oldArgs[argNumbers[i]] = context.args[argNumbers[i]];
     const argTerm = argTerms[i];

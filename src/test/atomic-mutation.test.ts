@@ -15,11 +15,19 @@ import { validateWriteResult } from "../write-result";
 import { RunQuery } from "../implementations/database/query";
 import type { QueryStage } from "../implementations/database/utils";
 
+interface NestedFields {
+  removed?: boolean;
+  retained: string;
+  stage?: string;
+  args?: string[];
+  date?: Date;
+}
+
 interface AtomicRecord {
   _id: string;
   revision?: string | null;
   value: string;
-  nested?: Record<string, unknown>;
+  nested?: NestedFields;
   tenant_id?: string;
   equal?: AtomicEqualityValue | null;
 }

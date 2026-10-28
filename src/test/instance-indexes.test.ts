@@ -72,7 +72,7 @@ const DEFINITION: SchemaDefinition = {
   },
   labels: { fields: { tag: "string" }, indexes: {} },
 };
-const DOCUMENTS: Record<string, Item[]> = {
+const DOCUMENTS = {
   alpha: [
     {
       _id: "a1",
@@ -90,7 +90,7 @@ const DOCUMENTS: Record<string, Item[]> = {
     { _id: "b2", status: "closed", rank: 2, category: "y" },
     { _id: "b3", status: "open", tags: ["green"] },
   ],
-};
+} satisfies Record<string, Item[]>;
 const LABEL_DOCUMENTS: Label[] = ["red", "blue", "green", "white"].map(
   (tag) => ({ _id: tag, tag }),
 );
@@ -464,7 +464,7 @@ async function crossInstanceWarning() {
   assert.equal(warn.mock.callCount(), 3);
 }
 
-function runConcurrently(boot: () => Promise<unknown>) {
+function runConcurrently<T>(boot: () => Promise<T>) {
   return Promise.all(Array.from({ length: CONCURRENT_BOOTS }, boot));
 }
 

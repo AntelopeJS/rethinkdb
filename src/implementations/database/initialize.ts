@@ -1,7 +1,10 @@
 import { setTimeout } from "node:timers/promises";
 import { RethinkDBErrorType } from "rethinkdb-ts";
 import { TermType } from "rethinkdb-ts/lib/proto/enums";
-import { isRethinkDBError } from "rethinkdb-ts/lib/error/error";
+import {
+  isRethinkDBError,
+  type RethinkDBError,
+} from "rethinkdb-ts/lib/error/error";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import type {
   IndexDefinition,
@@ -17,7 +20,7 @@ const ALREADY_EXISTS_PATTERN = /already exists/;
 const INITIALIZATION_ATTEMPTS = 5;
 const INITIAL_RETRY_DELAY_MS = 200;
 
-function isAlreadyExists(error: unknown): boolean {
+function isAlreadyExists(error: unknown): error is RethinkDBError {
   return (
     isRethinkDBError(error) &&
     error.type === RethinkDBErrorType.OP_FAILED &&
