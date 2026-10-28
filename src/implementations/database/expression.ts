@@ -4,10 +4,7 @@ import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import { Query, ValueProxy } from "@antelopejs/interface-database";
 import type { Value } from "@antelopejs/interface-database/common";
 
-// The ReQL compiler is one mutually recursive unit: decoding a value can hit a sub-query,
-// building a sub-query applies stream stages, and a stream stage decodes values again.
-// The cycle is the recursion, not an accident of where the code sits.
-// oxlint-disable-next-line import/no-cycle -- value decoding recurses into sub-query building
+// oxlint-disable-next-line import/no-cycle -- the ReQL compiler is one recursive unit: value decoding recurses into sub-query building
 import { SelectionQuery } from "./selection";
 import {
   allocateArgNumber,

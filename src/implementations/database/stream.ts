@@ -419,6 +419,11 @@ function buildNonIndexedOrderBy(
   return [TermType.ORDER_BY, [prev, ...fields]];
 }
 
+/**
+ * Orders by an index only when it is a `crossInstance` index on a table term.
+ * A scoped orderBy stays unindexed: an index would drop documents missing the
+ * field.
+ */
 function handleOrderBy(
   prev: TermJson,
   stage: QueryStage,
@@ -430,7 +435,6 @@ function handleOrderBy(
   const isDescending = stage.options.direction === "desc";
 
   const definition = FindIndex(schemaId, tableName, indexName);
-  // Scoped orderBy stays unindexed: an index would drop documents missing the field.
   if (definition && isTableTerm(prev)) {
     if (definition.crossInstance) {
       return buildIndexedOrderBy(prev, indexName, isDescending);
