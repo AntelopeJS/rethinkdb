@@ -176,12 +176,16 @@ function handleWithout(prev: TermJson, stage: QueryStage): TermJson {
   return [TermType.WITHOUT, [prev, ...fields]];
 }
 
+function buildRightStages(stage: QueryStage): QueryStage[] {
+  return (stage.args[0] as Stream<any>).build();
+}
+
 function handleUnion(
   prev: TermJson,
   stage: QueryStage,
   context: DecodingContext,
 ): TermJson {
-  const rightStages = (stage.args[0] as Stream<any>).build();
+  const rightStages = buildRightStages(stage);
   const rightTerm = SelectionQuery.buildTermJson(rightStages, context);
   return [TermType.UNION, [prev, rightTerm]];
 }
@@ -192,7 +196,7 @@ function handleJoin(
   context: DecodingContext,
 ): TermJson {
   const innerOnly = stage.options?.innerOnly ?? false;
-  const rightStages = (stage.args[0] as Stream<any>).build();
+  const rightStages = buildRightStages(stage);
   const rightTerm = SelectionQuery.buildTermJson(rightStages, context);
   const predicate = stage.args[1];
   const mapper = stage.args[2];
@@ -227,6 +231,11 @@ function handleJoin(
   return [TermType.MAP, [joinResult, mapperTerm]];
 }
 
+interface LookupOptions {
+  localKey: string;
+  otherKey: string;
+}
+
 function handleLookup(
   prev: TermJson,
   stage: QueryStage,
@@ -234,11 +243,12 @@ function handleLookup(
   _table: StreamTable,
   singleElement: boolean,
 ): TermJson {
-  const rightStages = (stage.args[0] as Stream<any>).build();
+  const rightStages = buildRightStages(stage);
   const rightQuery = SelectionQuery.decode(rightStages, context);
   const rightTerm = rightQuery.buildTerm();
-  const localKey = stage.options.localKey as string;
-  const otherKey = stage.options.otherKey as string;
+  const options = stage.options as LookupOptions;
+  const localKey = options.localKey;
+  const otherKey = options.otherKey;
 
   const mapArgId = allocateArgNumber();
   const row: TermJson = [TermType.VAR, [mapArgId]];
