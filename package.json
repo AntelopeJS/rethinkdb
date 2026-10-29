@@ -76,7 +76,7 @@
     "typescript": "^5.9.3"
   },
   "optionalDependencies": {
-    "@antelopejs/interface-rethinkdb": ">=0.0.6 <0.1.0"
+    "@antelopejs/interface-rethinkdb": ">=0.1.0 <0.2.0"
   },
   "packageManager": "pnpm@10.6.5",
   "antelopeJs": {

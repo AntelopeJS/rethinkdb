@@ -77,8 +77,8 @@ importers:
         version: 5.9.3
     optionalDependencies:
       '@antelopejs/interface-rethinkdb':
-        specifier: '>=0.0.6 <0.1.0'
-        version: 0.0.6(@antelopejs/interface-core@0.2.4)
+        specifier: '>=0.1.0 <0.2.0'
+        version: 0.1.0(@antelopejs/interface-core@0.2.4)
 
 packages:
 
@@ -100,8 +100,8 @@ packages:
     peerDependencies:
       '@antelopejs/interface-core': '>=0.2.4 <1.0.0'
 
-  '@antelopejs/interface-rethinkdb@0.0.6':
-    resolution: {integrity: sha512-2g2LCDHbFbDF15BbeHFGPjuUSC1yaQ3IYLcx/XoolFY5M+IugvbhktQ7ke+5a2wSTSxbZHspPGfoZTr+uzgpNQ==}
+  '@antelopejs/interface-rethinkdb@0.1.0':
+    resolution: {integrity: sha512-rQv2t3gCW/5fcVdpyk91piYAvCcVxpiP+PsW8us4U8U3/CvxRmuq8cRMfsYe83iz6BOgNhHSd1juajFErDrlKA==}
     peerDependencies:
       '@antelopejs/interface-core': '>=0.2.4 <1.0.0'
 
@@ -2590,7 +2590,7 @@ snapshots:
     dependencies:
       '@antelopejs/interface-core': 0.2.4
 
-  '@antelopejs/interface-rethinkdb@0.0.6(@antelopejs/interface-core@0.2.4)':
+  '@antelopejs/interface-rethinkdb@0.1.0(@antelopejs/interface-core@0.2.4)':
     dependencies:
       '@antelopejs/interface-core': 0.2.4
       rethinkdb-ts: 2.7.0
