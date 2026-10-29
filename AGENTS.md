@@ -10,7 +10,7 @@ The RethinkDB backend for AntelopeJS, published as `@antelopejs/rethinkdb`. It i
 
 ## Versioning
 
-- `@antelopejs/interface-database` stays capped below the next minor (`>=0.1.11 <0.2.0`), because a new minor can add required handlers.
+- `@antelopejs/interface-database` stays capped below the next minor (`>=0.2.0 <0.3.0`), because a new minor can add required handlers.
 - When a dependency range changes, update the compatibility table in `README.md` too.
 - A release that needs action from users gets an `### Upgrade notes` section in `CHANGELOG.md`, above the generated entries.
 
