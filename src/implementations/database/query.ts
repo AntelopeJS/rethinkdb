@@ -2,6 +2,7 @@ import assert from "node:assert";
 import type { Cursor } from "rethinkdb-ts/lib/response/cursor";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import { ValidateAtomicMutationTable } from "@antelopejs/interface-database/atomic";
+import { CROSS_INSTANCE } from "@antelopejs/interface-database/schema";
 
 import { Logger } from "../../utils/logger";
 import {
@@ -92,10 +93,7 @@ function runAtomicStages(stages: QueryStage[]) {
   const prefix = stages.slice(0, -1);
   ValidateAtomicMutationTable(prefix);
   const query = SelectionQuery.decode(prefix, new DecodingContext());
-  assert(
-    typeof query.instanceId !== "symbol",
-    "Atomic mutation must be scoped",
-  );
+  assert(query.instanceId !== CROSS_INSTANCE, "Atomic mutation must be scoped");
   return runAtomicMutation(
     query.getTableTerm(),
     query.instanceId ?? "",

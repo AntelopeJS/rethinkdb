@@ -20,22 +20,24 @@ import {
 import {
   allocateArgNumber,
   DecodingContext,
+  IsObject,
   type QueryStage,
   TENANT_ID_FIELD,
 } from "./utils";
 
-type ResultType =
-  | "stream"
-  | "table"
-  | "selection"
-  | "insert"
-  | "update"
-  | "replace"
-  | "delete";
+type WriteResultType = "insert" | "update" | "replace" | "delete";
+
+type ResultType = "stream" | "table" | "selection" | WriteResultType;
+
+type InstanceId = string | typeof CROSS_INSTANCE | undefined;
 
 type TenantContext = { kind: "scoped"; tenantId: string } | { kind: "cross" };
 
 const WRITE_STAGES = new Set(["insert", "update", "replace", "delete"]);
+
+function isWriteResult(resultType: ResultType): resultType is WriteResultType {
+  return WRITE_STAGES.has(resultType);
+}
 const PRE_STREAM_STAGES = new Set([
   "get",
   "getAll",
@@ -46,19 +48,31 @@ const PRE_STREAM_STAGES = new Set([
   "delete",
 ]);
 
-function resolveTenantContext(
-  schemaId: string,
+/** Throws unless `instanceId` is a string, `CROSS_INSTANCE` or undefined, whatever a JavaScript caller passed. */
+function assertInstanceId<Value>(
   tableName: string,
-  instanceId: unknown,
-): TenantContext {
-  if (instanceId === CROSS_INSTANCE) {
-    return { kind: "cross" };
-  }
-  if (instanceId !== undefined && typeof instanceId !== "string") {
+  instanceId: Value,
+): asserts instanceId is Value & InstanceId {
+  if (
+    instanceId !== CROSS_INSTANCE &&
+    instanceId !== undefined &&
+    typeof instanceId !== "string"
+  ) {
     throw new Error(
       `Invalid instance id for table '${tableName}': expected string or CROSS_INSTANCE, got ${typeof instanceId}`,
     );
   }
+}
+
+function resolveTenantContext(
+  schemaId: string,
+  tableName: string,
+  instanceId: InstanceId,
+): TenantContext {
+  if (instanceId === CROSS_INSTANCE) {
+    return { kind: "cross" };
+  }
+  assertInstanceId(tableName, instanceId);
   const tenantId = instanceId ?? "";
   if (!IsValidInstance(schemaId, tenantId)) {
     throw new Error(
@@ -85,7 +99,7 @@ export class SelectionQuery {
 
   public constructor(
     public readonly schemaId: string,
-    public readonly instanceId: string | typeof CROSS_INSTANCE | undefined,
+    public readonly instanceId: InstanceId,
     public readonly tableName: string,
     public readonly database: string,
     private context: DecodingContext,
@@ -187,8 +201,7 @@ export class SelectionQuery {
         this.term,
         streamStages,
         this.context,
-        this.schemaId,
-        this.tableName,
+        { schemaId: this.schemaId, tableName: this.tableName },
         this.singleElement,
       );
       this.term = result.term;
@@ -216,27 +229,27 @@ export class SelectionQuery {
 
   public async run(): Promise<any> {
     await WaitForSchemaReady(this.schemaId);
-    const RUN_HANDLERS: Record<string, () => Promise<any>> = {
+    const RUN_HANDLERS = {
       insert: () => this.runInsert(),
       update: () => this.runUpdate(),
       replace: () => this.runReplace(),
       delete: () => this.runDelete(),
-    };
+    } satisfies Record<WriteResultType, () => Promise<any>>;
 
-    const handler = RUN_HANDLERS[this.resultType];
-    if (this.external && this.resultType in RUN_HANDLERS) {
-      return RunExternalWrite(this.database, this.external.table, {
-        kind: this.resultType,
-        value: this.insertRawArgs,
-        target: await this.external.writeTarget(
-          this.streamStages.length > 0 ? this.term : undefined,
-          this.rawTarget ?? this.term,
-        ),
-        conflict: this.conflictMode,
-      });
-    }
-    if (handler) {
-      return handler();
+    const resultType = this.resultType;
+    if (isWriteResult(resultType)) {
+      if (this.external) {
+        return RunExternalWrite(this.database, this.external.table, {
+          kind: resultType,
+          value: this.insertRawArgs,
+          target: await this.external.writeTarget(
+            this.streamStages.length > 0 ? this.term : undefined,
+            this.rawTarget ?? this.term,
+          ),
+          conflict: this.conflictMode,
+        });
+      }
+      return RUN_HANDLERS[resultType]();
     }
 
     const timeoutMs = this.external
@@ -292,7 +305,7 @@ export class SelectionQuery {
         value[1].map((doc: any) => this.stampTenantId(doc, tenantId)),
       ];
     }
-    if (value && typeof value === "object" && !Array.isArray(value)) {
+    if (IsObject(value) && !Array.isArray(value)) {
       return { ...value, [TENANT_ID_FIELD]: tenantId };
     }
     return value;
@@ -387,13 +400,10 @@ export class SelectionQuery {
     if (!source || this.resultType !== "table") {
       return undefined;
     }
-    return applyStreamStages(
-      source,
-      this.streamStages,
-      this.context,
-      this.schemaId,
-      this.tableName,
-    ).term;
+    return applyStreamStages(source, this.streamStages, this.context, {
+      schemaId: this.schemaId,
+      tableName: this.tableName,
+    }).term;
   }
 
   public isSimpleTable(): boolean {

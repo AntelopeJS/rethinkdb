@@ -1,10 +1,14 @@
+import assert from "node:assert";
+import { r, RethinkDBErrorType } from "rethinkdb-ts";
 import { TermType } from "rethinkdb-ts/lib/proto/enums";
 import { isRethinkDBError } from "rethinkdb-ts/lib/error/error";
+import { isQuery } from "rethinkdb-ts/lib/query-builder/query";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
-import { r, RethinkDBErrorType, type RDatum } from "rethinkdb-ts";
 import {
+  type AtomicEqualityValue,
   type AtomicMutation,
   type AtomicMutationOutcome,
+  type MissingRevision,
   ValidateAtomicMutation,
 } from "@antelopejs/interface-database/atomic";
 
@@ -20,13 +24,22 @@ const DEFINITIVE_ERRORS = new Set([
   RethinkDBErrorType.PERMISSION_ERROR,
 ]);
 const WRITE_COUNTS = ["replaced", "deleted", "unchanged", "skipped"];
-type CompiledDatum = RDatum<unknown> & { term: TermJson };
 
-export async function runAtomicMutation(
+function compiledTerm(value: Parameters<typeof r.expr>[0]): TermJson {
+  const datum = r.expr(value);
+  assert(isQuery(datum), "r.expr answered no query");
+  return datum.term;
+}
+
+function isRevision(expected: string | MissingRevision): expected is string {
+  return typeof expected === "string";
+}
+
+export async function runAtomicMutation<T>(
   table: TermJson,
   tenantId: string,
   key: string,
-  request: AtomicMutation<Record<string, unknown>>,
+  request: AtomicMutation<T>,
 ): Promise<AtomicMutationOutcome> {
   ValidateAtomicMutation(key, request, [TENANT_ID_FIELD]);
   const term = buildAtomicTerm(table, tenantId, key, request);
@@ -40,11 +53,11 @@ export async function runAtomicMutation(
   }
 }
 
-function buildAtomicTerm(
+function buildAtomicTerm<T>(
   table: TermJson,
   tenantId: string,
   key: string,
-  request: AtomicMutation<Record<string, unknown>>,
+  request: AtomicMutation<T>,
 ): TermJson {
   const argId = allocateArgNumber();
   const doc: TermJson = [TermType.VAR, [argId]];
@@ -55,7 +68,7 @@ function buildAtomicTerm(
     : Object.fromEntries([
         ...Object.entries(request.patch).map(([field, value]) => [
           field,
-          [TermType.LITERAL, [(r.expr(value) as CompiledDatum).term]],
+          [TermType.LITERAL, [compiledTerm(value)]],
         ]),
         [request.revisionField, request.nextRevision],
       ]);
@@ -74,10 +87,10 @@ function buildAtomicTerm(
   ];
 }
 
-function mutationCondition(
+function mutationCondition<T>(
   doc: TermJson,
   tenantId: string,
-  request: AtomicMutation<Record<string, unknown>>,
+  request: AtomicMutation<T>,
 ): TermJson {
   const scope = fieldEquals(doc, TENANT_ID_FIELD, tenantId);
   const expected = expectedCondition(doc, request);
@@ -87,14 +100,14 @@ function mutationCondition(
   ];
 }
 
-function expectedCondition(
+function expectedCondition<T>(
   doc: TermJson,
-  request: AtomicMutation<Record<string, unknown>>,
+  request: AtomicMutation<T>,
 ): TermJson {
   if (request.type === "deleteIfEqual") {
     return fieldEquals(doc, request.field, request.expectedValue);
   }
-  if (typeof request.expectedRevision === "string") {
+  if (isRevision(request.expectedRevision)) {
     return fieldEquals(doc, request.revisionField, request.expectedRevision);
   }
   return [
@@ -103,17 +116,15 @@ function expectedCondition(
   ];
 }
 
-function fieldEquals(doc: TermJson, field: string, value: unknown): TermJson {
+function fieldEquals(
+  doc: TermJson,
+  field: string,
+  value: AtomicEqualityValue,
+): TermJson {
   return [
     TermType.DEFAULT,
     [
-      [
-        TermType.EQ,
-        [
-          [TermType.BRACKET, [doc, field]],
-          (r.expr(value) as CompiledDatum).term,
-        ],
-      ],
+      [TermType.EQ, [[TermType.BRACKET, [doc, field]], compiledTerm(value)]],
       false,
     ],
   ];

@@ -1,13 +1,7 @@
 {
   "rules": {
-    "antelopejs/no-comments": 13,
-    "anti-slop/no-known-value-widening": 9,
-    "anti-slop/no-runtime-typeof": 6,
-    "anti-slop/no-unknown-parameters": 4,
-    "anti-slop/no-unknown-returns": 2,
-    "anti-slop/no-unsafe-dictionary-type": 7,
-    "anti-slop/require-safety-comment-for-type-assertion": 16,
-    "eslint/max-params": 3
+    "anti-slop/no-known-value-widening": 5,
+    "anti-slop/require-safety-comment-for-type-assertion": 8
   },
   "oversizeFiles": {}
 }

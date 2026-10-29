@@ -1,0 +1,8 @@
+{
+  "rules": {
+    "import/no-cycle": 6
+  },
+  "tsExpectError": 0,
+  "tsIgnore": 0,
+  "safety": 4
+}

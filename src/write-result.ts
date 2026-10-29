@@ -11,8 +11,6 @@ const WRITE_TERMS = new Set([
   TermType.DELETE,
 ]);
 
-// RethinkDB reports a primary key collision as a per-row write error, not as
-// a query error: `errors > 0` with this prefix in `first_error`.
 const DUPLICATE_PRIMARY_KEY_PATTERN = /^Duplicate primary key/;
 
 function toWriteError(firstError: string | undefined): Error {
@@ -25,6 +23,10 @@ function toWriteError(firstError: string | undefined): Error {
 /**
  * Throws when a write result reports row errors, as a `DuplicateKeyError` on
  * `_id` when the first one is a primary key collision.
+ *
+ * RethinkDB reports a primary key collision as a per-row write error, not as
+ * a query error: `errors > 0` with `Duplicate primary key` leading
+ * `first_error`.
  */
 export function validateWriteResult(term: TermJson, result: any): void {
   if (!Array.isArray(term) || !WRITE_TERMS.has(term[0])) {
