@@ -8,7 +8,8 @@ type RethinkQueryWithTerm = RQuery & { term: TermJson };
 export async function RunQuery(
   query: RQuery,
   options?: RunOptions,
-): Promise<unknown> {
+): ReturnType<RQuery["run"]> {
+  // SAFETY: every rethinkdb-ts query carries its compiled `term`, which RQuery leaves undeclared; isQuery cannot check it, since a caller may build the query with its own rethinkdb-ts copy and query symbol.
   const cursor = await SendQuery((query as RethinkQueryWithTerm).term, options);
   if (!cursor) {
     return;

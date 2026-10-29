@@ -4,25 +4,21 @@ import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import { Query, ValueProxy } from "@antelopejs/interface-database";
 import type { Value } from "@antelopejs/interface-database/common";
 
-// The ReQL compiler is one mutually recursive unit: decoding a value can hit a sub-query,
-// building a sub-query applies stream stages, and a stream stage decodes values again.
-// The cycle is the recursion, not an accident of where the code sits.
-// oxlint-disable-next-line import/no-cycle -- value decoding recurses into sub-query building
+// oxlint-disable-next-line import/no-cycle -- the ReQL compiler is one recursive unit: value decoding recurses into sub-query building
 import { SelectionQuery } from "./selection";
 import {
   allocateArgNumber,
   type DecodingContext,
+  IsObject,
   type QueryStage,
 } from "./utils";
 
-type StageHandler =
-  | number
-  | ((expr: ExpressionBuilder, ...args: any[]) => TermJson);
+type StageHandler = (expr: ExpressionBuilder, ...args: any[]) => TermJson;
 
 interface ExpressionBuilder {
   value: TermJson;
   context: DecodingContext;
-  options?: Record<string, any>;
+  options?: QueryStage["options"];
 }
 
 const SIMPLE_STAGE_MAP: Record<string, number> = {
@@ -207,7 +203,7 @@ function decodeExpression(
     }
     const complexHandler = COMPLEX_STAGE_MAP[stage.stage];
     if (complexHandler) {
-      builder.value = (complexHandler as any)(builder, ...decodedArgs);
+      builder.value = complexHandler(builder, ...decodedArgs);
       continue;
     }
     throw new Error(`Unimplemented expression stage: ${stage.stage}`);
@@ -229,12 +225,12 @@ export function DecodeValue(
     return decodeSubquery(value.build(), context);
   }
 
-  if (value && typeof value === "object") {
+  if (IsObject(value)) {
     if (Array.isArray(value)) {
       return [
         TermType.MAKE_ARRAY,
         value.map((val) => DecodeValue(val, context)),
-      ] as TermJson;
+      ];
     }
     if (value instanceof Date) {
       return dateToReql(value);
@@ -253,7 +249,7 @@ export function DecodeValue(
     return undefined as any;
   }
 
-  return value as TermJson;
+  return value;
 }
 
 function dateToReql(date: Date): TermJson {
@@ -288,7 +284,7 @@ export function DecodeFunction(
   argTerms: TermJson[],
 ): TermJson {
   const argNumbers: number[] = func.args[0];
-  const oldArgs: Record<number, any> = {};
+  const oldArgs: DecodingContext["args"] = {};
   for (let i = 0; i < argNumbers.length; ++i) {
     oldArgs[argNumbers[i]] = context.args[argNumbers[i]];
     const argTerm = argTerms[i];

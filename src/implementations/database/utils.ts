@@ -9,6 +9,11 @@ export type QueryStage = StagedObject["stages"][number];
 
 export type ArgumentProvider = (subQuery: QueryStage[]) => any;
 
+/** Whether `value` is a non-null object, arrays included. */
+export function IsObject(value: unknown): value is object {
+  return value !== null && typeof value === "object";
+}
+
 let nextArgNumber = 0;
 export function allocateArgNumber() {
   return nextArgNumber++;
