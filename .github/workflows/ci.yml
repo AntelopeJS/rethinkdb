@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch: null
 
 permissions:
   contents: read
@@ -13,6 +14,9 @@ jobs:
     uses: AntelopeJS/.github/.github/workflows/ci-node.yml@v1
     with:
       services-compose-file: .github/release-services.yml
+    permissions:
+      contents: write
+      actions: write
 
   checks:
     if: always()

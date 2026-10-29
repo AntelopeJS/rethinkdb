@@ -1,17 +1,16 @@
 import assert from "node:assert";
-import type { Cursor } from "rethinkdb-ts/lib/response/cursor";
-import type { TermJson } from "rethinkdb-ts/lib/internal-types";
-import { backtraceTerm } from "rethinkdb-ts/lib/error/term-backtrace";
-import type { RethinkDBConnection } from "rethinkdb-ts/lib/connection/connection";
-import type { MasterConnectionPool } from "rethinkdb-ts/lib/connection/master-pool";
 import {
   type Connection,
-  type MasterPool,
   type RConnectionOptions,
   type RPoolConnectionOptions,
   type RunOptions,
   r,
 } from "rethinkdb-ts";
+import type { Cursor } from "rethinkdb-ts/lib/response/cursor";
+import type { TermJson } from "rethinkdb-ts/lib/internal-types";
+import { backtraceTerm } from "rethinkdb-ts/lib/error/term-backtrace";
+import { RethinkDBConnection } from "rethinkdb-ts/lib/connection/connection";
+import { MasterConnectionPool } from "rethinkdb-ts/lib/connection/master-pool";
 
 import { Logger } from "./utils/logger";
 import { validateWriteResult } from "./write-result";
@@ -19,20 +18,42 @@ import { validateWriteResult } from "./write-result";
 let connection:
   | {
       type: "direct";
-      connection: Connection;
+      connection: RethinkDBConnection;
     }
   | {
       type: "pool";
-      connection: MasterPool;
+      connection: MasterConnectionPool;
     }
   | undefined;
+
+async function OpenConnection(
+  options: RConnectionOptions,
+): Promise<RethinkDBConnection> {
+  const opened = await r.connect(options);
+  assert(
+    opened instanceof RethinkDBConnection,
+    "r.connect answered no RethinkDBConnection",
+  );
+  return opened;
+}
+
+async function OpenPool(
+  options: RPoolConnectionOptions,
+): Promise<MasterConnectionPool> {
+  const opened = await r.connectPool(options);
+  assert(
+    opened instanceof MasterConnectionPool,
+    "r.connectPool answered no MasterConnectionPool",
+  );
+  return opened;
+}
 
 export async function ConnectDirect(options: RConnectionOptions) {
   Logger.Debug("Connecting directly to RethinkDB", options.host ?? "localhost");
   Disconnect();
   connection = {
     type: "direct",
-    connection: await r.connect(options),
+    connection: await OpenConnection(options),
   };
   Logger.Debug("Connected directly to RethinkDB");
 }
@@ -42,7 +63,7 @@ export async function ConnectPool(options: RPoolConnectionOptions) {
   Disconnect();
   connection = {
     type: "pool",
-    connection: await r.connectPool(options),
+    connection: await OpenPool(options),
   };
   Logger.Debug("Connected to RethinkDB pool");
 }
@@ -69,9 +90,9 @@ export function SendQuery(
   Logger.Debug("Sending query via", connection.type);
   switch (connection.type) {
     case "direct":
-      return (<RethinkDBConnection>connection.connection).query(query, opts);
+      return connection.connection.query(query, opts);
     case "pool":
-      return (<MasterConnectionPool>connection.connection).queue(query, opts);
+      return connection.connection.queue(query, opts);
   }
 }
 
@@ -140,7 +161,7 @@ export async function OpenBoundedCursor(
   timeoutMs: number,
 ): Promise<BoundedCursor> {
   assert(directOptions, "No connection established");
-  const direct = await r.connect(directOptions);
+  const direct = await OpenConnection(directOptions);
   let expired = false;
   let timer: NodeJS.Timeout | undefined;
   let expire: (error: Error) => void = () => undefined;
@@ -162,8 +183,7 @@ export async function OpenBoundedCursor(
   };
   arm();
   try {
-    // SAFETY: r.connect answers the driver's RethinkDBConnection, whose query() takes raw terms.
-    const opening = (<RethinkDBConnection>direct).query(term);
+    const opening = direct.query(term);
     const cursor = await Promise.race([opening, deadline]);
     assert(cursor, "Query returned no cursor.");
     disarm();
@@ -189,7 +209,7 @@ export async function executeBounded(
   timeoutMs: number,
 ): Promise<any> {
   assert(directOptions, "No connection established");
-  const direct = await r.connect(directOptions);
+  const direct = await OpenConnection(directOptions);
   let timer: NodeJS.Timeout | undefined;
   const expired = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
@@ -198,10 +218,7 @@ export async function executeBounded(
     }, timeoutMs);
   });
   try {
-    // SAFETY: r.connect answers the driver's RethinkDBConnection, whose query() takes raw terms.
-    const running = (<RethinkDBConnection>direct)
-      .query(term)
-      .then((cursor) => Resolve(term, cursor));
+    const running = direct.query(term).then((cursor) => Resolve(term, cursor));
     return await Promise.race([running, expired]);
   } finally {
     clearTimeout(timer);

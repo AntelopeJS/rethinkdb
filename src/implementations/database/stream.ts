@@ -8,6 +8,7 @@ import { FindIndex, GetIndex } from "./schema";
 import {
   buildIndexScanPredicate,
   buildIndexScanValues,
+  type DeclaredIndex,
   warnUnindexedCrossInstance,
 } from "./indexes";
 // oxlint-disable-next-line import/no-cycle -- stream stages decode values; see expression.ts
@@ -22,12 +23,14 @@ import {
 
 const ALWAYS_INDEXED_FIELDS = new Set([PRIMARY_KEY_FIELD, TENANT_ID_FIELD]);
 
+/** The table a stream's stages read, by schema and table name. */
+type StreamTable = Pick<DeclaredIndex, "schemaId" | "tableName">;
+
 type StreamStageHandler = (
   prev: TermJson,
   stage: QueryStage,
   context: DecodingContext,
-  schemaId: string,
-  tableName: string,
+  table: StreamTable,
   singleElement: boolean,
 ) => TermJson;
 
@@ -60,10 +63,9 @@ export function applyStreamStages(
   prev: TermJson,
   stages: QueryStage[],
   context: DecodingContext,
-  schemaId: string,
-  tableName: string,
+  table: StreamTable,
   initialSingleElement = false,
-): { term: TermJson; isChangeStream: boolean; singleElement: boolean } {
+) {
   let term = prev;
   let isChangeStream = false;
   let singleElement = initialSingleElement;
@@ -83,7 +85,7 @@ export function applyStreamStages(
     if (!handler) {
       throw new Error(`Unimplemented stream stage: ${stage.stage}`);
     }
-    term = handler(term, stage, context, schemaId, tableName, singleElement);
+    term = handler(term, stage, context, table, singleElement);
   }
 
   return { term, isChangeStream, singleElement };
@@ -229,8 +231,7 @@ function handleLookup(
   prev: TermJson,
   stage: QueryStage,
   context: DecodingContext,
-  _schemaId: string,
-  _tableName: string,
+  _table: StreamTable,
   singleElement: boolean,
 ): TermJson {
   const rightStages = (stage.args[0] as Stream<any>).build();
@@ -322,8 +323,7 @@ function handleGroup(
   prev: TermJson,
   stage: QueryStage,
   context: DecodingContext,
-  schemaId: string,
-  tableName: string,
+  table: StreamTable,
 ): TermJson {
   const field = stage.options.index;
   const func = stage.args[0];
@@ -341,13 +341,8 @@ function handleGroup(
     if (subQuery.length <= 1) {
       return reductionAccess;
     }
-    return applyStreamStages(
-      reductionAccess,
-      subQuery.slice(1),
-      context,
-      schemaId,
-      tableName,
-    ).term;
+    return applyStreamStages(reductionAccess, subQuery.slice(1), context, table)
+      .term;
   };
   context.args[argNumbers[1]] = () => groupAccess;
 
@@ -419,18 +414,21 @@ function buildNonIndexedOrderBy(
   return [TermType.ORDER_BY, [prev, ...fields]];
 }
 
+/**
+ * Orders by an index only when it is a `crossInstance` index on a table term.
+ * A scoped orderBy stays unindexed: an index would drop documents missing the
+ * field.
+ */
 function handleOrderBy(
   prev: TermJson,
   stage: QueryStage,
   _context: DecodingContext,
-  schemaId: string,
-  tableName: string,
+  { schemaId, tableName }: StreamTable,
 ): TermJson {
   const indexName = stage.options.index;
   const isDescending = stage.options.direction === "desc";
 
   const definition = FindIndex(schemaId, tableName, indexName);
-  // Scoped orderBy stays unindexed: an index would drop documents missing the field.
   if (definition && isTableTerm(prev)) {
     if (definition.crossInstance) {
       return buildIndexedOrderBy(prev, indexName, isDescending);
@@ -507,8 +505,7 @@ function handleCount(
   prev: TermJson,
   stage: QueryStage,
   _context: DecodingContext,
-  schemaId: string,
-  tableName: string,
+  { schemaId, tableName }: StreamTable,
 ): TermJson {
   const field = stage.options?.field;
   if (!field) {
@@ -554,8 +551,7 @@ function handleDistinct(
   prev: TermJson,
   stage: QueryStage,
   _context: DecodingContext,
-  schemaId: string,
-  tableName: string,
+  { schemaId, tableName }: StreamTable,
 ): TermJson {
   const field = stage.options?.field;
   if (!field) {
