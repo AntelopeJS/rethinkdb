@@ -7,7 +7,7 @@ import { ExternalDatabaseName, GetOptions } from "../../config";
 import type { ExternalTable, KeyClass } from "./external-descriptor";
 import { Func, KeyExpression, KeyValue, Normalized } from "./external-read";
 import { FindIndex, GetExternalTable } from "./schema";
-import type { QueryStage } from "./utils";
+import { IsText, type QueryStage } from "./utils";
 
 const ID_FIELD = "_id";
 const UNSCOPED_INSTANCES: readonly (string | symbol | undefined)[] = [
@@ -32,7 +32,7 @@ export function ExternalAtomicRefusal(table: string): Error {
 
 /** A decoded key: constant text parsed as the key's type, a runtime value converted on the server. */
 function KeyTerm(key: KeyClass, decoded: TermJson): TermJson {
-  return decoded?.constructor === String
+  return IsText(decoded)
     ? KeyValue(key, String(decoded))
     : KeyExpression(key, decoded);
 }

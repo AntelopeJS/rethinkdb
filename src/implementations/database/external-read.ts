@@ -1,7 +1,7 @@
 import { TermType } from "rethinkdb-ts/lib/proto/enums";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 
-import { allocateArgNumber } from "./utils";
+import { allocateArgNumber, IsNumber, IsText } from "./utils";
 import {
   type DeclaredKind,
   type ExternalTable,
@@ -134,11 +134,7 @@ export function KeyDataTerm(value: KeyData): TermJson | undefined {
       ? [TermType.MAKE_ARRAY, elements]
       : undefined;
   }
-  // SAFETY: the value's constructor is String or Number, plain ReQL data.
-  const datum = value as TermJson;
-  return value?.constructor === String || value?.constructor === Number
-    ? datum
-    : undefined;
+  return IsText(value) || IsNumber(value) ? value : undefined;
 }
 
 function ParseArrayKey(text: string): TermJson {
