@@ -67,11 +67,13 @@ function buildAtomicTerm<T>(
   const isDelete = request.type !== "update";
   const patch = isDelete
     ? null
-    : Object.fromEntries([
-        ...Object.entries(request.patch).map(([field, value]) => [
-          field,
-          [TermType.LITERAL, [compiledTerm(value)]],
-        ]),
+    : Object.fromEntries<TermJson>([
+        ...Object.entries(request.patch).map(
+          ([field, value]): [string, TermJson] => [
+            field,
+            [TermType.LITERAL, [compiledTerm(value)]],
+          ],
+        ),
         [request.revisionField, request.nextRevision],
       ]);
   const replacement: TermJson = isDelete
