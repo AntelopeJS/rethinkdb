@@ -25,6 +25,19 @@ export function IsNumber(value: unknown): value is number {
   return typeof value === "number";
 }
 
+/** Whether `value` is a list. */
+export function IsList(value: unknown): value is unknown[] {
+  return Array.isArray(value);
+}
+
+/** Whether `value` is a term: null, a primitive string, number or boolean, or an object. */
+export function IsTermJson(value: unknown): value is TermJson {
+  return (
+    value === null ||
+    ["string", "number", "boolean", "object"].includes(typeof value)
+  );
+}
+
 /** Whether `value` is a list of primitive strings. */
 export function IsTextList(value: unknown): value is string[] {
   return Array.isArray(value) && value.every(IsText);

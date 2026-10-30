@@ -21,7 +21,9 @@ import {
 import {
   allocateArgNumber,
   DecodingContext,
+  IsList,
   IsObject,
+  IsTermJson,
   type QueryStage,
   TENANT_ID_FIELD,
 } from "./utils";
@@ -87,7 +89,7 @@ export class SelectionQuery {
   public resultType: ResultType = "table";
   public isChangeStream = false;
   public singleElement = false;
-  private newValue: any;
+  private newValue: TermJson = null;
   private conflictMode?: "update" | "replace";
   private insertRawArgs?: any;
   private term: TermJson;
@@ -302,11 +304,16 @@ export class SelectionQuery {
     );
   }
 
-  private stampTenantId(value: any, tenantId: string): any {
+  private stampTenantId(value: TermJson, tenantId: string): TermJson {
     if (Array.isArray(value) && value[0] === TermType.MAKE_ARRAY) {
+      const documents: unknown = value[1];
       return [
         TermType.MAKE_ARRAY,
-        value[1].map((doc: any) => this.stampTenantId(doc, tenantId)),
+        IsList(documents)
+          ? documents.map((doc) =>
+              IsTermJson(doc) ? this.stampTenantId(doc, tenantId) : doc,
+            )
+          : documents,
       ];
     }
     if (IsObject(value) && !Array.isArray(value)) {
@@ -439,10 +446,9 @@ export class SelectionQuery {
     const oldDoc: TermJson = [TermType.VAR, [argId]];
     let replaceValue = this.newValue;
     if (this.tenant.kind === "scoped") {
-      replaceValue = {
-        ...replaceValue,
+      replaceValue = Object.assign({}, replaceValue, {
         [TENANT_ID_FIELD]: this.tenant.tenantId,
-      };
+      });
     }
     const merged: TermJson = [
       TermType.MERGE,
@@ -467,7 +473,7 @@ export class SelectionQuery {
     this.term = term;
   }
 
-  public setNewValue(value: any) {
+  public setNewValue(value: TermJson) {
     this.newValue = value;
   }
 

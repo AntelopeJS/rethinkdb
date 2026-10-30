@@ -20,7 +20,7 @@ import {
   KeyValue,
   ReadField,
 } from "./external-read";
-import { allocateArgNumber, IsText } from "./utils";
+import { allocateArgNumber, IsList, IsTermJson, IsText } from "./utils";
 
 /** What went wrong with a write, in terms a caller can act on. */
 type ExternalWriteErrorKind = "invalid" | "forbidden";
@@ -189,8 +189,14 @@ function KeyClassOf(term: TermJson): KeyClass | undefined {
 
 /** A key term as the plain value the table stores. */
 function KeyData(term: TermJson): TermJson {
-  return Array.isArray(term) && term[0] === TermType.MAKE_ARRAY
-    ? term[1].map(KeyData)
+  const elements: unknown =
+    Array.isArray(term) && term[0] === TermType.MAKE_ARRAY
+      ? term[1]
+      : undefined;
+  return IsList(elements)
+    ? elements.map((element) =>
+        IsTermJson(element) ? KeyData(element) : element,
+      )
     : term;
 }
 
@@ -429,7 +435,7 @@ export interface ExternalWrite {
   conflict?: "update" | "replace";
 }
 
-const BY_KEY = new Set<TermJson>([TermType.GET, TermType.GET_ALL]);
+const BY_KEY = new Set<unknown>([TermType.GET, TermType.GET_ALL]);
 
 /**
  * The rows a selection names, pinned by their primary keys, so a second update reaches the rows
