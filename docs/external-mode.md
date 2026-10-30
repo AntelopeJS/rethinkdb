@@ -5,7 +5,7 @@ and reads and writes their rows. It is for describing an existing database to An
 typically a schema written from the module's catalog. It never changes that database's structure:
 no database, table or index is created, and no registry table is kept.
 
-```typescript
+```typescript fragment
 {
     mode: "external",
     url: "rethinkdb://erp_reader:…@client-db:28015/erp",
@@ -17,7 +17,7 @@ construct, rather than falling back to a default. It is the one secret of the in
 set it through `envOverrides`, and a staging copy under another database name needs only another
 value:
 
-```typescript
+```typescript fragment
 envOverrides: { ERP_RETHINKDB_URL: "modules.rethinkdb-erp.config.url" },
 ```
 
