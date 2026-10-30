@@ -147,7 +147,11 @@ function KeyOf(
     value[ID_FIELD] === undefined
       ? undefined
       : KeyValue(key, Text(value[ID_FIELD]) ?? "");
-  const byField = KeyFieldTerm(value[table.primaryKey]);
+  const byField = KeyFieldTerm(
+    Object.prototype.hasOwnProperty.call(value, table.primaryKey)
+      ? value[table.primaryKey]
+      : undefined,
+  );
   for (const [field, term] of [
     [ID_FIELD, byId],
     [table.primaryKey, byField],
@@ -237,7 +241,7 @@ function Split(
         (descriptor) =>
           SCALAR_KINDS.has(descriptor.kind) &&
           descriptor.field !== table.primaryKey &&
-          !(descriptor.field in value),
+          !Object.prototype.hasOwnProperty.call(value, descriptor.field),
       )
       .map((descriptor) => descriptor.field);
   }
