@@ -17,7 +17,7 @@ import {
   ExternalInstanceRefusal,
 } from "./external-selection";
 import { runAtomicMutation } from "./atomic";
-import { DecodingContext, type QueryStage } from "./utils";
+import { DecodingContext, IsObject, type QueryStage } from "./utils";
 import {
   CreateInstance,
   DestroyInstance,
@@ -112,7 +112,7 @@ function runAtomicStages(stages: QueryStage[]) {
 
 interface OpenCursor {
   cursor: Cursor;
-  iterator: AsyncIterableIterator<any>;
+  iterator: AsyncIterableIterator<unknown>;
   isChangeStream: boolean;
   arm?: () => void;
   disarm?: () => void;
@@ -144,7 +144,10 @@ function Release(reqId: number) {
 
 const openCursors = new Map<number, OpenCursor>();
 
-export async function ReadCursor(reqId: number, stages: QueryStage[]) {
+export async function ReadCursor(
+  reqId: number,
+  stages: QueryStage[],
+): Promise<IteratorResult<unknown, void>> {
   if (!openCursors.has(reqId)) {
     assert(stages[0]?.stage === "schema", "Expected schema stage");
     const schemaId = stages[0].options?.id;
@@ -196,14 +199,25 @@ export async function ReadCursor(reqId: number, stages: QueryStage[]) {
     return { done: true, value: undefined };
   }
 
-  if (entry.isChangeStream) {
+  if (entry.isChangeStream && IsChangeEvent(result.value)) {
     return { done: false, value: mapChangeEvent(result.value) };
   }
 
   return { done: false, value: result.value };
 }
 
-function mapChangeEvent(change: any) {
+/** A change feed event: the row before and after the change, either one absent or null. */
+interface ChangeEvent {
+  old_val?: unknown;
+  new_val?: unknown;
+}
+
+/** Whether `value` is a change feed event; any object is one, its rows being of any type. */
+function IsChangeEvent(value: unknown): value is ChangeEvent {
+  return IsObject(value);
+}
+
+function mapChangeEvent(change: ChangeEvent) {
   if (change.old_val === null || change.old_val === undefined) {
     return { changeType: "added" as const, newValue: change.new_val };
   }
