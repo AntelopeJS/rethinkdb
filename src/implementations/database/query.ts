@@ -48,24 +48,31 @@ const EXTERNAL_LIFECYCLE_HANDLERS = new Map<string, SchemaStageHandler>([
   ["listInstances", () => Promise.resolve([])],
 ]);
 
-const SCHEMA_STAGE_HANDLERS: Record<string, SchemaStageHandler> = {
-  instance: async (schemaId, stages) => {
-    await WaitForSchemaReady(schemaId);
-    if (stages.some((stage) => stage.stage === "atomicMutation")) {
-      if (IsExternal()) {
-        throw ExternalAtomicRefusal(stages[2]?.options?.id);
+const SCHEMA_STAGE_HANDLERS = new Map<string, SchemaStageHandler>([
+  [
+    "instance",
+    async (schemaId, stages) => {
+      await WaitForSchemaReady(schemaId);
+      if (stages.some((stage) => stage.stage === "atomicMutation")) {
+        if (IsExternal()) {
+          throw ExternalAtomicRefusal(stages[2]?.options?.id);
+        }
+        return runAtomicStages(stages);
       }
-      return runAtomicStages(stages);
-    }
-    const context = new DecodingContext();
-    return SelectionQuery.decode(stages, context).run();
-  },
-  createInstance: (schemaId, stages) =>
-    CreateInstance(schemaId, stages[1]?.options?.id),
-  destroyInstance: (schemaId, stages) =>
-    DestroyInstance(schemaId, stages[1]?.options?.id),
-  listInstances: (schemaId) => ListInstances(schemaId),
-};
+      const context = new DecodingContext();
+      return SelectionQuery.decode(stages, context).run();
+    },
+  ],
+  [
+    "createInstance",
+    (schemaId, stages) => CreateInstance(schemaId, stages[1]?.options?.id),
+  ],
+  [
+    "destroyInstance",
+    (schemaId, stages) => DestroyInstance(schemaId, stages[1]?.options?.id),
+  ],
+  ["listInstances", (schemaId) => ListInstances(schemaId)],
+]);
 
 export async function RunQuery(stages: QueryStage[]) {
   assert(stages[0]?.stage === "schema", "Expected schema stage");
@@ -75,7 +82,8 @@ export async function RunQuery(stages: QueryStage[]) {
   const next = stages[1]?.stage;
   const external =
     IsExternal() && next ? EXTERNAL_LIFECYCLE_HANDLERS.get(next) : undefined;
-  const handler = external ?? (next ? SCHEMA_STAGE_HANDLERS[next] : undefined);
+  const handler =
+    external ?? (next ? SCHEMA_STAGE_HANDLERS.get(next) : undefined);
   assert(handler, `Unknown schema stage '${next}'`);
   return handler(schemaId, stages);
 }
