@@ -49,7 +49,7 @@ const EXTERNAL_LIFECYCLE_HANDLERS = new Map<string, SchemaStageHandler>([
 ]);
 
 const SCHEMA_STAGE_HANDLERS: Record<string, SchemaStageHandler> = {
-  instance: async (schemaId, stages) => {
+  instance: async (schemaId, stages): Promise<any> => {
     await WaitForSchemaReady(schemaId);
     if (stages.some((stage) => stage.stage === "atomicMutation")) {
       if (IsExternal()) {
@@ -67,7 +67,7 @@ const SCHEMA_STAGE_HANDLERS: Record<string, SchemaStageHandler> = {
   listInstances: (schemaId) => ListInstances(schemaId),
 };
 
-export async function RunQuery(stages: QueryStage[]) {
+export async function RunQuery(stages: QueryStage[]): Promise<any> {
   assert(stages[0]?.stage === "schema", "Expected schema stage");
   const schemaId = stages[0].options?.id;
   assert(schemaId, "Unknown schema");

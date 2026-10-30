@@ -6,7 +6,7 @@
     "anti-slop/require-safety-comment-for-type-assertion": 5,
     "typescript/no-unsafe-argument": 33,
     "typescript/no-unsafe-assignment": 40,
-    "typescript/no-unsafe-return": 3
+    "typescript/no-unsafe-return": 1
   },
   "oversizeFiles": {}
 }
