@@ -134,7 +134,9 @@ describe("the profiles and samples of an external RethinkDB catalog", function (
       const slow = await Profile({
         relation: Relation("events"),
         columns: ["kind"],
-      }).catch((error: Error) => error.message);
+      }).catch((error: unknown) =>
+        error instanceof Error ? error.message : error,
+      );
       expect(JSON.stringify(slow)).to.contain("timeout");
     } finally {
       SetMeasureTimeoutForTests();

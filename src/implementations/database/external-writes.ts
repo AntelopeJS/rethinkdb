@@ -404,7 +404,7 @@ async function Insert(
     TermType.INSERT,
     [TableTerm(database, table), [TermType.MAKE_ARRAY, documents]],
     options,
-  ]).catch((error: Error) => {
+  ]).catch((error: unknown) => {
     throw IsDuplicateKeyError(error)
       ? new DuplicateKeyError(table.primaryKey, [table.primaryKey])
       : error;

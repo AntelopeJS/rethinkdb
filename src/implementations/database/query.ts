@@ -181,7 +181,7 @@ export async function ReadCursor(reqId: number, stages: QueryStage[]) {
   const result = await entry.iterator
     .next()
     .finally(() => entry.disarm?.())
-    .catch((error: Error) => {
+    .catch((error: unknown) => {
       const expired = entry.expired?.() ?? false;
       Release(reqId);
       throw expired ? new QueryTimeoutError(entry.timeoutMs ?? 0) : error;
