@@ -15,7 +15,7 @@ import type {
 } from "./external-descriptor";
 import {
   Func,
-  IsKeyData,
+  type KeyData,
   KeyDataTerm,
   KeyValue,
   ReadField,
@@ -458,20 +458,18 @@ async function Pinned(
     [target, Func((row) => [TermType.BRACKET, [row, table.primaryKey]])],
   ];
   const timeoutMs = GetOptions().statementTimeoutMs;
-  const keys: unknown =
+  const keys: KeyData[] =
     timeoutMs === undefined
       ? await executeTermJson(read)
       : await executeBounded(read, timeoutMs);
-  if (!IsList(keys) || keys.length === 0) {
+  if (keys.length === 0) {
     return target;
   }
   return [
     TermType.GET_ALL,
     [
       TableTerm(database, table),
-      ...keys.flatMap(
-        (key) => (IsKeyData(key) ? KeyDataTerm(key) : undefined) ?? [],
-      ),
+      ...keys.flatMap((key) => KeyDataTerm(key) ?? []),
     ],
   ];
 }

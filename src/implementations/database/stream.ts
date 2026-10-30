@@ -34,28 +34,28 @@ type StreamStageHandler = (
   singleElement: boolean,
 ) => TermJson;
 
-const STREAM_STAGE_MAP = new Map<string, StreamStageHandler>([
-  ["changes", handleChanges],
-  ["key", handleKey],
-  ["default", handleDefault],
-  ["map", handleMap],
-  ["filter", handleFilter],
-  ["pluck", handlePluck],
-  ["without", handleWithout],
-  ["union", handleUnion],
-  ["join", handleJoin],
-  ["lookup", handleLookup],
-  ["group", handleGroup],
-  ["orderBy", handleOrderBy],
-  ["slice", handleSlice],
-  ["nth", handleNth],
-  ["count", handleCount],
-  ["sum", handleSum],
-  ["avg", handleAvg],
-  ["min", handleMin],
-  ["max", handleMax],
-  ["distinct", handleDistinct],
-]);
+const STREAM_STAGE_MAP: Record<string, StreamStageHandler> = {
+  changes: handleChanges,
+  key: handleKey,
+  default: handleDefault,
+  map: handleMap,
+  filter: handleFilter,
+  pluck: handlePluck,
+  without: handleWithout,
+  union: handleUnion,
+  join: handleJoin,
+  lookup: handleLookup,
+  group: handleGroup,
+  orderBy: handleOrderBy,
+  slice: handleSlice,
+  nth: handleNth,
+  count: handleCount,
+  sum: handleSum,
+  avg: handleAvg,
+  min: handleMin,
+  max: handleMax,
+  distinct: handleDistinct,
+};
 
 const REDUCTION_STAGES = new Set(["nth", "count", "sum", "avg", "min", "max"]);
 
@@ -81,7 +81,7 @@ export function applyStreamStages(
       term = handleMapSingle(term, stage, context);
       continue;
     }
-    const handler = STREAM_STAGE_MAP.get(stage.stage);
+    const handler = STREAM_STAGE_MAP[stage.stage];
     if (!handler) {
       throw new Error(`Unimplemented stream stage: ${stage.stage}`);
     }
