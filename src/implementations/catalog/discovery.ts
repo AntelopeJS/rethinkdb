@@ -11,13 +11,8 @@ import { r, type RStream } from "rethinkdb-ts";
 
 import { ExternalDatabaseName, GetOptions } from "../../config";
 import { KeyOf } from "../database/external-descriptor";
-import {
-  Ends,
-  type IndexFacts,
-  IndexFields,
-  Table,
-  UUID_TEXT_PATTERN,
-} from "../database/external-probe";
+import { IsText } from "../database/utils";
+import { Ends, Indexes, Table, UuidKeys } from "../database/external-probe";
 import { Described, type Source, SourceFor, ValueOf } from "./measures";
 
 /** A table of the configured database, with what its listing and its info say. */
@@ -33,19 +28,12 @@ interface TableInfo {
   doc_count_estimates?: number[];
 }
 
-interface IndexStatus {
-  index: string;
-  multi: boolean;
-  query: string;
-}
-
 interface FieldType {
   type: string;
   count: number;
 }
 
 const DEFAULT_PRIMARY_KEY = "id";
-const KEY_SAMPLE = 1000;
 const FALLBACK_ROWS = 1000;
 const UNREACHABLE_KEY = "__antelopejs_write_probe__ no row has this key";
 const DOMINANT_SHARE = 0.8;
@@ -64,7 +52,7 @@ const READINGS = new Map<string, string>([
 ]);
 
 export async function ReadInfo(): Promise<CatalogInfo> {
-  const version: string = await r
+  const version: unknown = await r
     .db("rethinkdb")
     .table("server_status")
     .nth(0)("process")("version")
@@ -72,7 +60,7 @@ export async function ReadInfo(): Promise<CatalogInfo> {
     .catch(() => "unknown");
   return {
     engine: "rethinkdb",
-    version,
+    version: IsText(version) ? version : "unknown",
     database: ExternalDatabaseName(),
     role: GetOptions().pool?.user ?? "admin",
   };
@@ -81,7 +69,7 @@ export async function ReadInfo(): Promise<CatalogInfo> {
 export async function ListTable(name: string): Promise<ListedTable> {
   const info: TableInfo = await Table(name).info().run();
   const primaryKey = info.primary_key ?? DEFAULT_PRIMARY_KEY;
-  const keys: string[] = await Table(name).limit(KEY_SAMPLE)(primaryKey).run();
+  const uuidKeys = await UuidKeys(name, primaryKey);
   return {
     name,
     primaryKey,
@@ -89,9 +77,7 @@ export async function ListTable(name: string): Promise<ListedTable> {
       (sum, count) => sum + count,
       0,
     ),
-    uuidKeys:
-      keys.length > 0 &&
-      keys.every((key) => UUID_TEXT_PATTERN.test(String(key))),
+    uuidKeys,
   };
 }
 
@@ -125,22 +111,6 @@ export async function Summarize(table: ListedTable): Promise<RelationSummary> {
     writes: await Writes(table.name),
     comment: null,
   };
-}
-
-async function Indexes(name: string): Promise<IndexFacts[]> {
-  const statuses: IndexStatus[] = await Table(name)
-    .indexStatus()
-    .map((status) => ({
-      index: status("index"),
-      multi: status("multi"),
-      query: status("query"),
-    }))
-    .run();
-  return statuses.map((status) => ({
-    name: status.index,
-    fields: IndexFields(status.query),
-    multi: status.multi,
-  }));
 }
 
 function FieldTypes(
