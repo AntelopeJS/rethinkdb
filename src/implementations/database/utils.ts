@@ -1,3 +1,4 @@
+import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import type { StagedObject } from "@antelopejs/interface-database/common";
 
 export const TENANT_ID_FIELD = "tenant_id";
@@ -7,7 +8,7 @@ export const INSTANCE_REGISTRY_FIELD = "instance_id";
 
 export type QueryStage = StagedObject["stages"][number];
 
-export type ArgumentProvider = (subQuery: QueryStage[]) => any;
+export type ArgumentProvider = (subQuery: QueryStage[]) => TermJson;
 
 /** Whether `value` is a non-null object, arrays included. */
 export function IsObject(value: unknown): value is object {
