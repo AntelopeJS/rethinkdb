@@ -1,7 +1,7 @@
 import { TermType } from "rethinkdb-ts/lib/proto/enums";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 
-import { allocateArgNumber, IsNumber, IsText } from "./utils";
+import { allocateArgNumber, IsList, IsNumber, IsObject, IsText } from "./utils";
 import {
   type DeclaredKind,
   type ExternalTable,
@@ -123,6 +123,23 @@ export type KeyData =
   | KeyData[]
   | { [field: string]: KeyData };
 
+/** Whether `value` is key data: a primitive, null, undefined, a date, or a list or object of key data. */
+function IsKeyData(value: unknown): value is KeyData {
+  if (IsList(value)) {
+    return value.every(IsKeyData);
+  }
+  if (value instanceof Date) {
+    return true;
+  }
+  if (IsObject(value)) {
+    return Object.values(value).every(IsKeyData);
+  }
+  return (
+    value === null ||
+    ["string", "number", "boolean", "undefined"].includes(typeof value)
+  );
+}
+
 /**
  * A key's data as a term: each array, at any depth, built as one, so no part of it is ever read as
  * a term of its own; undefined for anything a key cannot hold.
@@ -139,8 +156,10 @@ export function KeyDataTerm(value: KeyData): TermJson | undefined {
 
 function ParseArrayKey(text: string): TermJson {
   try {
-    const parsed: KeyData = JSON.parse(text);
-    return Array.isArray(parsed) ? (KeyDataTerm(parsed) ?? text) : text;
+    const parsed: unknown = JSON.parse(text);
+    return Array.isArray(parsed) && IsKeyData(parsed)
+      ? (KeyDataTerm(parsed) ?? text)
+      : text;
   } catch {
     return text;
   }
