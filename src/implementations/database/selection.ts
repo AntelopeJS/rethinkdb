@@ -91,7 +91,7 @@ export class SelectionQuery {
   public singleElement = false;
   private newValue: TermJson = null;
   private conflictMode?: "update" | "replace";
-  private insertRawArgs?: any;
+  private insertRawArgs?: QueryStage["args"][number];
   private term: TermJson;
   private readonly tenant: TenantContext;
   private scopedGet = false;
@@ -294,14 +294,21 @@ export class SelectionQuery {
     return this.buildConflictInsertKeys(generatedKeys);
   }
 
-  private buildConflictInsertKeys(generatedKeys: string[]): string[] {
-    const rawDocs = Array.isArray(this.insertRawArgs)
+  private buildConflictInsertKeys(generatedKeys: string[]): unknown[] {
+    const rawDocs: unknown[] = Array.isArray(this.insertRawArgs)
       ? this.insertRawArgs
       : [this.insertRawArgs];
     let genIdx = 0;
-    return rawDocs.map(
-      (doc: any) => doc._id ?? doc.id ?? generatedKeys[genIdx++],
-    );
+    return rawDocs.map((doc) => {
+      if (!IsObject(doc)) {
+        return generatedKeys[genIdx++];
+      }
+      return (
+        ("_id" in doc ? doc._id : undefined) ??
+        ("id" in doc ? doc.id : undefined) ??
+        generatedKeys[genIdx++]
+      );
+    });
   }
 
   private stampTenantId(value: TermJson, tenantId: string): TermJson {
@@ -481,7 +488,7 @@ export class SelectionQuery {
     this.conflictMode = mode;
   }
 
-  public setInsertRawArgs(args: any) {
+  public setInsertRawArgs(args: QueryStage["args"][number]) {
     this.insertRawArgs = args;
   }
 }
