@@ -4,15 +4,22 @@ import { IsNumber, IsText } from "../implementations/database/utils";
 
 const NULL_PROTOTYPE: unknown = Object.create(null);
 
-describe("Primitive guards on the constructor", () => {
-  it("accept primitives and their boxed forms of the matching constructor", () => {
+describe("Primitive guards", () => {
+  it("accept primitives", () => {
     assert.equal(IsText("42"), true);
-    assert.equal(IsText(new String("42")), true);
+    assert.equal(IsText(""), true);
     assert.equal(IsNumber(42), true);
-    assert.equal(IsNumber(new Number(42)), true);
+    assert.equal(IsNumber(Number.NaN), true);
   });
 
-  it("reject other constructors, absent values and unprototyped objects", () => {
+  it("reject boxed values and objects forging a constructor", () => {
+    assert.equal(IsText(new String("42")), false);
+    assert.equal(IsNumber(new Number(42)), false);
+    assert.equal(IsText({ constructor: String }), false);
+    assert.equal(IsNumber({ constructor: Number }), false);
+  });
+
+  it("reject other types, absent values and unprototyped objects", () => {
     for (const value of [
       42,
       true,
@@ -25,14 +32,17 @@ describe("Primitive guards on the constructor", () => {
     ]) {
       assert.equal(IsText(value), false);
     }
-    for (const value of ["42", true, null, undefined, [], {}, NULL_PROTOTYPE]) {
+    for (const value of [
+      "42",
+      true,
+      null,
+      undefined,
+      [],
+      {},
+      new Date(),
+      NULL_PROTOTYPE,
+    ]) {
       assert.equal(IsNumber(value), false);
     }
-  });
-
-  it("read an own constructor key as the constructor", () => {
-    assert.equal(IsText({ constructor: String }), true);
-    assert.equal(IsText({ constructor: "String" }), false);
-    assert.equal(IsNumber({ constructor: Number }), true);
   });
 });

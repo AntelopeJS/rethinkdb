@@ -32,9 +32,7 @@ export function ExternalAtomicRefusal(table: string): Error {
 
 /** A decoded key: constant text parsed as the key's type, a runtime value converted on the server. */
 function KeyTerm(key: KeyClass, decoded: TermJson): TermJson {
-  return IsText(decoded)
-    ? KeyValue(key, String(decoded))
-    : KeyExpression(key, decoded);
+  return IsText(decoded) ? KeyValue(key, decoded) : KeyExpression(key, decoded);
 }
 
 /**

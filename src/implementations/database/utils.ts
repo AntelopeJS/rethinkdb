@@ -14,14 +14,14 @@ export function IsObject(value: unknown): value is object {
   return value !== null && typeof value === "object";
 }
 
-/** Whether `value` is made by the `String` constructor: a text as the driver and JSON hold one. */
+/** Whether `value` is a primitive string. */
 export function IsText(value: unknown): value is string {
-  return value !== null && value !== undefined && value.constructor === String;
+  return typeof value === "string";
 }
 
-/** Whether `value` is made by the `Number` constructor: a number as the driver and JSON hold one. */
+/** Whether `value` is a primitive number. */
 export function IsNumber(value: unknown): value is number {
-  return value !== null && value !== undefined && value.constructor === Number;
+  return typeof value === "number";
 }
 
 let nextArgNumber = 0;

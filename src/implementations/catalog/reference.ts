@@ -21,7 +21,7 @@ const NUMBER_TEXT = /^-?\d+(\.\d+)?$/;
  * also probes `42`, and `42` also probes `"42"`.
  */
 function AddressedAs(value: RowValue): RowValue[] {
-  if (IsText(value) && NUMBER_TEXT.test(String(value))) {
+  if (IsText(value) && NUMBER_TEXT.test(value)) {
     return [value, Number(value)];
   }
   return IsNumber(value) ? [value, String(value)] : [value];

@@ -105,7 +105,7 @@ function Written(
     const date =
       value instanceof Date
         ? value
-        : new Date(IsText(value) ? String(value) : Number.NaN);
+        : new Date(IsText(value) ? value : Number.NaN);
     return Number.isNaN(date.getTime()) ? undefined : TimeOf(date);
   }
   const fits = value.constructor === CONSTRUCTORS.get(descriptor.kind);
