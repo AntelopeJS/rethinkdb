@@ -6,6 +6,7 @@ import type {
 import { r, type RDatum } from "rethinkdb-ts";
 
 import { Table } from "../database/external-probe";
+import { IsNumber, IsText } from "../database/utils";
 import { Locate, SelectColumns } from "./locate";
 import { Measured } from "./measures";
 import { type RowValue, TextOf } from "./text";
@@ -20,10 +21,10 @@ const NUMBER_TEXT = /^-?\d+(\.\d+)?$/;
  * also probes `42`, and `42` also probes `"42"`.
  */
 function AddressedAs(value: RowValue): RowValue[] {
-  if (value?.constructor === String && NUMBER_TEXT.test(String(value))) {
+  if (IsText(value) && NUMBER_TEXT.test(value)) {
     return [value, Number(value)];
   }
-  return value?.constructor === Number ? [value, String(value)] : [value];
+  return IsNumber(value) ? [value, String(value)] : [value];
 }
 
 /**

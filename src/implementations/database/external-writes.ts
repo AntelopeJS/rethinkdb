@@ -19,7 +19,7 @@ import {
   KeyValue,
   ReadField,
 } from "./external-read";
-import { allocateArgNumber } from "./utils";
+import { allocateArgNumber, IsText } from "./utils";
 
 /** What went wrong with a write, in terms a caller can act on. */
 type ExternalWriteErrorKind = "invalid" | "forbidden";
@@ -105,7 +105,7 @@ function Written(
     const date =
       value instanceof Date
         ? value
-        : new Date(value.constructor === String ? String(value) : Number.NaN);
+        : new Date(IsText(value) ? value : Number.NaN);
     return Number.isNaN(date.getTime()) ? undefined : TimeOf(date);
   }
   const fits = value.constructor === CONSTRUCTORS.get(descriptor.kind);

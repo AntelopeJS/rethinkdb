@@ -14,6 +14,16 @@ export function IsObject(value: unknown): value is object {
   return value !== null && typeof value === "object";
 }
 
+/** Whether `value` is a primitive string. */
+export function IsText(value: unknown): value is string {
+  return typeof value === "string";
+}
+
+/** Whether `value` is a primitive number. */
+export function IsNumber(value: unknown): value is number {
+  return typeof value === "number";
+}
+
 let nextArgNumber = 0;
 export function allocateArgNumber() {
   return nextArgNumber++;
