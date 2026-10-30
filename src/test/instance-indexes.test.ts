@@ -14,6 +14,10 @@ import { Schemas } from "../implementations/database/schema";
 import { SelectionQuery } from "../implementations/database/selection";
 import {
   DecodingContext,
+  IsList,
+  IsObject,
+  IsText,
+  IsTextList,
   type QueryStage,
 } from "../implementations/database/utils";
 import {
@@ -128,7 +132,8 @@ function buildTerm(query: Selectable): TermJson {
 }
 
 async function dropDatabase(name: string) {
-  const databases: string[] = await executeTermJson([TermType.DB_LIST, []]);
+  const databases: unknown = await executeTermJson([TermType.DB_LIST, []]);
+  assert.ok(IsTextList(databases));
   if (databases.includes(name)) {
     await executeTermJson([TermType.DB_DROP, [name]]);
   }
@@ -158,20 +163,28 @@ async function createLegacyIndexes() {
   await executeTermJson([TermType.INDEX_CREATE, [table, "tenant_id"]]);
 }
 
+async function legacyIds(selection: TermJson): Promise<string[]> {
+  const documents: unknown = await executeTermJson(selection);
+  assert.ok(IsList(documents));
+  return documents
+    .map((document) => {
+      assert.ok(
+        IsObject(document) && "_id" in document && IsText(document._id),
+      );
+      return document._id;
+    })
+    .sort();
+}
+
 async function legacyScoped(
   tenantId: string,
   selection: TermJson,
 ): Promise<string[]> {
-  return ids(
-    await executeTermJson([
-      TermType.FILTER,
-      [selection, { tenant_id: tenantId }],
-    ]),
-  );
+  return legacyIds([TermType.FILTER, [selection, { tenant_id: tenantId }]]);
 }
 
 async function legacyCross(selection: TermJson): Promise<string[]> {
-  return ids(await executeTermJson(selection));
+  return legacyIds(selection);
 }
 
 function legacyGetAll(index: string, ...keys: TermJson[]): TermJson {
@@ -237,10 +250,11 @@ describe("Instance-prefixed indexes", function () {
 });
 
 async function upgradeLegacyTable() {
-  const indexes: string[] = await executeTermJson([
+  const indexes: unknown = await executeTermJson([
     TermType.INDEX_LIST,
     [table],
   ]);
+  assert.ok(IsTextList(indexes));
   assert.deepEqual(indexes.sort(), [
     "category",
     "category__i",
@@ -252,11 +266,16 @@ async function upgradeLegacyTable() {
     "tags__i",
     "tenant_id",
   ]);
-  const statuses: Array<{ ready: boolean }> = await executeTermJson([
+  const statuses: unknown = await executeTermJson([
     TermType.INDEX_STATUS,
     [table],
   ]);
-  assert.ok(statuses.every((status) => status.ready));
+  assert.ok(IsList(statuses));
+  assert.ok(
+    statuses.every(
+      (status) => IsObject(status) && "ready" in status && status.ready,
+    ),
+  );
 }
 
 async function scopedGetAllTerm() {
@@ -397,10 +416,10 @@ async function crossInstanceDistinct() {
   const items = schema.instance(CROSS_INSTANCE).table(TABLE);
   for (const index of ["status", "status_rank", "tags"] as const) {
     const legacy: TermJson = [TermType.DISTINCT, [table], { index }];
-    assert.deepEqual(
-      sortValues(await items.distinct(index).run()),
-      sortValues(await executeTermJson(legacy)),
-    );
+    const distinct = sortValues(await items.distinct(index).run());
+    const legacyValues: unknown = await executeTermJson(legacy);
+    assert.ok(IsList(legacyValues));
+    assert.deepEqual(distinct, sortValues(legacyValues));
     assert.equal(
       await items.count(index).run(),
       await executeTermJson([TermType.COUNT, [legacy]]),
@@ -485,10 +504,11 @@ async function concurrentInitialization() {
     TermType.TABLE,
     [[TermType.DB, [CONCURRENT_SCHEMA_ID]], TABLE],
   ];
-  const indexes: string[] = await executeTermJson([
+  const indexes: unknown = await executeTermJson([
     TermType.INDEX_LIST,
     [concurrentTable],
   ]);
+  assert.ok(IsTextList(indexes));
   assert.deepEqual(indexes.sort(), [
     "category",
     "category__i",

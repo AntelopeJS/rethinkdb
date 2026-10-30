@@ -1,6 +1,7 @@
 import { r } from "rethinkdb-ts";
 
 import { ExternalDatabaseName } from "../../config";
+import { IsList, IsNumber, IsObject, IsText, IsTextList } from "./utils";
 
 /** One secondary index, with the fields its definition reads when it reads plain fields. */
 export interface IndexFacts {
@@ -34,6 +35,30 @@ interface IndexStatus {
   query: string;
 }
 
+/** Whether `value` is an index's status as `Indexes` maps it: its name, multi flag and definition. */
+function IsIndexStatus(value: unknown): value is IndexStatus {
+  return (
+    IsObject(value) &&
+    "index" in value &&
+    IsText(value.index) &&
+    "multi" in value &&
+    typeof value.multi === "boolean" &&
+    "query" in value &&
+    IsText(value.query)
+  );
+}
+
+/** Whether `value` is one sampled group: a field, a ReQL type and how many rows hold it. */
+function IsSampledGroup(value: unknown): value is [string, string, number] {
+  return (
+    IsList(value) &&
+    value.length === 3 &&
+    IsText(value[0]) &&
+    IsText(value[1]) &&
+    IsNumber(value[2])
+  );
+}
+
 interface TableInfo {
   primary_key?: string;
   doc_count_estimates?: number[];
@@ -44,14 +69,14 @@ const DEFAULT_PRIMARY_KEY = "id";
 const SAMPLE_SIZE = 1000;
 
 /** The uuid shape the server generates, and a uuid-keyed table holds. */
-export const UUID_TEXT_PATTERN =
+const UUID_TEXT_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SINGLE_FIELD = /return \w+\.getField\("([^"]+)"\); \}/;
 const COMPOUND_FIELDS = /return r\.expr\(\[(.*)\]\); \}/;
 const ROW_FIELD = /r\.row\("([^"]+)"\)/g;
 
 /** The fields an index definition reads: one `getField`, or an array of `r.row` fields. */
-export function IndexFields(query: string): string[] {
+function IndexFields(query: string): string[] {
   const single = SINGLE_FIELD.exec(query);
   if (single) {
     return [single[1]];
@@ -74,16 +99,18 @@ export async function Ends(
   name: string,
   primaryKey: string,
 ): Promise<[string, string] | undefined> {
-  const [first]: string[] = await Table(name)
+  const firsts: unknown = await Table(name)
     .orderBy({ index: primaryKey })
     .limit(1)
     .map((row) => row(primaryKey).typeOf())
     .run();
-  const [last]: string[] = await Table(name)
+  const lasts: unknown = await Table(name)
     .orderBy({ index: r.desc(primaryKey) })
     .limit(1)
     .map((row) => row(primaryKey).typeOf())
     .run();
+  const [first] = IsTextList(firsts) ? firsts : [];
+  const [last] = IsTextList(lasts) ? lasts : [];
   return first && last ? [first, last] : undefined;
 }
 
@@ -92,7 +119,7 @@ async function SampleTypes(
   name: string,
   size = SAMPLE_SIZE,
 ): Promise<SampledType[]> {
-  const groups: [string, string, number][] = await Table(name)
+  const groups: unknown = await Table(name)
     .limit(size)
     .concatMap((row) =>
       row.keys().map((key) => ({ f: key, t: row(key).typeOf() })),
@@ -102,14 +129,43 @@ async function SampleTypes(
     .ungroup()
     .map((group) => group("group").append(group("reduction")))
     .run();
-  return groups.map(([field, type, count]) => ({ field, type, count }));
+  return IsList(groups)
+    ? groups
+        .filter(IsSampledGroup)
+        .map(([field, type, count]) => ({ field, type, count }))
+    : [];
 }
 
-async function UuidKeys(name: string, primaryKey: string): Promise<boolean> {
-  const keys: string[] = await Table(name).limit(SAMPLE_SIZE)(primaryKey).run();
+/** Whether the first keys of a table are all uuids, which the server generates on insert. */
+export async function UuidKeys(
+  name: string,
+  primaryKey: string,
+): Promise<boolean> {
+  const keys: unknown = await Table(name).limit(SAMPLE_SIZE)(primaryKey).run();
   return (
-    keys.length > 0 && keys.every((key) => UUID_TEXT_PATTERN.test(String(key)))
+    IsList(keys) &&
+    keys.length > 0 &&
+    keys.every((key) => UUID_TEXT_PATTERN.test(String(key)))
   );
+}
+
+/** A table's secondary indexes, with the fields each definition reads. */
+export async function Indexes(name: string): Promise<IndexFacts[]> {
+  const statuses: unknown = await Table(name)
+    .indexStatus()
+    .map((status) => ({
+      index: status("index"),
+      multi: status("multi"),
+      query: status("query"),
+    }))
+    .run();
+  return IsList(statuses)
+    ? statuses.filter(IsIndexStatus).map((status) => ({
+        name: status.index,
+        fields: IndexFields(status.query),
+        multi: status.multi,
+      }))
+    : [];
 }
 
 /** Reads one table's facts, writing nothing; a table the database lacks fails, naming it. */
@@ -124,14 +180,7 @@ export async function ProbeTable(
   }
   const info: TableInfo = await Table(name).info().run();
   const primaryKey = info.primary_key ?? DEFAULT_PRIMARY_KEY;
-  const statuses: IndexStatus[] = await Table(name)
-    .indexStatus()
-    .map((status) => ({
-      index: status("index"),
-      multi: status("multi"),
-      query: status("query"),
-    }))
-    .run();
+  const indexes = await Indexes(name);
   return {
     name,
     primaryKey,
@@ -139,11 +188,7 @@ export async function ProbeTable(
       (sum, count) => sum + count,
       0,
     ),
-    indexes: statuses.map((status) => ({
-      name: status.index,
-      fields: IndexFields(status.query),
-      multi: status.multi,
-    })),
+    indexes,
     ends: await Ends(name, primaryKey),
     uuidKeys: await UuidKeys(name, primaryKey),
     sample: await SampleTypes(name),

@@ -6,6 +6,7 @@ import { CROSS_INSTANCE } from "@antelopejs/interface-database/schema";
 // oxlint-disable-next-line import/no-cycle -- sub-query building applies stream stages; see expression.ts
 import { applyStreamStages } from "./stream";
 import { executeBounded, executeTermJson } from "../../connection";
+import { IsWriteResult } from "../../write-result";
 // oxlint-disable-next-line import/no-cycle -- the stage handlers build this query's terms
 import { SelectionStageHandlerOf } from "./selection-stages";
 import { ExternalDatabaseName, GetOptions, IsExternal } from "../../config";
@@ -20,7 +21,9 @@ import {
 import {
   allocateArgNumber,
   DecodingContext,
+  IsList,
   IsObject,
+  IsTermJson,
   type QueryStage,
   TENANT_ID_FIELD,
 } from "./utils";
@@ -86,9 +89,9 @@ export class SelectionQuery {
   public resultType: ResultType = "table";
   public isChangeStream = false;
   public singleElement = false;
-  private newValue: any;
+  private newValue: TermJson = null;
   private conflictMode?: "update" | "replace";
-  private insertRawArgs?: any;
+  private insertRawArgs?: QueryStage["args"][number];
   private term: TermJson;
   private readonly tenant: TenantContext;
   private scopedGet = false;
@@ -255,7 +258,7 @@ export class SelectionQuery {
     const timeoutMs = this.external
       ? GetOptions().statementTimeoutMs
       : undefined;
-    const result =
+    const result: unknown =
       timeoutMs === undefined
         ? await executeTermJson(this.term)
         : await executeBounded(this.term, timeoutMs);
@@ -281,28 +284,43 @@ export class SelectionQuery {
       [this.getTableTerm(), value],
       insertOpts,
     ];
-    const result = await executeTermJson(insertTerm);
+    const result: unknown = await executeTermJson(insertTerm);
+    const generatedKeys = IsWriteResult(result)
+      ? (result.generated_keys ?? [])
+      : [];
     if (!this.conflictMode) {
-      return result?.generated_keys ?? [];
+      return generatedKeys;
     }
-    return this.buildConflictInsertKeys(result?.generated_keys ?? []);
+    return this.buildConflictInsertKeys(generatedKeys);
   }
 
-  private buildConflictInsertKeys(generatedKeys: string[]): string[] {
-    const rawDocs = Array.isArray(this.insertRawArgs)
+  private buildConflictInsertKeys(generatedKeys: string[]): unknown[] {
+    const rawDocs: unknown[] = Array.isArray(this.insertRawArgs)
       ? this.insertRawArgs
       : [this.insertRawArgs];
     let genIdx = 0;
-    return rawDocs.map(
-      (doc: any) => doc._id ?? doc.id ?? generatedKeys[genIdx++],
-    );
+    return rawDocs.map((doc) => {
+      if (!IsObject(doc)) {
+        return generatedKeys[genIdx++];
+      }
+      return (
+        ("_id" in doc ? doc._id : undefined) ??
+        ("id" in doc ? doc.id : undefined) ??
+        generatedKeys[genIdx++]
+      );
+    });
   }
 
-  private stampTenantId(value: any, tenantId: string): any {
+  private stampTenantId(value: TermJson, tenantId: string): TermJson {
     if (Array.isArray(value) && value[0] === TermType.MAKE_ARRAY) {
+      const documents: unknown = value[1];
       return [
         TermType.MAKE_ARRAY,
-        value[1].map((doc: any) => this.stampTenantId(doc, tenantId)),
+        IsList(documents)
+          ? documents.map((doc) =>
+              IsTermJson(doc) ? this.stampTenantId(doc, tenantId) : doc,
+            )
+          : documents,
       ];
     }
     if (IsObject(value) && !Array.isArray(value)) {
@@ -421,8 +439,8 @@ export class SelectionQuery {
 
   private async runUpdate() {
     const updateTerm: TermJson = [TermType.UPDATE, [this.term, this.newValue]];
-    const result = await executeTermJson(updateTerm);
-    return result?.replaced ?? 0;
+    const result: unknown = await executeTermJson(updateTerm);
+    return IsWriteResult(result) ? result.replaced : 0;
   }
 
   private async runReplace() {
@@ -435,10 +453,9 @@ export class SelectionQuery {
     const oldDoc: TermJson = [TermType.VAR, [argId]];
     let replaceValue = this.newValue;
     if (this.tenant.kind === "scoped") {
-      replaceValue = {
-        ...replaceValue,
+      replaceValue = Object.assign({}, replaceValue, {
         [TENANT_ID_FIELD]: this.tenant.tenantId,
-      };
+      });
     }
     const merged: TermJson = [
       TermType.MERGE,
@@ -449,21 +466,21 @@ export class SelectionQuery {
       [[TermType.MAKE_ARRAY, [argId]], merged],
     ];
     const replaceTerm: TermJson = [TermType.REPLACE, [this.term, func]];
-    const result = await executeTermJson(replaceTerm);
-    return result?.replaced ?? 0;
+    const result: unknown = await executeTermJson(replaceTerm);
+    return IsWriteResult(result) ? result.replaced : 0;
   }
 
   private async runDelete() {
     const deleteTerm: TermJson = [TermType.DELETE, [this.term]];
-    const result = await executeTermJson(deleteTerm);
-    return result?.deleted ?? 0;
+    const result: unknown = await executeTermJson(deleteTerm);
+    return IsWriteResult(result) ? result.deleted : 0;
   }
 
   public setTerm(term: TermJson) {
     this.term = term;
   }
 
-  public setNewValue(value: any) {
+  public setNewValue(value: TermJson) {
     this.newValue = value;
   }
 
@@ -471,7 +488,7 @@ export class SelectionQuery {
     this.conflictMode = mode;
   }
 
-  public setInsertRawArgs(args: any) {
+  public setInsertRawArgs(args: QueryStage["args"][number]) {
     this.insertRawArgs = args;
   }
 }

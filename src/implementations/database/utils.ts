@@ -1,3 +1,4 @@
+import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import type { StagedObject } from "@antelopejs/interface-database/common";
 
 export const TENANT_ID_FIELD = "tenant_id";
@@ -7,7 +8,7 @@ export const INSTANCE_REGISTRY_FIELD = "instance_id";
 
 export type QueryStage = StagedObject["stages"][number];
 
-export type ArgumentProvider = (subQuery: QueryStage[]) => any;
+export type ArgumentProvider = (subQuery: QueryStage[]) => TermJson;
 
 /** Whether `value` is a non-null object, arrays included. */
 export function IsObject(value: unknown): value is object {
@@ -22,6 +23,24 @@ export function IsText(value: unknown): value is string {
 /** Whether `value` is a primitive number. */
 export function IsNumber(value: unknown): value is number {
   return typeof value === "number";
+}
+
+/** Whether `value` is a list. */
+export function IsList(value: unknown): value is unknown[] {
+  return Array.isArray(value);
+}
+
+/** Whether `value` is a term: null, a primitive string, number or boolean, or an object. */
+export function IsTermJson(value: unknown): value is TermJson {
+  return (
+    value === null ||
+    ["string", "number", "boolean", "object"].includes(typeof value)
+  );
+}
+
+/** Whether `value` is a list of primitive strings. */
+export function IsTextList(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every(IsText);
 }
 
 let nextArgNumber = 0;

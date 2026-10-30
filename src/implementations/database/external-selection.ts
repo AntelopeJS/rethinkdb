@@ -7,7 +7,7 @@ import { ExternalDatabaseName, GetOptions } from "../../config";
 import type { ExternalTable, KeyClass } from "./external-descriptor";
 import { Func, KeyExpression, KeyValue, Normalized } from "./external-read";
 import { FindIndex, GetExternalTable } from "./schema";
-import { IsText, type QueryStage } from "./utils";
+import { IsText, IsTextList, type QueryStage } from "./utils";
 
 const ID_FIELD = "_id";
 const UNSCOPED_INSTANCES: readonly (string | symbol | undefined)[] = [
@@ -96,14 +96,17 @@ export class ExternalReads {
       [selected, Func((row) => [TermType.BRACKET, [row, ID_FIELD]])],
     ];
     const timeoutMs = GetOptions().statementTimeoutMs;
-    const ids: string[] =
+    const ids: unknown =
       timeoutMs === undefined
         ? await executeTermJson(read)
         : await executeBounded(read, timeoutMs);
     const key = this.requireKey();
     return [
       TermType.GET_ALL,
-      [this.tableTerm(), ...ids.map((id) => KeyValue(key, id))],
+      [
+        this.tableTerm(),
+        ...(IsTextList(ids) ? ids : []).map((id) => KeyValue(key, id)),
+      ],
     ];
   }
 
