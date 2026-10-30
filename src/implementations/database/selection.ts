@@ -6,6 +6,7 @@ import { CROSS_INSTANCE } from "@antelopejs/interface-database/schema";
 // oxlint-disable-next-line import/no-cycle -- sub-query building applies stream stages; see expression.ts
 import { applyStreamStages } from "./stream";
 import { executeBounded, executeTermJson } from "../../connection";
+import { IsWriteResult } from "../../write-result";
 // oxlint-disable-next-line import/no-cycle -- the stage handlers build this query's terms
 import { SelectionStageHandlerOf } from "./selection-stages";
 import { ExternalDatabaseName, GetOptions, IsExternal } from "../../config";
@@ -255,7 +256,7 @@ export class SelectionQuery {
     const timeoutMs = this.external
       ? GetOptions().statementTimeoutMs
       : undefined;
-    const result =
+    const result: unknown =
       timeoutMs === undefined
         ? await executeTermJson(this.term)
         : await executeBounded(this.term, timeoutMs);
@@ -281,11 +282,14 @@ export class SelectionQuery {
       [this.getTableTerm(), value],
       insertOpts,
     ];
-    const result = await executeTermJson(insertTerm);
+    const result: unknown = await executeTermJson(insertTerm);
+    const generatedKeys = IsWriteResult(result)
+      ? (result.generated_keys ?? [])
+      : [];
     if (!this.conflictMode) {
-      return result?.generated_keys ?? [];
+      return generatedKeys;
     }
-    return this.buildConflictInsertKeys(result?.generated_keys ?? []);
+    return this.buildConflictInsertKeys(generatedKeys);
   }
 
   private buildConflictInsertKeys(generatedKeys: string[]): string[] {
@@ -421,8 +425,8 @@ export class SelectionQuery {
 
   private async runUpdate() {
     const updateTerm: TermJson = [TermType.UPDATE, [this.term, this.newValue]];
-    const result = await executeTermJson(updateTerm);
-    return result?.replaced ?? 0;
+    const result: unknown = await executeTermJson(updateTerm);
+    return IsWriteResult(result) ? result.replaced : 0;
   }
 
   private async runReplace() {
@@ -449,14 +453,14 @@ export class SelectionQuery {
       [[TermType.MAKE_ARRAY, [argId]], merged],
     ];
     const replaceTerm: TermJson = [TermType.REPLACE, [this.term, func]];
-    const result = await executeTermJson(replaceTerm);
-    return result?.replaced ?? 0;
+    const result: unknown = await executeTermJson(replaceTerm);
+    return IsWriteResult(result) ? result.replaced : 0;
   }
 
   private async runDelete() {
     const deleteTerm: TermJson = [TermType.DELETE, [this.term]];
-    const result = await executeTermJson(deleteTerm);
-    return result?.deleted ?? 0;
+    const result: unknown = await executeTermJson(deleteTerm);
+    return IsWriteResult(result) ? result.deleted : 0;
   }
 
   public setTerm(term: TermJson) {

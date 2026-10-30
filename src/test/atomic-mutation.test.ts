@@ -291,7 +291,12 @@ async function classifyErrors() {
   }
   mockSchemaExecution(async (term: TermJson) => {
     validateWriteResult(term, {
+      inserted: 0,
+      replaced: 0,
+      unchanged: 0,
       errors: 1,
+      deleted: 0,
+      skipped: 0,
       first_error: "Untyped write failure",
     });
   });

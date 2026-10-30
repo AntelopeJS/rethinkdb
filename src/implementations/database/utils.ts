@@ -25,6 +25,11 @@ export function IsNumber(value: unknown): value is number {
   return typeof value === "number";
 }
 
+/** Whether `value` is a list of primitive strings. */
+export function IsTextList(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every(IsText);
+}
+
 let nextArgNumber = 0;
 export function allocateArgNumber() {
   return nextArgNumber++;

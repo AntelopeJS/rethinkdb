@@ -7,6 +7,7 @@ import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 
 import { GetOptions } from "../../config";
 import { executeBounded, executeTermJson } from "../../connection";
+import { IsWriteResult } from "../../write-result";
 import type {
   ExternalTable,
   FieldDescriptor,
@@ -400,7 +401,7 @@ async function Insert(
       : { ...payload.fields, [table.primaryKey]: payload.key };
   });
   const options = conflict ? { conflict: ConflictMerge(table, conflict) } : {};
-  const result = await executeTermJson([
+  const result: unknown = await executeTermJson([
     TermType.INSERT,
     [TableTerm(database, table), [TermType.MAKE_ARRAY, documents]],
     options,
@@ -409,7 +410,9 @@ async function Insert(
       ? new DuplicateKeyError(table.primaryKey, [table.primaryKey])
       : error;
   });
-  const generated: TermJson[] = [...(result?.generated_keys ?? [])];
+  const generated: TermJson[] = IsWriteResult(result)
+    ? [...(result.generated_keys ?? [])]
+    : [];
   return documents.map((document) => {
     const stored = document[table.primaryKey] ?? generated.shift() ?? null;
     return key === "array"
@@ -474,9 +477,11 @@ async function Run(
     return Insert(database, table, [write.value].flat(), write.conflict);
   }
   if (write.kind === "delete") {
-    return (
-      (await executeTermJson([TermType.DELETE, [write.target]]))?.deleted ?? 0
-    );
+    const deleted: unknown = await executeTermJson([
+      TermType.DELETE,
+      [write.target],
+    ]);
+    return IsWriteResult(deleted) ? deleted.deleted : 0;
   }
   const [value] = [write.value].flat();
   const payload = Split(
@@ -489,18 +494,22 @@ async function Run(
       ? await Pinned(database, table, write.target)
       : write.target;
   const target = KeyedTarget(table, selected, payload.key);
-  const updated = await executeTermJson([
+  const updated: unknown = await executeTermJson([
     TermType.UPDATE,
     [target, GuardedUpdate(payload)],
   ]);
+  const replaced = IsWriteResult(updated) ? updated.replaced : 0;
   if (payload.removed.length === 0) {
-    return updated?.replaced ?? 0;
+    return replaced;
   }
   const removals = Object.fromEntries(
     payload.removed.map((field) => [field, [TermType.LITERAL, []]]),
   );
-  const removed = await executeTermJson([TermType.UPDATE, [target, removals]]);
-  return Math.max(updated?.replaced ?? 0, removed?.replaced ?? 0);
+  const removed: unknown = await executeTermJson([
+    TermType.UPDATE,
+    [target, removals],
+  ]);
+  return Math.max(replaced, IsWriteResult(removed) ? removed.replaced : 0);
 }
 
 /**

@@ -13,6 +13,7 @@ import {
 } from "@antelopejs/interface-database/atomic";
 
 import { executeTermJson } from "../../connection";
+import { IsWriteResult, type WriteResult } from "../../write-result";
 import { allocateArgNumber, TENANT_ID_FIELD } from "./utils";
 
 const DEFINITIVE_ERRORS = new Set([
@@ -23,7 +24,7 @@ const DEFINITIVE_ERRORS = new Set([
   RethinkDBErrorType.NON_EXISTENCE,
   RethinkDBErrorType.PERMISSION_ERROR,
 ]);
-const WRITE_COUNTS = ["replaced", "deleted", "unchanged", "skipped"];
+const WRITE_COUNTS = ["replaced", "deleted", "unchanged", "skipped"] as const;
 
 function compiledTerm(value: Parameters<typeof r.expr>[0]): TermJson {
   const datum = r.expr(value);
@@ -44,7 +45,8 @@ export async function runAtomicMutation<T>(
   ValidateAtomicMutation(key, request, [TENANT_ID_FIELD]);
   const term = buildAtomicTerm(table, tenantId, key, request);
   try {
-    return mutationOutcome(await executeTermJson(term));
+    const result: unknown = await executeTermJson(term);
+    return IsWriteResult(result) ? mutationOutcome(result) : "unknown";
   } catch (error) {
     if (isRethinkDBError(error) && DEFINITIVE_ERRORS.has(error.type)) {
       throw error;
@@ -130,10 +132,10 @@ function fieldEquals(
   ];
 }
 
-function mutationOutcome(result: any): AtomicMutationOutcome {
+function mutationOutcome(result: WriteResult): AtomicMutationOutcome {
   if (
-    result?.errors !== 0 ||
-    result?.inserted !== 0 ||
+    result.errors !== 0 ||
+    result.inserted !== 0 ||
     !WRITE_COUNTS.every(
       (field) => Number.isInteger(result[field]) && result[field] >= 0,
     ) ||

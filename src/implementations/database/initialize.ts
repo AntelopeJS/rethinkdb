@@ -14,7 +14,11 @@ import type {
 import { Logger } from "../../utils/logger";
 import { executeTermJson } from "../../connection";
 import { buildIndexCreations } from "./indexes";
-import { INSTANCE_REGISTRY_TABLE, PRIMARY_KEY_FIELD } from "./utils";
+import {
+  INSTANCE_REGISTRY_TABLE,
+  IsTextList,
+  PRIMARY_KEY_FIELD,
+} from "./utils";
 
 const ALREADY_EXISTS_PATTERN = /already exists/;
 const INITIALIZATION_ATTEMPTS = 5;
@@ -39,7 +43,8 @@ async function createIfMissing(term: TermJson) {
 }
 
 async function listNames(term: TermJson): Promise<string[]> {
-  return (await executeTermJson(term)) ?? [];
+  const names: unknown = await executeTermJson(term);
+  return IsTextList(names) ? names : [];
 }
 
 export async function ensureDatabase(dbName: string) {
