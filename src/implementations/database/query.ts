@@ -54,33 +54,42 @@ const EXTERNAL_LIFECYCLE_HANDLERS = new Map<string, SchemaStageHandler>([
   ["listInstances", () => Promise.resolve([])],
 ]);
 
-const SCHEMA_STAGE_HANDLERS: Record<string, SchemaStageHandler> = {
-  instance: async (schemaId, stages): Promise<any> => {
-    await WaitForSchemaReady(schemaId);
-    if (stages.some((stage) => stage.stage === "atomicMutation")) {
-      if (IsExternal()) {
-        const table = stages[2];
-        throw ExternalAtomicRefusal(
-          IsQueryStage(table, "table") ? table.options.id : undefined,
-        );
+const SCHEMA_STAGE_HANDLERS = new Map<string, SchemaStageHandler>([
+  [
+    "instance",
+    async (schemaId, stages): Promise<any> => {
+      await WaitForSchemaReady(schemaId);
+      if (stages.some((stage) => stage.stage === "atomicMutation")) {
+        if (IsExternal()) {
+          const table = stages[2];
+          throw ExternalAtomicRefusal(
+            IsQueryStage(table, "table") ? table.options.id : undefined,
+          );
+        }
+        return runAtomicStages(stages);
       }
-      return runAtomicStages(stages);
-    }
-    const context = new DecodingContext();
-    return SelectionQuery.decode(stages, context).run();
-  },
-  createInstance: (schemaId, stages) =>
-    CreateInstance(
-      schemaId,
-      StageNamed(stages[1], "createInstance").options?.id,
-    ),
-  destroyInstance: (schemaId, stages) =>
-    DestroyInstance(
-      schemaId,
-      StageNamed(stages[1], "destroyInstance").options?.id,
-    ),
-  listInstances: (schemaId) => ListInstances(schemaId),
-};
+      const context = new DecodingContext();
+      return SelectionQuery.decode(stages, context).run();
+    },
+  ],
+  [
+    "createInstance",
+    (schemaId, stages) =>
+      CreateInstance(
+        schemaId,
+        StageNamed(stages[1], "createInstance").options?.id,
+      ),
+  ],
+  [
+    "destroyInstance",
+    (schemaId, stages) =>
+      DestroyInstance(
+        schemaId,
+        StageNamed(stages[1], "destroyInstance").options?.id,
+      ),
+  ],
+  ["listInstances", (schemaId) => ListInstances(schemaId)],
+]);
 
 export async function RunQuery(stages: QueryStage[]): Promise<any> {
   assert(stages[0]?.stage === "schema", "Expected schema stage");
@@ -90,7 +99,8 @@ export async function RunQuery(stages: QueryStage[]): Promise<any> {
   const next = stages[1]?.stage;
   const external =
     IsExternal() && next ? EXTERNAL_LIFECYCLE_HANDLERS.get(next) : undefined;
-  const handler = external ?? (next ? SCHEMA_STAGE_HANDLERS[next] : undefined);
+  const handler =
+    external ?? (next ? SCHEMA_STAGE_HANDLERS.get(next) : undefined);
   assert(handler, `Unknown schema stage '${next}'`);
   return handler(schemaId, stages);
 }
