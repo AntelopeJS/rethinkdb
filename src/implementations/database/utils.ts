@@ -1,12 +1,36 @@
+import assert from "node:assert";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
-import type { StagedObject } from "@antelopejs/interface-database/common";
+import {
+  IsQueryStage,
+  type QueryStage,
+  type QueryStageName,
+} from "@antelopejs/interface-database/common";
 
 export const TENANT_ID_FIELD = "tenant_id";
 export const PRIMARY_KEY_FIELD = "_id";
 export const INSTANCE_REGISTRY_TABLE = "__instances__";
 export const INSTANCE_REGISTRY_FIELD = "instance_id";
 
-export type QueryStage = StagedObject["stages"][number];
+export type { QueryStage };
+
+/** The stage a handler registered under `name` runs for, typed by that name. */
+export function StageNamed<Name extends QueryStageName>(
+  stage: QueryStage | undefined,
+  name: Name,
+): Extract<QueryStage, { stage: Name }> {
+  assert(IsQueryStage(stage, name), `Expected a ${name} stage`);
+  return stage;
+}
+
+/**
+ * Tells whether an `update` argument records a function of the row rather than a document: an
+ * object whose `stage` reads "func", which is how the adapter tells them apart.
+ */
+export function IsUpdateFunction(
+  value: QueryStage<"update">["args"][0],
+): value is QueryStage<"func"> {
+  return value instanceof Object && "stage" in value && value.stage === "func";
+}
 
 export type ArgumentProvider = (subQuery: QueryStage[]) => TermJson;
 

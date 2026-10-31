@@ -2,6 +2,7 @@ import assert from "node:assert";
 import type { Cursor } from "rethinkdb-ts/lib/response/cursor";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import { ValidateAtomicMutationTable } from "@antelopejs/interface-database/atomic";
+import { IsQueryStage } from "@antelopejs/interface-database/common";
 import { CROSS_INSTANCE } from "@antelopejs/interface-database/schema";
 
 import { Logger } from "../../utils/logger";
@@ -17,7 +18,12 @@ import {
   ExternalInstanceRefusal,
 } from "./external-selection";
 import { runAtomicMutation } from "./atomic";
-import { DecodingContext, IsObject, type QueryStage } from "./utils";
+import {
+  DecodingContext,
+  IsObject,
+  type QueryStage,
+  StageNamed,
+} from "./utils";
 import {
   CreateInstance,
   DestroyInstance,
@@ -55,7 +61,10 @@ const SCHEMA_STAGE_HANDLERS = new Map<string, SchemaStageHandler>([
       await WaitForSchemaReady(schemaId);
       if (stages.some((stage) => stage.stage === "atomicMutation")) {
         if (IsExternal()) {
-          throw ExternalAtomicRefusal(stages[2]?.options?.id);
+          const table = stages[2];
+          throw ExternalAtomicRefusal(
+            IsQueryStage(table, "table") ? table.options.id : undefined,
+          );
         }
         return runAtomicStages(stages);
       }
@@ -65,11 +74,19 @@ const SCHEMA_STAGE_HANDLERS = new Map<string, SchemaStageHandler>([
   ],
   [
     "createInstance",
-    (schemaId, stages) => CreateInstance(schemaId, stages[1]?.options?.id),
+    (schemaId, stages) =>
+      CreateInstance(
+        schemaId,
+        StageNamed(stages[1], "createInstance").options?.id,
+      ),
   ],
   [
     "destroyInstance",
-    (schemaId, stages) => DestroyInstance(schemaId, stages[1]?.options?.id),
+    (schemaId, stages) =>
+      DestroyInstance(
+        schemaId,
+        StageNamed(stages[1], "destroyInstance").options?.id,
+      ),
   ],
   ["listInstances", (schemaId) => ListInstances(schemaId)],
 ]);

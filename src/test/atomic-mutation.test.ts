@@ -15,22 +15,22 @@ import { validateWriteResult } from "../write-result";
 import { RunQuery } from "../implementations/database/query";
 import type { QueryStage } from "../implementations/database/utils";
 
-interface NestedFields {
+type NestedFields = {
   removed?: boolean;
   retained: string;
   stage?: string;
   args?: string[];
   date?: Date;
-}
+};
 
-interface AtomicRecord {
+type AtomicRecord = {
   _id: string;
   revision?: string | null;
   value: string;
   nested?: NestedFields;
   tenant_id?: string;
   equal?: AtomicEqualityValue | null;
-}
+};
 
 type Execute = typeof connection.executeTermJson;
 
@@ -330,8 +330,16 @@ async function rejectStages() {
   const fault = mockSchemaExecution(async () => {
     throw new Error("Must not send");
   });
-  await assert.rejects(RunQuery([...prefix, { ...terminal, options: {} }]));
-  await assert.rejects(RunQuery([...prefix, { ...terminal, args: [] }]));
+  await assert.rejects(
+    // @ts-expect-error options on an atomicMutation stage, which RunQuery refuses as one without options
+    RunQuery([...prefix, { ...terminal, options: {} }]),
+    /Atomic mutation requires one key and request without options/,
+  );
+  await assert.rejects(
+    // @ts-expect-error an atomicMutation stage with no arguments, which RunQuery refuses for lacking its key and request
+    RunQuery([...prefix, { ...terminal, args: [] }]),
+    /Atomic mutation requires one key and request without options/,
+  );
   await assert.rejects(
     RunQuery([...prefix, { stage: "get", args: ["id"] }, terminal]),
   );

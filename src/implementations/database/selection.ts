@@ -11,7 +11,7 @@ import { IsWriteResult } from "../../write-result";
 import { SelectionStageHandlerOf } from "./selection-stages";
 import { ExternalDatabaseName, GetOptions, IsExternal } from "../../config";
 import { ExternalReads } from "./external-selection";
-import { RunExternalWrite } from "./external-writes";
+import { type ExternalWrite, RunExternalWrite } from "./external-writes";
 import { FindIndex, IsValidInstance, WaitForSchemaReady } from "./schema";
 import {
   buildIndexedRead,
@@ -91,7 +91,9 @@ export class SelectionQuery {
   public singleElement = false;
   private newValue: TermJson = null;
   private conflictMode?: "update" | "replace";
-  private insertRawArgs?: QueryStage["args"][number];
+  private insertRawArgs?: QueryStage<
+    "insert" | "update" | "replace"
+  >["args"][0];
   private term: TermJson;
   private readonly tenant: TenantContext;
   private scopedGet = false;
@@ -244,7 +246,7 @@ export class SelectionQuery {
       if (this.external) {
         return RunExternalWrite(this.database, this.external.table, {
           kind: resultType,
-          value: this.insertRawArgs,
+          value: this.insertRawArgs as ExternalWrite["value"],
           target: await this.external.writeTarget(
             this.streamStages.length > 0 ? this.term : undefined,
             this.rawTarget ?? this.term,
@@ -488,7 +490,9 @@ export class SelectionQuery {
     this.conflictMode = mode;
   }
 
-  public setInsertRawArgs(args: QueryStage["args"][number]) {
+  public setInsertRawArgs(
+    args: QueryStage<"insert" | "update" | "replace">["args"][0],
+  ) {
     this.insertRawArgs = args;
   }
 }
