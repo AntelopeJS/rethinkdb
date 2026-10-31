@@ -92,6 +92,7 @@ async function hydrateInstances(schemaId: string) {
     TermType.TABLE,
     [[TermType.DB, [schemaId]], INSTANCE_REGISTRY_TABLE],
   ];
+  // oxlint-disable-next-line typescript/no-unsafe-assignment -- executeTermJson answers the any of rethinkdb-ts's Cursor.toArray(); only CreateInstance writes these rows as { _id, instance_id }, and typing the answer unknown moves the row to no-unknown-returns while a read-side parse of stored rows is refused
   const rows: Array<{ _id: string; instance_id: string }> =
     (await executeTermJson(table)) ?? [];
   const set = new Set<string>();

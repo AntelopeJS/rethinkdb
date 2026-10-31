@@ -1,6 +1,7 @@
 {
   "rules": {
-    "import/no-cycle": 6
+    "import/no-cycle": 6,
+    "typescript/no-unsafe-assignment": 1
   },
   "tsExpectError": 10,
   "tsIgnore": 0,
