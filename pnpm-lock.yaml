@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  '@antelopejs/interface-database': file:.campaign/tgz/antelopejs-interface-database-beb5f5b.tgz
+  '@antelopejs/interface-database': file:.campaign/tgz/antelopejs-interface-database-4939b45.tgz
 
 importers:
 
@@ -15,8 +15,8 @@ importers:
         specifier: '>=0.2.4 <1.0.0'
         version: 0.2.4
       '@antelopejs/interface-database':
-        specifier: file:.campaign/tgz/antelopejs-interface-database-beb5f5b.tgz
-        version: file:.campaign/tgz/antelopejs-interface-database-beb5f5b.tgz(@antelopejs/interface-core@0.2.4)
+        specifier: file:.campaign/tgz/antelopejs-interface-database-4939b45.tgz
+        version: file:.campaign/tgz/antelopejs-interface-database-4939b45.tgz(@antelopejs/interface-core@0.2.4)
       '@antelopejs/interface-database-catalog':
         specifier: '>=0.0.3 <0.1.0'
         version: 0.0.3(@antelopejs/interface-core@0.2.4)
@@ -98,8 +98,8 @@ packages:
     peerDependencies:
       '@antelopejs/interface-core': '>=0.2.4 <1.0.0'
 
-  '@antelopejs/interface-database@file:.campaign/tgz/antelopejs-interface-database-beb5f5b.tgz':
-    resolution: {integrity: sha512-bdfYinyDzxENCig8AQ9Pmroc4E4SmVfRJ9q6xYWmlq0h57w0KO6rZKUyOfCKa3DEhixQ9SqWxH9Uh0VGsa0SgA==, tarball: file:.campaign/tgz/antelopejs-interface-database-beb5f5b.tgz}
+  '@antelopejs/interface-database@file:.campaign/tgz/antelopejs-interface-database-4939b45.tgz':
+    resolution: {integrity: sha512-VRmwQxfTXl2gQgbjk1HM3I/BYXxJktwWMcecpF4DX6IBHEg9kKgNbrButI73lL0wlnq0m3ncXDSpQzZ2S+3cnw==, tarball: file:.campaign/tgz/antelopejs-interface-database-4939b45.tgz}
     version: 0.3.0
     peerDependencies:
       '@antelopejs/interface-core': '>=0.2.4 <1.0.0'
@@ -2622,7 +2622,7 @@ snapshots:
     dependencies:
       '@antelopejs/interface-core': 0.2.4
 
-  '@antelopejs/interface-database@file:.campaign/tgz/antelopejs-interface-database-beb5f5b.tgz(@antelopejs/interface-core@0.2.4)':
+  '@antelopejs/interface-database@file:.campaign/tgz/antelopejs-interface-database-4939b45.tgz(@antelopejs/interface-core@0.2.4)':
     dependencies:
       '@antelopejs/interface-core': 0.2.4
 
