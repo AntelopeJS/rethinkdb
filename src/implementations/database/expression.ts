@@ -29,7 +29,6 @@ const SIMPLE_STAGE_MAP = new Map<string, number>([
   ["not", TermType.NOT],
   ["eq", TermType.EQ],
   ["ne", TermType.NE],
-  ["add", TermType.ADD],
   ["sub", TermType.SUB],
   ["mul", TermType.MUL],
   ["div", TermType.DIV],
@@ -70,10 +69,64 @@ const SIMPLE_STAGE_MAP = new Map<string, number>([
   ["date_minutes", TermType.MINUTES],
   ["date_seconds", TermType.SECONDS],
   ["date_epoch", TermType.TO_EPOCH_TIME],
-  ["date_during", TermType.DURING],
 ]);
 
+const MILLISECONDS_PER_SECOND = 1000;
+
+/** `ADD` refuses a null, which the contract answers null for, and only the server knows an expression's value. */
+function AddTerm(value: TermJson, operand: TermJson): TermJson {
+  if (operand === null) {
+    return null;
+  }
+  const sum: TermJson = [TermType.ADD, [value, operand]];
+  return Array.isArray(operand)
+    ? [TermType.BRANCH, [[TermType.EQ, [operand, null]], null, sum]]
+    : sum;
+}
+
+/** A bound of `during` as a time: a number is milliseconds since the UNIX epoch, as `new Date(n)` reads it. */
+function DuringBound(bound: TermJson): TermJson {
+  const time: TermJson = [
+    TermType.EPOCH_TIME,
+    [[TermType.DIV, [bound, MILLISECONDS_PER_SECOND]]],
+  ];
+  if (Array.isArray(bound)) {
+    return [
+      TermType.BRANCH,
+      [[TermType.EQ, [[TermType.TYPE_OF, [bound]], "NUMBER"]], time, bound],
+    ];
+  }
+  return Number.isFinite(bound) ? time : bound;
+}
+
+/** ReQL filters keep everything but false and null, where the contract rejects a 0 too. */
+function FilterBody(body: TermJson): TermJson {
+  const argId = allocateArgNumber();
+  const result: TermJson = [TermType.VAR, [argId]];
+  return [
+    TermType.FUNCALL,
+    [
+      [
+        TermType.FUNC,
+        [
+          [TermType.MAKE_ARRAY, [argId]],
+          [TermType.AND, [result, [TermType.NE, [result, 0]]]],
+        ],
+      ],
+      body,
+    ],
+  ];
+}
+
 const COMPLEX_STAGE_MAP = new Map<string, StageHandler>([
+  ["add", (expr, operand: TermJson) => AddTerm(expr.value, operand)],
+  [
+    "date_during",
+    (expr, low: TermJson, high: TermJson) => [
+      TermType.DURING,
+      [expr.value, DuringBound(low), DuringBound(high)],
+    ],
+  ],
   [
     "arg",
     (expr, num: number) => {
@@ -180,7 +233,7 @@ const FUNC_STAGE_MAP = new Map<string, FuncStageHandler>([
       const [func] = StageNamed(stage, "arr_filter").args;
       const argId = allocateArgNumber();
       const row: TermJson = [TermType.VAR, [argId]];
-      const body = DecodeFunction(func, expr.context, [row]);
+      const body = FilterBody(DecodeFunction(func, expr.context, [row]));
       return [
         TermType.FILTER,
         [expr.value, [TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], body]]],

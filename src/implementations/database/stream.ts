@@ -50,10 +50,10 @@ const STREAM_STAGE_MAP = new Map<string, StreamStageHandler>([
   ["slice", handleSlice],
   ["nth", handleNth],
   ["count", handleCount],
-  ["sum", handleSum],
-  ["avg", handleAvg],
-  ["min", handleMin],
-  ["max", handleMax],
+  ["sum", handleFieldReduction("sum", TermType.SUM)],
+  ["avg", handleFieldReduction("avg", TermType.AVG)],
+  ["min", handleFieldExtreme("min", TermType.MIN)],
+  ["max", handleFieldExtreme("max", TermType.MAX)],
   ["distinct", handleDistinct],
 ]);
 
@@ -95,9 +95,16 @@ function handleChanges(prev: TermJson): TermJson {
   return [TermType.CHANGES, [prev]];
 }
 
-function handleKey(prev: TermJson, stage: QueryStage): TermJson {
+function handleKey(
+  prev: TermJson,
+  stage: QueryStage,
+  context: DecodingContext,
+): TermJson {
   const [fieldName, defaultValue] = StageNamed(stage, "key").args;
-  const bracket: TermJson = [TermType.BRACKET, [prev, fieldName]];
+  const bracket: TermJson = [
+    TermType.BRACKET,
+    [prev, DecodeValue(fieldName, context)],
+  ];
   if (defaultValue !== undefined) {
     return [TermType.DEFAULT, [bracket, defaultValue]];
   }
@@ -525,36 +532,26 @@ function handleCount(
   ];
 }
 
-function handleSum(prev: TermJson, stage: QueryStage): TermJson {
-  const field = StageNamed(stage, "sum").options?.field;
-  if (field) {
-    return [TermType.SUM, [prev, field]];
-  }
-  return [TermType.SUM, [prev]];
+function handleFieldReduction(
+  name: "sum" | "avg",
+  term: number,
+): StreamStageHandler {
+  return (prev, stage) => {
+    const field = StageNamed(stage, name).options?.field;
+    return field ? [term, [prev, field]] : [term, [prev]];
+  };
 }
 
-function handleAvg(prev: TermJson, stage: QueryStage): TermJson {
-  const field = StageNamed(stage, "avg").options?.field;
-  if (field) {
-    return [TermType.AVG, [prev, field]];
-  }
-  return [TermType.AVG, [prev]];
-}
-
-function handleMin(prev: TermJson, stage: QueryStage): TermJson {
-  const field = StageNamed(stage, "min").options?.field;
-  if (field) {
-    return [TermType.BRACKET, [[TermType.MIN, [prev, field]], field]];
-  }
-  return [TermType.MIN, [prev]];
-}
-
-function handleMax(prev: TermJson, stage: QueryStage): TermJson {
-  const field = StageNamed(stage, "max").options?.field;
-  if (field) {
-    return [TermType.BRACKET, [[TermType.MAX, [prev, field]], field]];
-  }
-  return [TermType.MAX, [prev]];
+function handleFieldExtreme(
+  name: "min" | "max",
+  term: number,
+): StreamStageHandler {
+  return (prev, stage) => {
+    const field = StageNamed(stage, name).options?.field;
+    return field
+      ? [TermType.BRACKET, [[term, [prev, field]], field]]
+      : [term, [prev]];
+  };
 }
 
 function handleDistinct(
