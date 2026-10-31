@@ -331,14 +331,14 @@ async function rejectStages() {
     throw new Error("Must not send");
   });
   await assert.rejects(
-    RunQuery(
-      JSON.parse(JSON.stringify([...prefix, { ...terminal, options: {} }])),
-    ),
+    // @ts-expect-error options on an atomicMutation stage, which RunQuery refuses as one without options
+    RunQuery([...prefix, { ...terminal, options: {} }]),
+    /Atomic mutation requires one key and request without options/,
   );
   await assert.rejects(
-    RunQuery(
-      JSON.parse(JSON.stringify([...prefix, { ...terminal, args: [] }])),
-    ),
+    // @ts-expect-error an atomicMutation stage with no arguments, which RunQuery refuses for lacking its key and request
+    RunQuery([...prefix, { ...terminal, args: [] }]),
+    /Atomic mutation requires one key and request without options/,
   );
   await assert.rejects(
     RunQuery([...prefix, { stage: "get", args: ["id"] }, terminal]),
