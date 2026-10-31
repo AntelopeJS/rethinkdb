@@ -20,9 +20,13 @@ function Rows() {
   return schema.instance(INSTANCE).table("rows");
 }
 
-/** An `add` stage as a route rebuilds it from a request's JSON: any number of operands, read after `receiver`. */
-function JsonAdd(receiver: ValueProxy<number>, args: (number | string)[]) {
-  const rebuilt: unknown = JSON.parse(JSON.stringify({ stage: "add", args }));
+/** A stage as a route rebuilds it from a request's JSON: any number of arguments, read after `receiver`. */
+function JsonStage(
+  receiver: ValueProxy<number>,
+  stage: "add" | "date_during",
+  args: (number | string)[],
+) {
+  const rebuilt: unknown = JSON.parse(JSON.stringify({ stage, args }));
   return Object.assign(
     new ValueProxy<number>(QueryStage("add", undefined, null), receiver),
     { stages: [...receiver.build(), rebuilt] },
@@ -42,8 +46,8 @@ describe("the operations a caller reaches past the contract, with a JSON stage",
   it("add sends every operand of a hand-written JSON stage", async () => {
     assert.deepEqual(
       await Rows().map((row) => ({
-        two: JsonAdd(row.key("age"), [1, 2]),
-        text: JsonAdd(row.key("name").cast<number>(), ["x", "y"]),
+        two: JsonStage(row.key("age"), "add", [1, 2]),
+        text: JsonStage(row.key("name").cast<number>(), "add", ["x", "y"]),
       })),
       [{ two: 39, text: "adaxy" }],
     );
@@ -51,8 +55,19 @@ describe("the operations a caller reaches past the contract, with a JSON stage",
 
   it("add answers its receiver for a hand-written JSON stage with no operand", async () => {
     assert.deepEqual(
-      await Rows().map((row) => JsonAdd(row.key("age"), [])),
+      await Rows().map((row) => JsonStage(row.key("age"), "add", [])),
       [36],
     );
+  });
+
+  it("during refuses a hand-written JSON stage without exactly two bounds", async () => {
+    for (const bounds of [[0], [0, 10_000, 5]]) {
+      await assert.rejects(
+        Rows()
+          .map((row) => JsonStage(row.key("age"), "date_during", bounds))
+          .run(),
+        /Expected 3 arguments/,
+      );
+    }
   });
 });
