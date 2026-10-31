@@ -11,6 +11,7 @@ import {
   type DecodingContext,
   IsObject,
   type QueryStage,
+  StageNamed,
 } from "./utils";
 
 type StageHandler = (expr: ExpressionBuilder, ...args: any[]) => TermJson;
@@ -18,7 +19,7 @@ type StageHandler = (expr: ExpressionBuilder, ...args: any[]) => TermJson;
 interface ExpressionBuilder {
   value: TermJson;
   context: DecodingContext;
-  options?: QueryStage["options"];
+  stage?: QueryStage;
 }
 
 const SIMPLE_STAGE_MAP: Record<string, number> = {
@@ -86,10 +87,11 @@ const COMPLEX_STAGE_MAP: Record<string, StageHandler> = {
     [expr.value, timezone],
   ],
   str_split: (expr) => {
-    const sep = expr.options?.separator ?? " ";
+    const { options } = StageNamed(expr.stage, "str_split");
+    const sep = options?.separator ?? " ";
     const result: TermJson = [TermType.SPLIT, [expr.value, sep]];
-    if (expr.options?.maxSplits) {
-      return [TermType.SLICE, [result, 0, expr.options.maxSplits]];
+    if (options?.maxSplits) {
+      return [TermType.SLICE, [result, 0, options.maxSplits]];
     }
     return result;
   },
@@ -145,11 +147,11 @@ type FuncStageHandler = (
 
 const FUNC_STAGE_MAP: Record<string, FuncStageHandler> = {
   obj_has: (expr, stage) => {
-    const fields = stage.args[0] as string[];
+    const [fields] = StageNamed(stage, "obj_has").args;
     return [TermType.HAS_FIELDS, [expr.value, ...fields]];
   },
   arr_filter: (expr, stage) => {
-    const func = stage.args[0];
+    const [func] = StageNamed(stage, "arr_filter").args;
     const argId = allocateArgNumber();
     const row: TermJson = [TermType.VAR, [argId]];
     const body = DecodeFunction(func, expr.context, [row]);
@@ -159,7 +161,7 @@ const FUNC_STAGE_MAP: Record<string, FuncStageHandler> = {
     ];
   },
   arr_map: (expr, stage) => {
-    const func = stage.args[0];
+    const [func] = StageNamed(stage, "arr_map").args;
     const argId = allocateArgNumber();
     const row: TermJson = [TermType.VAR, [argId]];
     const body = DecodeFunction(func, expr.context, [row]);
@@ -189,7 +191,7 @@ function decodeExpression(
   const builder: ExpressionBuilder = { value: startValue, context };
 
   for (const stage of stages) {
-    builder.options = stage.options;
+    builder.stage = stage;
     const funcHandler = FUNC_STAGE_MAP[stage.stage];
     if (funcHandler) {
       builder.value = funcHandler(builder, stage);
@@ -209,7 +211,7 @@ function decodeExpression(
     throw new Error(`Unimplemented expression stage: ${stage.stage}`);
   }
 
-  delete builder.options;
+  delete builder.stage;
   return builder.value;
 }
 
@@ -279,11 +281,11 @@ function decodeSubquery(
 }
 
 export function DecodeFunction(
-  func: QueryStage,
+  func: QueryStage<"func">,
   context: DecodingContext,
   argTerms: TermJson[],
 ): TermJson {
-  const argNumbers: number[] = func.args[0];
+  const [argNumbers] = func.args;
   const oldArgs: DecodingContext["args"] = {};
   for (let i = 0; i < argNumbers.length; ++i) {
     oldArgs[argNumbers[i]] = context.args[argNumbers[i]];

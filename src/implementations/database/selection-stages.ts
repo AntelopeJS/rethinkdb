@@ -5,7 +5,13 @@ import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import { DecodeFunction, DecodeValue } from "./expression";
 import { type IndexedRead, indexOptions } from "./indexes";
 import type { SelectionQuery } from "./selection";
-import { allocateArgNumber, DecodingContext, type QueryStage } from "./utils";
+import {
+  allocateArgNumber,
+  DecodingContext,
+  IsUpdateFunction,
+  type QueryStage,
+  StageNamed,
+} from "./utils";
 
 type SelectionStageHandler = (query: SelectionQuery, stage: QueryStage) => void;
 
@@ -13,7 +19,8 @@ const SELECTION_STAGES = new Map<string, SelectionStageHandler>([
   [
     "get",
     (query, stage) => {
-      const key = DecodeValue(stage.args[0], query.getContext());
+      const [rawKey] = StageNamed(stage, "get").args;
+      const key = DecodeValue(rawKey, query.getContext());
       if (query.external) {
         query.resultType = "selection";
         query.singleElement = true;
@@ -26,15 +33,18 @@ const SELECTION_STAGES = new Map<string, SelectionStageHandler>([
   [
     "getAll",
     (query, stage) => {
+      const {
+        args: [rawKeys],
+        options,
+      } = StageNamed(stage, "getAll");
       query.resultType = "selection";
-      const rawKeys = stage.args[0];
       const context = query.getContext();
       const keys = Array.isArray(rawKeys)
         ? rawKeys.map((k) => DecodeValue(k, context))
         : [DecodeValue(rawKeys, context)];
       if (query.external) {
         query.setTerm(
-          query.external.getAll(query.schemaId, stage.options?.index, keys),
+          query.external.getAll(query.schemaId, options?.index, keys),
         );
         return;
       }
@@ -49,23 +59,22 @@ const SELECTION_STAGES = new Map<string, SelectionStageHandler>([
           [[TermType.MAKE_ARRAY, keys], value],
         ],
       };
-      query.setTerm(query.selectByIndex(stage.options?.index, read));
+      query.setTerm(query.selectByIndex(options?.index, read));
     },
   ],
   [
     "between",
     (query, stage) => {
+      const {
+        args: [rawLow, rawHigh],
+        options,
+      } = StageNamed(stage, "between");
       query.resultType = "selection";
-      const low = DecodeValue(stage.args[0], query.getContext());
-      const high = DecodeValue(stage.args[1], query.getContext());
+      const low = DecodeValue(rawLow, query.getContext());
+      const high = DecodeValue(rawHigh, query.getContext());
       if (query.external) {
         query.setTerm(
-          query.external.between(
-            query.schemaId,
-            stage.options?.index,
-            low,
-            high,
-          ),
+          query.external.between(query.schemaId, options?.index, low, high),
         );
         return;
       }
@@ -83,48 +92,52 @@ const SELECTION_STAGES = new Map<string, SelectionStageHandler>([
           ],
         ],
       };
-      query.setTerm(query.selectByIndex(stage.options?.index, read));
+      query.setTerm(query.selectByIndex(options?.index, read));
     },
   ],
   [
     "insert",
     (query, stage) => {
+      const {
+        args: [documents],
+        options,
+      } = StageNamed(stage, "insert");
       query.resultType = "insert";
-      query.setNewValue(DecodeValue(stage.args[0], new DecodingContext()));
-      query.setConflictMode(stage.options?.conflict);
-      query.setInsertRawArgs(stage.args[0]);
+      query.setNewValue(DecodeValue(documents, new DecodingContext()));
+      query.setConflictMode(options?.conflict);
+      query.setInsertRawArgs(documents);
     },
   ],
   [
     "update",
     (query, stage) => {
+      const [document] = StageNamed(stage, "update").args;
       query.resultType = "update";
       if (query.external) {
-        query.external.refuseMapper(stage.args[0]);
-        query.setInsertRawArgs(stage.args[0]);
+        query.external.refuseMapper(document);
+        query.setInsertRawArgs(document);
         return;
       }
-      if (stage.args[0]?.stage === "func") {
+      if (IsUpdateFunction(document)) {
         const argId = allocateArgNumber();
         const docVar: TermJson = [TermType.VAR, [argId]];
-        const body = DecodeFunction(stage.args[0], new DecodingContext(), [
-          docVar,
-        ]);
+        const body = DecodeFunction(document, new DecodingContext(), [docVar]);
         query.setNewValue([
           TermType.FUNC,
           [[TermType.MAKE_ARRAY, [argId]], body],
         ]);
       } else {
-        query.setNewValue(DecodeValue(stage.args[0], new DecodingContext()));
+        query.setNewValue(DecodeValue(document, new DecodingContext()));
       }
     },
   ],
   [
     "replace",
     (query, stage) => {
+      const [document] = StageNamed(stage, "replace").args;
       query.resultType = "replace";
-      query.setInsertRawArgs(stage.args[0]);
-      query.setNewValue(DecodeValue(stage.args[0], new DecodingContext()));
+      query.setInsertRawArgs(document);
+      query.setNewValue(DecodeValue(document, new DecodingContext()));
     },
   ],
   [

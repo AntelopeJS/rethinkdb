@@ -61,7 +61,14 @@ const ERP_DEFINITION: SchemaDefinition = {
   },
 };
 
-type ErpValue = string | number | boolean | Date | null | string[] | ErpObject;
+type ErpValue =
+  | string
+  | number
+  | boolean
+  | Date
+  | null
+  | (string | number)[]
+  | ErpObject;
 
 interface ErpObject {
   [field: string]: string | number;

@@ -24,7 +24,7 @@ export function ExternalInstanceRefusal(stage: string): Error {
 }
 
 /** Refuses `atomicMutation`, whose contract writes revision fields the client's rows do not have. */
-export function ExternalAtomicRefusal(table: string): Error {
+export function ExternalAtomicRefusal(table: string | undefined): Error {
   return new Error(
     `The 'atomicMutation' stage is not supported on table ${table}, an external table: its contract writes revision fields the client's rows do not have`,
   );

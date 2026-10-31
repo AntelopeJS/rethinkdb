@@ -3,9 +3,9 @@
   "rules": {
     "antelopejs/no-inherited-key-lookup": 5,
     "anti-slop/no-known-value-widening": 5,
-    "anti-slop/require-safety-comment-for-type-assertion": 5,
-    "typescript/no-unsafe-argument": 33,
-    "typescript/no-unsafe-assignment": 40,
+    "anti-slop/require-safety-comment-for-type-assertion": 3,
+    "typescript/no-unsafe-argument": 5,
+    "typescript/no-unsafe-assignment": 4,
     "typescript/no-unsafe-return": 1
   },
   "oversizeFiles": {}
