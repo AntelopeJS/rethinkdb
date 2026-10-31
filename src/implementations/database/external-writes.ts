@@ -1,3 +1,4 @@
+import assert from "node:assert";
 import { TermType } from "rethinkdb-ts/lib/proto/enums";
 import {
   DuplicateKeyError,
@@ -15,7 +16,7 @@ import type {
 } from "./external-descriptor";
 import {
   Func,
-  type KeyData,
+  IsKeyData,
   KeyDataTerm,
   KeyValue,
   ReadField,
@@ -458,10 +459,11 @@ async function Pinned(
     [target, Func((row) => [TermType.BRACKET, [row, table.primaryKey]])],
   ];
   const timeoutMs = GetOptions().statementTimeoutMs;
-  const keys: KeyData[] =
+  const keys: unknown =
     timeoutMs === undefined
       ? await executeTermJson(read)
       : await executeBounded(read, timeoutMs);
+  assert(IsList(keys), "A map over a selection answers a list");
   if (keys.length === 0) {
     return target;
   }
@@ -470,7 +472,7 @@ async function Pinned(
     [
       TableTerm(database, table),
       ...keys.flatMap((key) => {
-        const term = KeyDataTerm(key);
+        const term = IsKeyData(key) ? KeyDataTerm(key) : undefined;
         return term === undefined ? [] : [term];
       }),
     ],
