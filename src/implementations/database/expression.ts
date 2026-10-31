@@ -100,7 +100,7 @@ function DuringBound(bound: TermJson): TermJson {
 }
 
 /** ReQL filters keep everything but false and null, where the contract rejects a 0 too. */
-function FilterBody(body: TermJson): TermJson {
+function FilterBody(body: TermJson | undefined): TermJson {
   const argId = allocateArgNumber();
   const result: TermJson = [TermType.VAR, [argId]];
   return [
@@ -261,7 +261,7 @@ const FUNC_STAGE_MAP = new Map<string, FuncStageHandler>([
 function applySimpleStage(
   prev: TermJson,
   termType: number,
-  args: TermJson[],
+  args: (TermJson | undefined)[],
 ): TermJson {
   if (args.length === 0) {
     return [termType, [prev]];
@@ -283,7 +283,7 @@ function decodeExpression(
       builder.value = funcHandler(builder, stage);
       continue;
     }
-    const decodedArgs = stage.args.map((arg) => DecodeValue(arg, context));
+    const decodedArgs = stage.args.map((arg) => DecodeOperand(arg, context));
     const simpleType = SIMPLE_STAGE_MAP.get(stage.stage);
     if (simpleType !== undefined) {
       builder.value = applySimpleStage(builder.value, simpleType, decodedArgs);
@@ -302,7 +302,7 @@ function decodeExpression(
 }
 
 export function DecodeValue(
-  value: Value<unknown>,
+  value: NonNullable<Value<unknown>> | null,
   context: DecodingContext,
 ): TermJson {
   if (value instanceof ValueProxy) {
@@ -317,7 +317,7 @@ export function DecodeValue(
     if (Array.isArray(value)) {
       return [
         TermType.MAKE_ARRAY,
-        value.map((val) => DecodeValue(val, context)),
+        value.map((val) => DecodeOperand(val, context)),
       ];
     }
     if (value instanceof Date) {
@@ -327,17 +327,21 @@ export function DecodeValue(
       return Object.fromEntries(
         Object.entries(value).map(([key, val]) => [
           key,
-          DecodeValue(val, context),
+          DecodeOperand(val, context),
         ]),
       );
     }
   }
 
-  if (value === undefined) {
-    return undefined as any;
-  }
-
   return value;
+}
+
+/** A value a stage may leave out, as {@link DecodeValue} reads it: an absent one stays `undefined`. */
+export function DecodeOperand(
+  value: Value<unknown>,
+  context: DecodingContext,
+): TermJson | undefined {
+  return value === undefined ? undefined : DecodeValue(value, context);
 }
 
 function dateToReql(date: Date): TermJson {
@@ -370,7 +374,7 @@ export function DecodeFunction(
   func: QueryStage<"func">,
   context: DecodingContext,
   argTerms: TermJson[],
-): TermJson {
+): TermJson | undefined {
   const [argNumbers] = func.args;
   const oldArgs: DecodingContext["args"] = {};
   for (let i = 0; i < argNumbers.length; ++i) {
@@ -378,7 +382,7 @@ export function DecodeFunction(
     const argTerm = argTerms[i];
     context.args[argNumbers[i]] = () => argTerm;
   }
-  const val = DecodeValue(func.args[1], context);
+  const val = DecodeOperand(func.args[1], context);
   for (let i = 0; i < argNumbers.length; ++i) {
     if (oldArgs[argNumbers[i]] !== undefined) {
       context.args[argNumbers[i]] = oldArgs[argNumbers[i]];
