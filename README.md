@@ -87,7 +87,7 @@ In the module that stores data, add the database interface:
 pnpm add @antelopejs/interface-database
 ```
 
-Then follow the [database interface guide](https://framework.antelopejs.com/docs/guides/database) to declare a schema and query it. The same code runs on [`@antelopejs/mongodb`](https://github.com/AntelopeJS/mongodb).
+Then follow the [database interface guide](https://framework.antelopejs.com/docs/guides/database) to declare a schema and query it. The same code runs on [`@antelopejs/postgres`](https://github.com/AntelopeJS/postgres) and [`@antelopejs/mongodb`](https://github.com/AntelopeJS/mongodb).
 
 To use the driver directly instead, add `@antelopejs/interface-rethinkdb` and read its [documentation](https://interfaces.antelopejs.com/docs/rethinkdb/introduction).
 
