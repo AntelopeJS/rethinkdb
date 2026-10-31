@@ -469,7 +469,10 @@ async function Pinned(
     TermType.GET_ALL,
     [
       TableTerm(database, table),
-      ...keys.flatMap((key) => KeyDataTerm(key) ?? []),
+      ...keys.flatMap((key) => {
+        const term = KeyDataTerm(key);
+        return term === undefined ? [] : [term];
+      }),
     ],
   ];
 }
