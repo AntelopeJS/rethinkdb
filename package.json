@@ -78,7 +78,7 @@
   "optionalDependencies": {
     "@antelopejs/interface-rethinkdb": ">=0.1.0 <0.2.0"
   },
-  "packageManager": "pnpm@10.6.5",
+  "packageManager": "pnpm@10.33.0",
   "antelopeJs": {
     "implements": [
       "@antelopejs/interface-database",
