@@ -112,12 +112,12 @@ Version 1.4 added the `<name>__i` indexes. The first boot after an upgrade build
 
 <!-- antelopejs-docs-compat:start -->
 
-| Package                                  | Supported        | Tested with |
-| ---------------------------------------- | ---------------- | ----------- |
-| `@antelopejs/interface-core`             | `>=0.2.4 <1.0.0` | `0.2.4`     |
-| `@antelopejs/interface-database`         | `>=0.2.0 <0.3.0` | `0.2.0`     |
-| `@antelopejs/interface-database-catalog` | `>=0.0.3 <0.1.0` | `0.0.3`     |
-| `@antelopejs/interface-rethinkdb`        | `>=0.1.0 <0.2.0` | `0.1.0`     |
+| Package                                  | Supported                                                      | Tested with                                                    |
+| ---------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------- |
+| `@antelopejs/interface-core`             | `>=0.2.4 <1.0.0`                                               | `0.2.4`                                                        |
+| `@antelopejs/interface-database`         | `file:.campaign/tgz/antelopejs-interface-database-beec46b.tgz` | `file:.campaign/tgz/antelopejs-interface-database-beec46b.tgz` |
+| `@antelopejs/interface-database-catalog` | `>=0.0.3 <0.1.0`                                               | `0.0.3`                                                        |
+| `@antelopejs/interface-rethinkdb`        | `>=0.1.0 <0.2.0`                                               | `0.1.0`                                                        |
 
 <!-- antelopejs-docs-compat:end -->
 
