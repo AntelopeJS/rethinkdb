@@ -11,7 +11,7 @@ import {
   warnUnindexedCrossInstance,
 } from "./indexes";
 // oxlint-disable-next-line import/no-cycle -- stream stages decode values; see expression.ts
-import { DecodeFunction, DecodeValue } from "./expression";
+import { DecodeFunction, DecodeOperand, DecodeValue } from "./expression";
 import {
   allocateArgNumber,
   type DecodingContext,
@@ -117,7 +117,7 @@ function handleDefault(
   context: DecodingContext,
 ): TermJson {
   const [value] = StageNamed(stage, "default").args;
-  return [TermType.DEFAULT, [prev, DecodeValue(value, context)]];
+  return [TermType.DEFAULT, [prev, DecodeOperand(value, context)]];
 }
 
 function handleMap(
@@ -360,7 +360,7 @@ function handleGroup(
   };
   context.args[argNumbers[1]] = () => groupAccess;
 
-  const body = DecodeValue(func.args[1], context);
+  const body = DecodeOperand(func.args[1], context);
 
   if (oldArgs0 !== undefined) {
     context.args[argNumbers[0]] = oldArgs0;
@@ -464,10 +464,10 @@ function handleSlice(
   stage: QueryStage,
   context: DecodingContext,
 ): TermJson {
-  const offset = DecodeValue(stage.args[0], context);
+  const offset = DecodeOperand(stage.args[0], context);
   const count =
     stage.args[1] !== undefined
-      ? DecodeValue(stage.args[1], context)
+      ? DecodeOperand(stage.args[1], context)
       : undefined;
 
   let result = prev;
@@ -485,7 +485,7 @@ function handleNth(
   stage: QueryStage,
   context: DecodingContext,
 ): TermJson {
-  const n = DecodeValue(stage.args[0], context);
+  const n = DecodeOperand(stage.args[0], context);
   return [TermType.NTH, [prev, n]];
 }
 
