@@ -125,9 +125,9 @@ const COMPLEX_STAGE_MAP = new Map<string, StageHandler>([
   ],
   [
     "date_during",
-    (expr, low: TermJson, high: TermJson) => [
+    (expr, ...bounds: TermJson[]) => [
       TermType.DURING,
-      [expr.value, DuringBound(low), DuringBound(high)],
+      [expr.value, ...bounds.map(DuringBound)],
     ],
   ],
   [
