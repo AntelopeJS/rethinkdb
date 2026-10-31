@@ -36,6 +36,10 @@ describe("a replace on array-keyed rows selected by another field", () => {
     );
   });
 
+  after(async () => {
+    await Native((table) => table("order_lines").getAll(r.args(KEYS)).delete());
+  });
+
   it("pins each row by its whole key and removes the fields it leaves out", async () => {
     const target: TermJson = [
       TermType.FILTER,
