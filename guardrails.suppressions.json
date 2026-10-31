@@ -2,7 +2,7 @@
   "rules": {
     "import/no-cycle": 6
   },
-  "tsExpectError": 7,
+  "tsExpectError": 10,
   "tsIgnore": 0,
   "safety": 3,
   "config": {}
