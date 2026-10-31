@@ -62,7 +62,7 @@ export default defineConfig({
 
 For a single connection:
 
-```typescript
+```typescript fragment
 config: {
   connection: { host: "127.0.0.1", port: 28015, user: "admin", password: "" },
 },
@@ -121,14 +121,7 @@ Version 1.4 added the `<name>__i` indexes. The first boot after an upgrade build
 
 <!-- antelopejs-docs-compat:end -->
 
-| Package                                  | Supported range  |
-| ---------------------------------------- | ---------------- |
-| `@antelopejs/interface-database`         | `>=0.2.0 <0.3.0` |
-| `@antelopejs/interface-rethinkdb`        | `>=0.1.0 <0.2.0` |
-| `@antelopejs/interface-database-catalog` | `>=0.0.3 <0.1.0` |
-| `@antelopejs/interface-core`             | `>=0.2.4 <1.0.0` |
-
-The module is developed and tested against `@antelopejs/core` `^1.13.4` on Node.js 24, with `rethinkdb-ts` `^2.7.0` and RethinkDB 2.4.
+The module is developed and tested on Node.js 24, with `rethinkdb-ts` `^2.7.0` and RethinkDB 2.4.
 
 ## Contributing
 
