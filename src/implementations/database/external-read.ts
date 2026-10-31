@@ -120,7 +120,7 @@ export type KeyData =
   | null
   | undefined
   | Date
-  | KeyData[]
+  | readonly KeyData[]
   | { [field: string]: KeyData };
 
 /** Whether `value` is key data: a primitive, null, undefined, a date, or a list or object of key data. */

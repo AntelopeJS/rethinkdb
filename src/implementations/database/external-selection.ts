@@ -110,13 +110,11 @@ export class ExternalReads {
     ];
   }
 
-  /** Refuses an update computed from the row, which the write-back guard cannot check. */
-  public refuseMapper(value: QueryStage | TermJson) {
-    if (value instanceof Object && "stage" in value && value.stage === "func") {
-      throw new Error(
-        `An update of table ${this.table.table} computed from the row is not supported on an external table: pass the new field values`,
-      );
-    }
+  /** The refusal of an update computed from the row, which the write-back guard cannot check. */
+  public mapperRefusal(): Error {
+    return new Error(
+      `An update of table ${this.table.table} computed from the row is not supported on an external table: pass the new field values`,
+    );
   }
 
   public get(decoded: TermJson): TermJson {
