@@ -60,14 +60,35 @@ describe("the operations a caller reaches past the contract, with a JSON stage",
     );
   });
 
-  it("during refuses a hand-written JSON stage without exactly two bounds", async () => {
-    for (const bounds of [[0], [0, 10_000, 5]]) {
-      await assert.rejects(
-        Rows()
-          .map((row) => JsonStage(row.key("age"), "date_during", bounds))
-          .run(),
-        /Expected 3 arguments/,
-      );
-    }
+  it("during refuses a hand-written stage with one bound", async () => {
+    await assert.rejects(
+      Rows()
+        .map(
+          (row) =>
+            new ValueProxy<number>(
+              // @ts-expect-error one bound where date_during takes two, which the server refuses by its argument count
+              { stage: "date_during", args: [0] },
+              row.key("age"),
+            ),
+        )
+        .run(),
+      /Expected 3 arguments/,
+    );
+  });
+
+  it("during refuses a hand-written stage with three bounds", async () => {
+    await assert.rejects(
+      Rows()
+        .map(
+          (row) =>
+            new ValueProxy<number>(
+              // @ts-expect-error three bounds where date_during takes two, which the server refuses by its argument count
+              { stage: "date_during", args: [0, 10_000, 5] },
+              row.key("age"),
+            ),
+        )
+        .run(),
+      /Expected 3 arguments/,
+    );
   });
 });
