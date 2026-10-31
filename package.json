@@ -6,7 +6,6 @@
     "antelopejs",
     "database",
     "nosql",
-    "realtime",
     "rethinkdb"
   ],
   "homepage": "https://interfaces.antelopejs.com/docs/database",
