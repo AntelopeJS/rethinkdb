@@ -50,7 +50,7 @@ describe("a replace on array-keyed rows selected by another field", () => {
     ];
     await RunExternalWrite(CLIENT_DATABASE, LINES, {
       kind: "replace",
-      value: { sku: "PINNED" },
+      value: [{ sku: "PINNED" }],
       target,
     });
     for (const key of KEYS) {

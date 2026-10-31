@@ -4,6 +4,10 @@ import {
   DuplicateKeyError,
   IsDuplicateKeyError,
 } from "@antelopejs/interface-database";
+import type {
+  WriteDocument,
+  WriteValue,
+} from "@antelopejs/interface-database/common";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 
 import { GetOptions } from "../../config";
@@ -40,21 +44,6 @@ class ExternalWriteError extends Error {
 
 type WriteMode = "insert" | "update" | "replace";
 
-/** A plain value of a payload, as data-api and the DMS send it. */
-type PayloadValue =
-  | string
-  | number
-  | boolean
-  | Date
-  | null
-  | undefined
-  | PayloadValue[]
-  | PayloadObject;
-
-interface PayloadObject {
-  [field: string]: PayloadValue;
-}
-
 interface Payload {
   key?: TermJson;
   fields: Record<string, TermJson>;
@@ -80,7 +69,7 @@ const CONSTRUCTORS = new Map<string, unknown>([
 ]);
 
 /** A primitive value as text; undefined for null, documents and arrays. */
-function Text(value: PayloadValue | TermJson): string | undefined {
+function Text(value: WriteValue | TermJson): string | undefined {
   if (value === null || value === undefined || value instanceof Object) {
     return undefined;
   }
@@ -98,7 +87,7 @@ function TimeOf(date: Date): TermJson {
 /** A value as its declared kind writes it, or undefined when it is not of that kind. */
 function Written(
   descriptor: FieldDescriptor,
-  value: PayloadValue,
+  value: WriteValue,
 ): TermJson | undefined {
   if (value === null || value === undefined) {
     return null;
@@ -141,7 +130,7 @@ function RequireKey(table: ExternalTable): KeyClass {
 /** The key a payload names, through `_id` or the primary key field, which must agree. */
 function KeyOf(
   table: ExternalTable,
-  value: PayloadObject,
+  value: WriteDocument,
   failures: [string, string][],
 ): TermJson | undefined {
   const key = RequireKey(table);
@@ -173,7 +162,7 @@ function KeyOf(
 }
 
 /** A key field's value as a query term: arrays, at any depth, built as such, never read as terms. */
-function KeyFieldTerm(value: PayloadValue): TermJson | undefined {
+function KeyFieldTerm(value: WriteValue): TermJson | undefined {
   if (value === undefined || value === null) {
     return undefined;
   }
@@ -204,7 +193,7 @@ function KeyData(term: TermJson): TermJson {
 function Split(
   table: ExternalTable,
   mode: WriteMode,
-  value: PayloadObject,
+  value: WriteDocument,
 ): Payload {
   const failures: [string, string][] = [];
   const payload: Payload = {
@@ -392,7 +381,7 @@ function TableTerm(database: string, table: ExternalTable): TermJson {
 async function Insert(
   database: string,
   table: ExternalTable,
-  values: PayloadObject[],
+  values: WriteDocument[],
   conflict?: "update" | "replace",
 ): Promise<string[]> {
   const key = RequireKey(table);
@@ -431,7 +420,7 @@ async function Insert(
 /** One write on an external table, as `SelectionQuery` hands it over. */
 export interface ExternalWrite {
   kind: string;
-  value: PayloadObject | PayloadObject[];
+  value: WriteDocument[];
   target: TermJson;
   conflict?: "update" | "replace";
 }
@@ -485,7 +474,7 @@ async function Run(
   write: ExternalWrite,
 ): Promise<number | string[]> {
   if (write.kind === "insert") {
-    return Insert(database, table, [write.value].flat(), write.conflict);
+    return Insert(database, table, write.value, write.conflict);
   }
   if (write.kind === "delete") {
     const deleted: unknown = await executeTermJson([
@@ -494,7 +483,7 @@ async function Run(
     ]);
     return IsWriteResult(deleted) ? deleted.deleted : 0;
   }
-  const [value] = [write.value].flat();
+  const [value] = write.value;
   const payload = Split(
     table,
     write.kind === "replace" ? "replace" : "update",

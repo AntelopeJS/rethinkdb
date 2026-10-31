@@ -2,6 +2,7 @@ import assert from "node:assert";
 import { TermType } from "rethinkdb-ts/lib/proto/enums";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import { CROSS_INSTANCE } from "@antelopejs/interface-database/schema";
+import type { WriteDocument } from "@antelopejs/interface-database/common";
 
 // oxlint-disable-next-line import/no-cycle -- sub-query building applies stream stages; see expression.ts
 import { applyStreamStages } from "./stream";
@@ -11,7 +12,7 @@ import { IsWriteResult } from "../../write-result";
 import { SelectionStageHandlerOf } from "./selection-stages";
 import { ExternalDatabaseName, GetOptions, IsExternal } from "../../config";
 import { ExternalReads } from "./external-selection";
-import { type ExternalWrite, RunExternalWrite } from "./external-writes";
+import { RunExternalWrite } from "./external-writes";
 import { FindIndex, IsValidInstance, WaitForSchemaReady } from "./schema";
 import {
   buildIndexedRead,
@@ -91,9 +92,7 @@ export class SelectionQuery {
   public singleElement = false;
   private newValue: TermJson = null;
   private conflictMode?: "update" | "replace";
-  private insertRawArgs?: QueryStage<
-    "insert" | "update" | "replace"
-  >["args"][0];
+  private insertRawArgs: WriteDocument[] = [];
   private term: TermJson;
   private readonly tenant: TenantContext;
   private scopedGet = false;
@@ -246,7 +245,7 @@ export class SelectionQuery {
       if (this.external) {
         return RunExternalWrite(this.database, this.external.table, {
           kind: resultType,
-          value: this.insertRawArgs as ExternalWrite["value"],
+          value: this.insertRawArgs,
           target: await this.external.writeTarget(
             this.streamStages.length > 0 ? this.term : undefined,
             this.rawTarget ?? this.term,
@@ -297,9 +296,7 @@ export class SelectionQuery {
   }
 
   private buildConflictInsertKeys(generatedKeys: string[]): unknown[] {
-    const rawDocs: unknown[] = Array.isArray(this.insertRawArgs)
-      ? this.insertRawArgs
-      : [this.insertRawArgs];
+    const rawDocs: unknown[] = this.insertRawArgs;
     let genIdx = 0;
     return rawDocs.map((doc) => {
       if (!IsObject(doc)) {
@@ -490,9 +487,7 @@ export class SelectionQuery {
     this.conflictMode = mode;
   }
 
-  public setInsertRawArgs(
-    args: QueryStage<"insert" | "update" | "replace">["args"][0],
-  ) {
-    this.insertRawArgs = args;
+  public setInsertRawArgs(documents: WriteDocument | WriteDocument[]) {
+    this.insertRawArgs = [documents].flat();
   }
 }

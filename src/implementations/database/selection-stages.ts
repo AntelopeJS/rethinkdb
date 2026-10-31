@@ -114,7 +114,9 @@ const SELECTION_STAGES = new Map<string, SelectionStageHandler>([
       const [document] = StageNamed(stage, "update").args;
       query.resultType = "update";
       if (query.external) {
-        query.external.refuseMapper(document);
+        if (IsUpdateFunction(document)) {
+          throw query.external.mapperRefusal();
+        }
         query.setInsertRawArgs(document);
         return;
       }
