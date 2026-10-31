@@ -124,7 +124,7 @@ export type KeyData =
   | { [field: string]: KeyData };
 
 /** Whether `value` is key data: a primitive, null, undefined, a date, or a list or object of key data. */
-function IsKeyData(value: unknown): value is KeyData {
+export function IsKeyData(value: unknown): value is KeyData {
   if (IsList(value)) {
     return value.every(IsKeyData);
   }
