@@ -17,7 +17,7 @@ export type { QueryStage };
 export function StageNamed<Name extends QueryStageName>(
   stage: QueryStage | undefined,
   name: Name,
-) {
+): Extract<QueryStage, { stage: Name }> {
   assert(IsQueryStage(stage, name), `Expected a ${name} stage`);
   return stage;
 }
