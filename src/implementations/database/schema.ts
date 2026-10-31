@@ -92,8 +92,14 @@ async function hydrateInstances(schemaId: string) {
     TermType.TABLE,
     [[TermType.DB, [schemaId]], INSTANCE_REGISTRY_TABLE],
   ];
-  const rows: Array<{ _id: string; instance_id: string }> =
-    (await executeTermJson(table)) ?? [];
+  /*
+   * SAFETY: executeTermJson returns any; the registry table holds only the rows
+   * CreateInstance inserts, as { _id, instance_id }.
+   */
+  const rows = ((await executeTermJson(table)) ?? []) as Array<{
+    _id: string;
+    instance_id: string;
+  }>;
   const set = new Set<string>();
   for (const row of rows) {
     set.add(row.instance_id);

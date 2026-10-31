@@ -244,6 +244,13 @@ export class SelectionQuery {
     const resultType = this.resultType;
     if (isWriteResult(resultType)) {
       if (this.external) {
+        /*
+         * SAFETY: insert, update and replace store the caller's document or
+         * documents here, and an external update refuses a function stage
+         * first; delete leaves it undefined and RunExternalWrite never reads
+         * the value for it. RunExternalWrite reads a document only through the
+         * table's declared fields and refuses a value of the wrong kind.
+         */
         return RunExternalWrite(this.database, this.external.table, {
           kind: resultType,
           value: this.insertRawArgs as ExternalWrite["value"],
