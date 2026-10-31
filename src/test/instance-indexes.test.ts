@@ -103,10 +103,6 @@ const db: TermJson = [TermType.DB, [SCHEMA_ID]];
 const table: TermJson = [TermType.TABLE, [db, TABLE]];
 let schema: Schema<Tables>;
 
-function compoundKey(...values: Array<string | number>): string {
-  return values as never;
-}
-
 function list(...values: TermJson[]): TermJson {
   return [TermType.MAKE_ARRAY, values];
 }
@@ -285,14 +281,11 @@ async function scopedGetAllTerm() {
     [table, list("alpha", "open")],
     { index: "status__i" },
   ]);
-  assert.deepEqual(
-    buildTerm(items.getAll([compoundKey("open", 1)], "status_rank")),
-    [
-      TermType.GET_ALL,
-      [table, [TermType.PREPEND, [list("open", 1), "alpha"]]],
-      { index: "status_rank__i" },
-    ],
-  );
+  assert.deepEqual(buildTerm(items.getAll([["open", 1]], "status_rank")), [
+    TermType.GET_ALL,
+    [table, [TermType.PREPEND, [list("open", 1), "alpha"]]],
+    { index: "status_rank__i" },
+  ]);
 }
 
 async function scopedGetAllResults() {
@@ -303,7 +296,7 @@ async function scopedGetAllResults() {
       await legacyScoped(tenantId, legacyGetAll("status", "open", "closed")),
     );
     assert.deepEqual(
-      ids(await items.getAll([compoundKey("open", 2)], "status_rank").run()),
+      ids(await items.getAll([["open", 2]], "status_rank").run()),
       await legacyScoped(
         tenantId,
         legacyGetAll("status_rank", list("open", 2)),
@@ -389,7 +382,7 @@ async function crossInstanceScan() {
     await legacyCross(legacyGetAll("status", "open", "closed")),
   );
   assert.deepEqual(
-    ids(await items.getAll([compoundKey("open", 1)], "status_rank").run()),
+    ids(await items.getAll([["open", 1]], "status_rank").run()),
     await legacyCross(legacyGetAll("status_rank", list("open", 1))),
   );
   assert.deepEqual(
