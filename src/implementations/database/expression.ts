@@ -119,7 +119,10 @@ function FilterBody(body: TermJson): TermJson {
 }
 
 const COMPLEX_STAGE_MAP = new Map<string, StageHandler>([
-  ["add", (expr, operand: TermJson) => AddTerm(expr.value, operand)],
+  [
+    "add",
+    (expr, ...operands: TermJson[]) => operands.reduce(AddTerm, expr.value),
+  ],
   [
     "date_during",
     (expr, low: TermJson, high: TermJson) => [
