@@ -220,6 +220,9 @@ for (const [scope, id] of [["a", "a"], ["cross", CROSS_INSTANCE]]) {
   out[scope] = { plain: await reads(items, ["cat", "cat_price", "tags"]), flagged: await reads(items, ["kind", "kind_cost", "labels"]) };
 }
 out.again = names(await schema.instance(CROSS_INSTANCE).table("items").getAll("y", "cat"));
+await schema.instance("b").table("items").insert({ _id: "i5", name: "B3", tags: [], labels: [] });
+const everyItem = schema.instance(CROSS_INSTANCE).table("items");
+out.distinctMissing = { plain: (await everyItem.distinct("cat")).sort(), flagged: (await everyItem.distinct("kind")).sort() };
 return out;`;
 
 const SCOPED_READS = { getAll: ["A1"], getAllMulti: ["A1"], between: ["A1"], betweenCompound: ["A1"], orderBy: ["A1", "A2"], orderByDesc: ["A2", "A1"], distinct: ["x", "y"], count: 2 } satisfies Record<string, Json>;
@@ -243,7 +246,11 @@ export const crossInstanceIndexes: Journey = {
         Object.entries(expected).map(([read, rows]) => same(`${read} on ${label}, ${flag === "plain" ? "without" : "with"} crossInstance`, pick(result.value, scope, flag, read), rows)),
       ),
     );
-    context.expect(result.folder, [...checks, sees("a second CROSS_INSTANCE read still answers", { ...result, value: pick(result.value, "again") }, ["A2"])]);
+    context.expect(result.folder, [
+      ...checks,
+      sees("a second CROSS_INSTANCE read still answers", { ...result, value: pick(result.value, "again") }, ["A2"]),
+      sees("distinct on CROSS_INSTANCE leaves out a document missing the field, with and without crossInstance", { ...result, value: pick(result.value, "distinctMissing") }, { flagged: ["x", "y"], plain: ["x", "y"] }),
+    ]);
     const output = await logs(session);
     context.expect(context.work, [
       ...["cat", "cat_price", "tags"].map((index) => same(`a CROSS_INSTANCE read on '${index}', without crossInstance, warns once`, occurrences(output, index), 1)),

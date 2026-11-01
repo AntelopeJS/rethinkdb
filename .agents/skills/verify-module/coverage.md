@@ -92,7 +92,7 @@ Doc keys: R = rethinkdb README.md, X = rethinkdb docs/external-mode.md, I = inte
 | 55 | compound index bounds are lists | I 2.table.md | schemas/cross-instance-indexes: "betweenCompound on instance a / CROSS_INSTANCE, with/without crossInstance" |
 | 56 | orderBy on a compound index orders by every field | I 5.indexes.md | reads/read-streams: "orderBy on a compound index ascending/descending ..."; cross-instance-indexes: orderBy, orderByDesc |
 | 57 | multi index: lookup by any element | I 5.indexes.md | schemas/cross-instance-indexes: getAllMulti (scoped and cross, both flags) |
-| 58 | crossInstance never changes results (getAll, between, orderBy, distinct, count(field)) | I 5.indexes.md | schemas/cross-instance-indexes: every `<read> on CROSS_INSTANCE, with/without crossInstance` |
+| 58 | crossInstance never changes results (getAll, between, orderBy, distinct, count(field)), a document missing the indexed field included | I 5.indexes.md | schemas/cross-instance-indexes: every `<read> on CROSS_INSTANCE, with/without crossInstance`; "distinct on CROSS_INSTANCE leaves out a document missing the field, with and without crossInstance" |
 | 59 | scoped reads on an index see only the instance | I | schemas/cross-instance-indexes: every `<read> on instance a ...` |
 | 60 | compound prefix lookup "by the first field alone" | I 5.indexes.md | not asserted: the docs give no call shape for it |
 | 138 | a `between` bound may be `null` (`IndexBound`) | I 2.table.md | not asserted: the docs do not say what a null bound selects |
