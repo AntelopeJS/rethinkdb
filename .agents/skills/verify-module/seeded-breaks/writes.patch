@@ -1,0 +1,13 @@
+diff --git a/src/implementations/database/selection.ts b/src/implementations/database/selection.ts
+index 435dd5a..15f483e 100644
+--- a/src/implementations/database/selection.ts
++++ b/src/implementations/database/selection.ts
+@@ -279,7 +279,7 @@ export class SelectionQuery {
+     if (this.tenant.kind === "scoped") {
+       value = this.stampTenantId(value, this.tenant.tenantId);
+     }
+-    const insertOpts = this.conflictMode ? { conflict: this.conflictMode } : {};
++    const insertOpts = this.conflictMode ? { conflict: "replace" } : {};
+     const insertTerm: TermJson = [
+       TermType.INSERT,
+       [this.getTableTerm(), value],

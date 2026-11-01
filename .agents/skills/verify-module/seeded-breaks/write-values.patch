@@ -1,0 +1,13 @@
+diff --git a/src/implementations/database/expression.ts b/src/implementations/database/expression.ts
+index 091afe2..d172027 100644
+--- a/src/implementations/database/expression.ts
++++ b/src/implementations/database/expression.ts
+@@ -333,7 +333,7 @@ export function DecodeValue(
+     }
+   }
+ 
+-  return value;
++  return typeof value === "bigint" ? Number(value) : value;
+ }
+ 
+ /** A value a stage may leave out, as {@link DecodeValue} reads it: an absent one stays `undefined`. */

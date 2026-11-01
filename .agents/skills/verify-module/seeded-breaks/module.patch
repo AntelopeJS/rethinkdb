@@ -1,0 +1,15 @@
+diff --git a/src/config.ts b/src/config.ts
+index c01fff1..10c16d2 100644
+--- a/src/config.ts
++++ b/src/config.ts
+@@ -159,7 +159,9 @@ export function SetOptions(options?: Options): ResolvedOptions {
+     mode === "external" ? ExternalDatabase(options, parsed) : undefined;
+   const pool = parsed
+     ? { ...POOL_DEFAULTS, ...options?.pool, ...parsed.connection }
+-    : options?.pool;
++    : options?.connection
++      ? undefined
++      : options?.pool;
+   if (!pool && !options?.connection) {
+     throw new Error("Invalid RethinkDB options: set url, pool or connection");
+   }

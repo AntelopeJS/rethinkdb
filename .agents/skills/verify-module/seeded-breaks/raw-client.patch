@@ -1,0 +1,13 @@
+diff --git a/src/implementations/rethinkdb/index.ts b/src/implementations/rethinkdb/index.ts
+index 260e381..d2470cc 100644
+--- a/src/implementations/rethinkdb/index.ts
++++ b/src/implementations/rethinkdb/index.ts
+@@ -20,7 +20,7 @@ export async function RunQuery(
+   }
+   switch (cursor.getType()) {
+     case "Atom":
+-      return results[0];
++      return results;
+     case "Cursor":
+       return cursor.toArray();
+     default:
