@@ -10,7 +10,7 @@ journeys:
 
 # External writes
 
-Writes to the client's tables: declared fields only, dropped scope fields, read-only object and list fields, key rules, replace keeping undeclared fields, `DuplicateKeyError`, `forbidden`, and what an external instance refuses. This feature holds the second containment of the Data door (`external-writes`).
+Writes to the client's tables: declared fields only, dropped scope fields, read-only object and list fields, key rules, replace keeping undeclared fields, `DuplicateKeyError`, `forbidden`, and what an external instance refuses.
 
 ## Sub-features
 

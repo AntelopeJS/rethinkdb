@@ -123,15 +123,16 @@ export function sees(label: string, result: Answer, expected: Json): Check {
   return same(label, result.value, expected);
 }
 
-/** Drops every database and account a previous journey left, so each journey starts from the container's empty state. */
-export async function begin(context: JourneyContext): Promise<void> {
-  const cleared = await owner(
-    context,
-    "empty the server",
-    `const keep = ["rethinkdb", "test"];
+const EMPTY_SERVER = `const keep = ["rethinkdb", "test"];
 for (const name of await r.dbList().run(c)) if (!keep.includes(name)) await r.dbDrop(name).run(c);
 for (const user of await r.db("rethinkdb").table("users").getField("id").run(c)) if (user !== "admin") await r.db("rethinkdb").table("users").get(user).delete().run(c);
-return await r.dbList().run(c);`,
-  );
+return await r.dbList().run(c);`;
+
+/** Drops every database and account a previous journey left, so each journey starts from the container's empty state; a server still starting is asked again. */
+export async function begin(context: JourneyContext): Promise<void> {
+  let cleared = await owner(context, "empty the server", EMPTY_SERVER);
+  for (let attempt = 2; attempt <= 4 && cleared.exitCode !== 0; attempt += 1) {
+    cleared = await owner(context, `empty the server, attempt ${attempt}`, EMPTY_SERVER);
+  }
   context.expect(cleared.folder, [same("only the system databases remain", cleared.value, ["rethinkdb", "test"])], { critical: true });
 }

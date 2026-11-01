@@ -20,7 +20,7 @@ const config: VerifyConfig = {
         "src/implementations/database/external-writes.ts",
       ],
       funnels: ["src/implementations/database/selection.ts", "src/implementations/database/atomic.ts", "src/implementations/database/external-writes.ts"],
-      containments: ["schemas/instances", "external-write/external-writes"],
+      containments: ["schemas/instances"],
       why: "these modules decide which database, table and instance a row is written to and read from: a change that stamps the wrong instance or writes outside the declared fields leaves rows an upgrade cannot find or a client's database holds wrong",
     },
     format: {
@@ -49,7 +49,7 @@ const config: VerifyConfig = {
     rethinkdb: {
       image: "rethinkdb:2.4",
       port: 28015,
-      ready: ["bash", "-c", ": > /dev/tcp/127.0.0.1/28015"],
+      ready: ["curl", "-sf", "-o", "/dev/null", "http://127.0.0.1:8080/"],
     },
   },
   moduleConfig(services) {

@@ -1,13 +1,13 @@
 diff --git a/src/implementations/database/stream.ts b/src/implementations/database/stream.ts
-index 6e29cf8..d86f179 100644
+index 6e29cf8..37aeda1 100644
 --- a/src/implementations/database/stream.ts
 +++ b/src/implementations/database/stream.ts
-@@ -471,7 +471,7 @@ function handleSlice(
-       : undefined;
+@@ -472,7 +472,7 @@ function handleSlice(
  
    let result = prev;
--  if (offset !== 0) {
-+  if (offset > 1) {
-     result = [TermType.SKIP, [result, offset]];
+   if (offset !== 0) {
+-    result = [TermType.SKIP, [result, offset]];
++    result = [TermType.SKIP, [result, 0]];
    }
    if (count !== undefined) {
+     result = [TermType.LIMIT, [result, count]];
