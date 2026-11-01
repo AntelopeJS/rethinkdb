@@ -102,7 +102,7 @@ out.max = await products.max("price");
 out.group = (await products.group("category", (stream, category) => ({ category, total: stream.count(), sum: stream.sum("price") }))).sort((a, b) => a.category < b.category ? -1 : 1);
 out.joinInner = (await products.joinInner(orders, (p, o) => o.key("productId").eq(p.key("_id")), (p, o) => ({ name: p.key("name"), qty: o.key("qty") }))).sort((a, b) => a.qty - b.qty);
 out.join = (await orders.join(products, (o, p) => p.key("_id").eq(o.key("productId")), (o, p) => ({ order: o.key("_id"), name: p.key("name").default("-") }))).map((row) => row.order + ":" + row.name).sort();
-out.joinRight = (await orders.join(products, (o, p) => p.key("_id").eq(o.key("productId")), (o, p) => ({ order: o.key("_id"), product: p }))).filter((row) => row.order === "o4").map((row) => row.product);
+out.joinRight = await (async () => { try { return (await orders.join(products, (o, p) => p.key("_id").eq(o.key("productId")), (o, p) => ({ order: o.key("_id"), product: p }))).filter((row) => row.order === "o4").map((row) => row.product); } catch (error) { return String(error.message); } })();
 out.lookupOne = (await orders.lookup(products, "productId", "_id")).filter((o) => o._id !== "o4").map((o) => [o._id, o.productId.name]).sort();
 const looked = await orders.get("o3").lookup(products, "productId", "_id");
 out.lookupDatum = [looked._id, looked.qty, looked.productId.name, looked.productId.price];
