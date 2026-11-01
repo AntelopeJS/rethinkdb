@@ -14,7 +14,7 @@ Writes to the client's tables: declared fields only, dropped scope fields, read-
 
 ## Sub-features
 
-- `external-writes`: insert, update, replace and delete against the client rows, read back with `rethinkdb-ts`.
+- `external-writes`: insert, update, replace, delete and conflict upserts against the client rows, on text, number and compound keys, with the keys each insert answers, read back with `rethinkdb-ts`; a row whose field read as null or absent, written back whole, keeps it.
 - `external-refusals`: multi-type key writes, mapper updates, `changes()`, `atomicMutation` and instances are refused and change nothing.
 
 ## How to get to it (user POV)

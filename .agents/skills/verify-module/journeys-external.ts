@@ -1,43 +1,7 @@
-import { has, interrupted, type Journey, type JourneyContext } from "@antelopejs/tooling-configs/verify";
+import { has, type Journey } from "@antelopejs/tooling-configs/verify";
 
-import { ERP_SCHEMA, externalConfig, seedClient } from "./external-seed.ts";
-import { answered, begin, keysOf, logs, open, owner, pick, refusedRegistration, same, sees, type Answer, type Session } from "./session.ts";
-
-const NO_RETHINKDB = ["@antelopejs/interface-rethinkdb"];
-const PREAMBLE = `const ERP = ${ERP_SCHEMA};
-const schema = new db.Schema("erp", ERP);
-const t = (name) => schema.instance().table(name);
-const out = {};
-const attempt = async (label, fn) => {
-  try { out[label] = await fn(); } catch (error) { out[label] = { error: error.name, kind: error.kind, message: String(error.message) }; }
-};
-`;
-
-function part(result: Answer, key: string): Answer {
-  return { ...result, value: pick(result.value, key) };
-}
-
-async function structure(context: JourneyContext, label: string): Promise<{ folder: string; value: string }> {
-  const read = await owner(
-    context,
-    label,
-    `const out = { databases: await r.dbList().run(c), tables: {} };
-for (const table of await r.db("erp").tableList().run(c)) out.tables[table] = (await r.db("erp").table(table).indexList().run(c)).sort();
-return out;`,
-  );
-  return { folder: read.folder, value: JSON.stringify(read.value) };
-}
-
-async function external(context: JourneyContext, account: "erp_reader" | "erp_writer"): Promise<Session> {
-  await begin(context);
-  await seedClient(context);
-  return open(context, externalConfig(context, account), NO_RETHINKDB);
-}
-
-async function stopped(session: Session): Promise<void> {
-  const result = await session.context.stop("SIGINT", session.app);
-  session.context.expect(result.folder, [interrupted(result)]);
-}
+import { external, part, PREAMBLE, stopped, structure } from "./external-seed.ts";
+import { answered, logs, pick, refusedRegistration, same, sees } from "./session.ts";
 
 export const externalReads: Journey = {
   title: "an external instance reads the client's tables verbatim: _id by key type, null for a value the declaration does not read, no undeclared fields, and the structure is never changed",
@@ -65,6 +29,12 @@ await attempt("mixedCount", () => t("products_mixed").count());
 await attempt("mixedFilter", async () => (await t("products_mixed").filter((row) => row.key("label").eq("number key"))).length);
 await attempt("mixedRowKeys", async () => (await t("products_mixed").orderBy("label")).map((row) => Object.keys(row).sort()));
 await attempt("mixedGet", () => t("products_mixed").get("T-1"));
+const uuid = (n) => "0c000000-0000-4000-8000-" + String(n).padStart(12, "0");
+await attempt("getAllList", async () => (await t("customers").getAll([uuid(1), uuid(3)])).map((row) => row.name).sort());
+await attempt("numberGetAllList", async () => (await t("numbered").getAll(["7", "8"])).map((row) => row.label).sort());
+await attempt("betweenId", async () => (await t("customers").between("_id", uuid(2), uuid(4))).map((row) => row.name).sort());
+await attempt("orderDesc", async () => (await t("customers").orderBy("email", "desc")).map((row) => row.email));
+await attempt("named", () => schema.instance("tenant").table("notes").count());
 return out;`,
     );
     context.expect(result.folder, [answered(result)], { critical: true });
@@ -87,128 +57,16 @@ return out;`,
       sees("a table with keys of two types is read without _id", part(result, "mixedRowKeys"), [["label"], ["label"]]),
     ]);
     const mixedGet = pick(result.value, "mixedGet");
-    context.expect(result.folder, [has("get by _id on a table with keys of two types is refused", JSON.stringify(mixedGet), /more than one type/)]);
+    context.expect(result.folder, [
+      has("get by _id on a table with keys of two types is refused", JSON.stringify(mixedGet), /more than one type/),
+      sees("getAll with a list of keys reads each row", part(result, "getAllList"), ["Customer 1", "Customer 3"]),
+      sees("getAll with a list of number keys reads each row", part(result, "numberGetAllList"), ["eight", "seven"]),
+      sees("between by _id includes the lower bound and excludes the upper", part(result, "betweenId"), ["Customer 2", "Customer 3"]),
+      sees("orderBy a declared index descending reverses the order", part(result, "orderDesc"), ["c4@example.com", "c3@example.com", "c2@example.com", "c1@example.com"]),
+      has("a named instance of an external table is refused", JSON.stringify(pick(result.value, "named")), /"error":"/),
+    ]);
     const after = await structure(context, "the client's structure after");
     context.expect(after.folder, [same("no database, table or index was created or dropped", after.value, before.value)]);
-    await stopped(session);
-  },
-};
-
-export const externalWrites: Journey = {
-  title: "an external instance writes the declared fields of the keyed tables its account may write, and leaves undeclared fields, keys and other rows alone",
-  entryPoint: "`insert`, `update`, `replace` and `delete` on a schema declared as docs/external-mode.md describes, with a writer account",
-  async run(context) {
-    const session = await external(context, "erp_writer");
-    const result = await session.run(
-      "write to the client database",
-      `${PREAMBLE}
-const id = (n) => "0c000000-0000-4000-8000-" + String(n).padStart(12, "0");
-await attempt("insertGenerated", async () => (await t("customers").insert({ name: "Generated" })).length);
-await attempt("insertKeyed", () => t("customers").insert({ id: id(50), name: "Keyed", email: "k@example.com" }));
-await attempt("insertDisagree", () => t("customers").insert({ _id: id(51), id: id(52), name: "Disagree" }));
-await attempt("insertNoKeyText", () => t("notes").insert({ body: "x" }));
-await attempt("insertUnknown", () => t("customers").insert({ id: id(53), _internal: 1 }));
-await attempt("insertObject", () => t("customers").insert({ id: id(54), address: { city: "X" } }));
-await attempt("insertDuplicate", () => t("notes").insert({ id: "n1", body: "again" }));
-await attempt("updateOwn", () => t("notes").get("n1").update({ body: "changed" }));
-await attempt("updateOtherRow", () => t("notes").get("n1").update({ _id: "n2", body: "hijack" }));
-await attempt("writeBackWhole", async () => t("notes").get("n2").update(await t("notes").get("n2")));
-await attempt("updateScopeFields", () => t("notes").get("n2").update({ body: "scoped", tenant_id: "zzz", _instance: "q" }));
-await attempt("updateObjectIgnored", () => t("customers").get(id(1)).update({ address: { city: "Lyon" }, name: "Renamed" }));
-await attempt("replace", () => t("customers").get(id(2)).replace({ id: id(2), name: "Replaced" }));
-await attempt("deleteOne", () => t("customers").get(id(50)).delete());
-await attempt("locked", () => t("locked").insert({ id: "l2", body: "x" }));
-await attempt("lockedDelete", () => t("locked").get("l1").delete());
-return out;`,
-    );
-    context.expect(result.folder, [answered(result)], { critical: true });
-    const refusal = (key: string, pattern: RegExp, kind: string) =>
-      has(`${key} is refused as ${kind}`, JSON.stringify(pick(result.value, key)), pattern);
-    context.expect(result.folder, [
-      sees("an insert without a key lets the server generate a uuid", part(result, "insertGenerated"), 1),
-      refusal("insertDisagree", /"kind":"invalid"/, "invalid"),
-      refusal("insertNoKeyText", /"kind":"invalid".*keys of type string are not generated/, "invalid"),
-      refusal("insertUnknown", /"kind":"invalid".*Field '_internal' of customers is not a declared field/, "invalid"),
-      refusal("insertObject", /"kind":"invalid".*Field 'address' of customers is read-only/, "invalid"),
-      refusal("insertDuplicate", /"error":"DuplicateKeyError"/, "a DuplicateKeyError"),
-      sees("update changes one row", part(result, "updateOwn"), 1),
-      sees("an update whose _id names another row writes nothing", part(result, "updateOtherRow"), 0),
-      sees("a row read and written back whole changes nothing", part(result, "writeBackWhole"), 0),
-      sees("_instance and tenant_id are dropped, the declared field is written", part(result, "updateScopeFields"), 1),
-      sees("an object field in an update is ignored, the declared field is written", part(result, "updateObjectIgnored"), 1),
-      sees("replace answers 1", part(result, "replace"), 1),
-      sees("delete answers 1", part(result, "deleteOne"), 1),
-      refusal("locked", /"kind":"forbidden"/, "forbidden"),
-      refusal("lockedDelete", /"kind":"forbidden"/, "forbidden"),
-    ]);
-    const duplicate = JSON.stringify(pick(result.value, "insertDuplicate"));
-    context.expect(result.folder, [has("a DuplicateKeyError quotes no row", duplicate, /^((?!again).)*$/)]);
-    const native = await owner(
-      context,
-      "read the client's rows back",
-      `const db = r.db("erp");
-const n1 = await db.table("notes").get("n1").run(c);
-const n2 = await db.table("notes").get("n2").run(c);
-const c1 = await db.table("customers").get("0c000000-0000-4000-8000-000000000001").run(c);
-const c2 = await db.table("customers").get("0c000000-0000-4000-8000-000000000002").run(c);
-const generated = await db.table("customers").filter({ name: "Generated" }).run(c);
-const deleted = await db.table("customers").get("0c000000-0000-4000-8000-000000000050").run(c);
-return { n1, n2, c1Name: c1.name, c1Address: c1.address, c2, generated: generated.map((row) => /^[0-9a-f-]{36}$/.test(row.id)), deletedGone: deleted === null, noUnknown: (await db.table("customers").get("0c000000-0000-4000-8000-000000000053").run(c)) === null };`,
-    );
-    context.expect(native.folder, [
-      same("update wrote the declared field and kept the row", pick(pick(native.value, "n1"), "body"), "changed"),
-      same("the row named by the refused _id was not touched", pick(pick(native.value, "n2"), "body"), "scoped"),
-      same("tenant_id and _instance were never stored", keysOf(pick(native.value, "n2")), ["body", "id"]),
-      same("an object field in an update keeps its stored value", pick(native.value, "c1Address"), { city: "Paris" }),
-      same("update renamed the customer", pick(native.value, "c1Name"), "Renamed"),
-      same("replace removed the declared fields it left out (segment, email, created_at) and kept the undeclared phone and the read-only object and list fields", pick(native.value, "c2"), { address: { city: "Paris" }, id: "0c000000-0000-4000-8000-000000000002", name: "Replaced", phone: "+33 2", tags: [] }),
-      same("the generated key is a uuid", pick(native.value, "generated"), [true]),
-      same("delete removed the row", pick(native.value, "deletedGone"), true),
-      same("a refused insert stored nothing", pick(native.value, "noUnknown"), true),
-    ]);
-    await stopped(session);
-  },
-};
-
-export const externalRefusals: Journey = {
-  title: "an external instance refuses what docs/external-mode.md excludes: writes to multi-type keys, mapper updates, change feeds, atomic mutations and instances",
-  entryPoint: "the refused calls on a schema declared as docs/external-mode.md describes, with a writer account",
-  async run(context) {
-    const session = await external(context, "erp_writer");
-    const before = await structure(context, "the client's structure before");
-    const result = await session.run(
-      "call what is excluded",
-      `${PREAMBLE}
-await attempt("mixedInsert", () => t("products_mixed").insert({ sku: "X", label: "x" }));
-await attempt("mixedUpdate", () => t("products_mixed").filter((row) => row.key("label").eq("text key")).update({ label: "y" }));
-await attempt("mixedDelete", () => t("products_mixed").filter((row) => row.key("label").eq("text key")).delete());
-await attempt("mixedGetAll", () => t("products_mixed").getAll("T-1"));
-await attempt("mapper", () => t("notes").get("n1").update((row) => ({ body: row.key("body") })));
-await attempt("changes", async () => { for await (const change of t("notes").changes()) return change; });
-await attempt("atomic", () => t("notes").atomicMutation("n1", { type: "deleteIfEqual", field: "body", expectedValue: "first" }));
-await attempt("create", () => schema.createInstance("extra"));
-await attempt("destroy", () => schema.destroyInstance("extra"));
-out.listed = await schema.listInstances();
-return out;`,
-    );
-    context.expect(result.folder, [answered(result)], { critical: true });
-    const says = (key: string, pattern: RegExp) => has(`${key} is refused with its reason`, JSON.stringify(pick(result.value, key)), pattern);
-    context.expect(result.folder, [
-      says("mixedInsert", /more than one type.*cannot be written/),
-      says("mixedUpdate", /"error":"/),
-      says("mixedDelete", /"error":"/),
-      says("mixedGetAll", /more than one type/),
-      says("mapper", /computed from the row is not supported on an external table/),
-      says("changes", /changes\(\) is not supported on table notes/),
-      says("atomic", /'atomicMutation' stage is not supported on table notes/),
-      says("create", /'createInstance' stage manages instances/),
-      says("destroy", /'destroyInstance' stage manages instances/),
-      sees("listInstances is empty", part(result, "listed"), []),
-    ]);
-    const after = await structure(context, "the client's structure after");
-    context.expect(after.folder, [same("the refused calls changed nothing", after.value, before.value)]);
-    const native = await owner(context, "read the multi-type table back", `return await r.db("erp").table("products_mixed").orderBy("label").getField("label").run(c);`);
-    context.expect(native.folder, [same("no row of the multi-type table was written", native.value, ["number key", "text key"])]);
     await stopped(session);
   },
 };
@@ -237,6 +95,14 @@ await waitFor(2500);
 return (await schema.instance().table("products").orderBy("sku")).map((row) => [row._id, row.price]);`,
     );
     context.expect(accepted.folder, [answered(accepted), sees("the schema registers and reads", accepted, [["SKU-1", 5.5], ["SKU-2", null]])]);
+    const codec = await session.run(
+      "declare a field with an io-ts codec",
+      `const Body = { name: "Body", is: (value) => typeof value === "string", encode: (value) => value, decode: (value) => ({ _tag: "Right", right: value }) };
+const schema = new db.Schema("codec", { notes: { fields: { _id: "string", id: "string", body: Body }, indexes: {} } });
+await waitFor(2000);
+return await schema.instance().table("notes").count();`,
+    );
+    context.expect(codec.folder, [answered(codec), sees("a field declared with an io-ts codec is a known type: the schema, labelled codec, registers and reads the url's notes", codec, 2)]);
     const warnings = await logs(session);
     context.expect(context.work, [
       has("a field some of whose sampled values are not read warns with their share", warnings, /Field 'warn\.products\.price' is declared number, but 1 of 2 sampled values \(50\.0%\) are STRING/),
@@ -245,3 +111,4 @@ return (await schema.instance().table("products").orderBy("sku")).map((row) => [
     await stopped(session);
   },
 };
+

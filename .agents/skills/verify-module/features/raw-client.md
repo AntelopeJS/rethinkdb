@@ -13,7 +13,7 @@ journeys:
 
 ## Sub-features
 
-- `raw-client`: create a database and a table, insert and read through `RunQuery`, read back with `rethinkdb-ts`.
+- `raw-client`: create a database and a table, insert and read through `RunQuery`, read back with `rethinkdb-ts`; with `pool.db` set, a table named without a database is read from it.
 
 ## How to get to it (user POV)
 

@@ -1,12 +1,14 @@
 import type { VerifyConfig } from "@antelopejs/tooling-configs/verify";
 
 import { atomicOutcomes } from "./journeys-atomic.ts";
-import { catalogDescribe, catalogRefused, rawClient } from "./journeys-catalog.ts";
-import { externalReads, externalRefusals, externalRegistration, externalWrites } from "./journeys-external.ts";
-import { configRefused, connectionModes } from "./journeys-module.ts";
+import { catalogDescribe, catalogRefused, catalogStart } from "./journeys-catalog.ts";
+import { externalReads, externalRegistration } from "./journeys-external.ts";
+import { externalRefusals, externalWrites } from "./journeys-external-writes.ts";
+import { configRefused, connectionModes, externalOptions, moduleDev } from "./journeys-module.ts";
 import { crossInstanceIndexes, instances, refusedIndexes, storageLayout } from "./journeys-owned.ts";
 import { readExpressions } from "./journeys-expressions.ts";
 import { changeFeeds } from "./journeys-feeds.ts";
+import { rawClient } from "./journeys-raw.ts";
 import { readSelections, readStreams } from "./journeys-reads.ts";
 import { guardedAll, poolConfig } from "./session.ts";
 import { insertConflicts, insertValues, storedValues, unstorableValues, updateReplaceDelete } from "./journeys-writes.ts";
@@ -63,6 +65,7 @@ const config: VerifyConfig = {
     return poolConfig({ name: "rethinkdb", container: found?.container ?? "", host: found?.host ?? "127.0.0.1", port: found?.port ?? 28015 });
   },
   journeys: guardedAll({
+    "module-dev": moduleDev,
     "connection-modes": connectionModes,
     "config-refused": configRefused,
     "storage-layout": storageLayout,
@@ -81,10 +84,12 @@ const config: VerifyConfig = {
     "change-feeds": changeFeeds,
     "external-reads": externalReads,
     "external-registration": externalRegistration,
+    "external-options": externalOptions,
     "external-writes": externalWrites,
     "external-refusals": externalRefusals,
     "catalog-describe": catalogDescribe,
     "catalog-refused": catalogRefused,
+    "catalog-start": catalogStart,
     "raw-client": rawClient,
   }),
 };

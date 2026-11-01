@@ -33,7 +33,8 @@ export function path(...parts: string[]): string {
   return parts.join("/");
 }
 
-async function freePort(context: JourneyContext): Promise<number> {
+/** A loopback port nothing listens on, picked by the kernel. */
+export async function freePort(context: JourneyContext): Promise<number> {
   const picked = await context.command("pick a free port", "node", ["-e", "const s = require('net').createServer(); s.listen(0, '127.0.0.1', () => { console.log(s.address().port); s.close(); });"]);
   return Number(picked.stdout.trim());
 }
@@ -78,12 +79,18 @@ function addConsumer(context: JourneyContext, project: string, moduleConfig: Mod
   context.edit("consumer source", path(project, "app", "index.js"), APP_SOURCE);
 }
 
-/** Starts `ajs project dev` with the module configured as `moduleConfig` and a consumer module that runs scenario bodies. */
-export async function open(context: JourneyContext, moduleConfig: ModuleConfig, disabledExports: string[] = []): Promise<Session> {
+/** Writes a fixture project with the module configured as `moduleConfig` and a consumer module that runs scenario bodies; returns its folder. */
+export async function prepare(context: JourneyContext, moduleConfig: ModuleConfig, disabledExports: string[] = []): Promise<string> {
   const project = context.fixture({ moduleConfig });
   addConsumer(context, project, moduleConfig, disabledExports);
   const link = await context.command("link the repository's packages", "ln", ["-s", path(context.repo, "node_modules"), path(project, "app", "node_modules")]);
   context.expect(link.folder, [{ name: "the consumer resolves the repository's packages", pass: link.exitCode === 0, detail: link.stderr }], { critical: true });
+  return project;
+}
+
+/** Starts `ajs project dev` on a {@link prepare}d project. */
+export async function open(context: JourneyContext, moduleConfig: ModuleConfig, disabledExports: string[] = []): Promise<Session> {
+  const project = await prepare(context, moduleConfig, disabledExports);
   const port = await freePort(context);
   const app = await context.dev("ajs project dev", project, { env: { VERIFY_APP_PORT: String(port) } });
   const base = `http://127.0.0.1:${port}/`;

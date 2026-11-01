@@ -11,6 +11,7 @@ docs:
 journeys:
   - connection-modes
   - config-refused
+  - external-options
 ---
 
 # Module
@@ -20,7 +21,8 @@ How the module is configured and connects: `pool`, `connection` or `url`, `pool`
 ## Sub-features
 
 - `connection-modes`: a round trip works with `connection` alone, with `url` alone and with a `pool` beside a dead `connection`.
-- `config-refused`: no connection option, an external instance without a url or database, a `pool.db` that disagrees, an unknown mode, a zero `statementTimeoutMs` and a non-rethinkdb url each stop `ajs project dev` and say why.
+- `config-refused`: no connection option, an external instance without a url or database, a `pool.db` that disagrees, an unknown mode, a zero, fractional or negative `statementTimeoutMs` and a non-rethinkdb url each stop `ajs project dev` and say why.
+- `external-options`: an external instance whose `pool` points at a dead server still reads through the url's server, since pool options are merged under the url; with `statementTimeoutMs: 1`, a scan of 40000 rows rejects with a timeout, while the same scan without a limit answers.
 
 ## How to get to it (user POV)
 

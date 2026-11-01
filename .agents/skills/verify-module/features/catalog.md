@@ -6,6 +6,7 @@ docs:
 journeys:
   - catalog-describe
   - catalog-refused
+  - catalog-start
 ---
 
 # Catalog
@@ -14,8 +15,9 @@ The catalog of an external instance: information, relations, descriptions, profi
 
 ## Sub-features
 
-- `catalog-describe`: `Info`, `ListRelations`, `DescribeRelations`, `Profile` and `SampleRows`, with the long text cut at 200 characters.
+- `catalog-describe`: `Info`, `ListRelations`, `DescribeRelations`, `Profile`, `CheckReference` and `SampleRows`, with the long text cut at 200 characters, a binary value answered by its length, the 80% rule of a field's declaration, the fields of getField, array and other function indexes, the profile's nulls, distinct values, lengths, ranges, months and categories (at least 5 rows each, at most 25 distinct values), and the `columns` filters.
 - `catalog-refused`: refusals on an owned instance and with `catalog.enabled` false.
+- `catalog-start`: a project built with `ajs project build` and run with `ajs project start` refuses the catalog when `catalog.enabled` is unset and answers it when true; under `ajs project run` it answers. The journey drives `start` and `run` with a small node script, because `context.dev` only runs `ajs project dev`.
 
 ## How to get to it (user POV)
 

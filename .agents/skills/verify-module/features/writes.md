@@ -19,7 +19,7 @@ journeys:
 
 - `insert-values`: text, numbers, booleans, null, dates, lists and nested documents are stored as those ReQL types.
 - `insert-conflicts`: a taken `_id` throws `DuplicateKeyError` on `_id` and stores nothing; `conflict: "update"` keeps unmentioned fields and `"replace"` drops them.
-- `update-replace-delete`: counts and effects of the four writes, with a function update and getAll and filter selections.
+- `update-replace-delete`: counts and effects of the four writes, with a function update and getAll and filter selections; an update that changes nothing resolves to 0, since update counts the documents it modified.
 
 ## How to get to it (user POV)
 

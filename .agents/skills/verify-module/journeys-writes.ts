@@ -191,6 +191,9 @@ out.updateComputed = await users.get("u1").update((user) => ({ loginCount: user.
 out.loginCount = (await users.get("u1")).loginCount;
 out.updateMissing = await users.get("nobody").update({ status: "x" });
 out.updateMany = await users.getAll("inactive", "status").update({ status: "active" });
+out.updateSame = await users.get("u1").update({ status: "away" });
+out.updateManySame = await users.getAll(["u2", "u3"]).update({ status: "active" });
+out.updateMixed = await users.getAll(["u1", "u2"]).update({ status: "active" });
 out.replaceOne = await users.get("u1").replace({ _id: "u1", name: "Alice" });
 out.afterReplace = await users.get("u1");
 out.deleteOne = await users.get("u2").delete();
@@ -209,6 +212,9 @@ return out;`,
       sees("the function added one to the stored number", part(result, "loginCount"), 2),
       sees("update of a missing key resolves to 0", part(result, "updateMissing"), 0),
       sees("update of a getAll selection resolves to its size", part(result, "updateMany"), 2),
+      sees("an update that changes nothing modified no document", part(result, "updateSame"), 0),
+      sees("an update of two documents that already hold the values modified none", part(result, "updateManySame"), 0),
+      sees("an update of two documents, one already holding the value, modified one", part(result, "updateMixed"), 1),
       sees("replace resolves to 1", part(result, "replaceOne"), 1),
       same("replace stores the new field", pick(replaced, "name"), "Alice"),
       same("replace removes the fields it leaves out", pick(replaced, "extra"), undefined),

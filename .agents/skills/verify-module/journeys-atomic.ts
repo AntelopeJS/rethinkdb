@@ -44,6 +44,15 @@ out.deleteIfEqualArray = await jobs.atomicMutation("stamp", { type: "deleteIfEqu
 out.deleteIfEqualMissingField = await jobs.atomicMutation("stamp", { type: "deleteIfEqual", field: "title2", expectedValue: "x" });
 out.deleteIfEqualDate = await jobs.atomicMutation("stamp", { type: "deleteIfEqual", field: "seenAt", expectedValue: seen });
 out.left = (await jobs).map((job) => job._id).sort();
+await jobs.insert([{ _id: "scoped", title: "Scoped", revision: "r1" }, { _id: "scoped2", title: "Scoped2", revision: "r1" }]);
+const refusedPatch = async (label, patch) => {
+  try { await jobs.atomicMutation("scoped", { type: "update", revisionField: "revision", expectedRevision: "r1", nextRevision: "r2", patch }); out[label] = "applied"; } catch (error) { out[label] = "refused"; }
+};
+await refusedPatch("tenantPatch", { tenant_id: "b" });
+await refusedPatch("revisionPatch", { revision: "r7" });
+await refusedPatch("plainIdPatch", { id: "other" });
+out.otherDelete = await other.atomicMutation("scoped", { type: "delete", revisionField: "revision", expectedRevision: "r1" });
+out.otherDeleteIfEqual = await other.atomicMutation("scoped2", { type: "deleteIfEqual", field: "title", expectedValue: "Scoped2" });
 const { CROSS_INSTANCE } = load("@antelopejs/interface-database/schema");
 await schema.createInstance();
 const home = schema.instance().table("jobs");
@@ -78,6 +87,11 @@ return out;`,
       sees("deleteIfEqual on a missing field never matches", part(result, "deleteIfEqualMissingField"), "not-applied"),
       sees("deleteIfEqual with the stored instant is applied", part(result, "deleteIfEqualDate"), "applied"),
       sees("only the untouched records are left", part(result, "left"), ["legacy", "nullrev"]),
+      sees("a patch naming the adapter-owned tenant_id is refused", part(result, "tenantPatch"), "refused"),
+      sees("a patch naming the revision field is refused", part(result, "revisionPatch"), "refused"),
+      sees("a patch naming id is refused", part(result, "plainIdPatch"), "refused"),
+      sees("a delete of another instance's record is not-applied", part(result, "otherDelete"), "not-applied"),
+      sees("a deleteIfEqual of another instance's record is not-applied", part(result, "otherDeleteIfEqual"), "not-applied"),
       sees("a CROSS_INSTANCE atomic mutation is refused", part(result, "crossInstance"), "refused"),
       sees("the default instance is supported", part(result, "defaultInstance"), "applied"),
       sees("deleteIfEqual is type-sensitive: the text 1 does not match the number 1", part(result, "typeSensitive"), "not-applied"),
@@ -87,7 +101,7 @@ return out;`,
       context,
       "read the bootstrapped and patched records back",
       `const t = r.db("verify-atomic").table("jobs");
-return { legacy: await t.get("legacy").run(c), home: await t.get("h1").run(c), seenType: await t.get("h1")("seenAt").typeOf().run(c), seenEpoch: await t.get("h1")("seenAt").toEpochTime().run(c), typed: await t.get("typed").run(c) };`,
+return { legacy: await t.get("legacy").run(c), home: await t.get("h1").run(c), seenType: await t.get("h1")("seenAt").typeOf().run(c), seenEpoch: await t.get("h1")("seenAt").toEpochTime().run(c), typed: await t.get("typed").run(c), scoped: (await t.getAll("scoped", "scoped2").orderBy("_id").run(c)).map((row) => [row._id, row.title, row.revision, row.tenant_id]) };`,
     );
     const home = pick(native.value, "home");
     context.expect(native.folder, [
@@ -98,6 +112,7 @@ return { legacy: await t.get("legacy").run(c), home: await t.get("h1").run(c), s
       same("a Date in a patch is stored as a time", pick(native.value, "seenType"), "PTYPE<TIME>"),
       same("with its milliseconds", pick(native.value, "seenEpoch"), 1717243200.25),
       same("the record deleted by its number is gone", pick(native.value, "typed"), null),
+      same("the refused patches and the other instance's deletes left both records as written, in instance a", pick(native.value, "scoped"), [["scoped", "Scoped", "r1", "a"], ["scoped2", "Scoped2", "r1", "a"]]),
     ]);
     const stopped = await context.stop("SIGINT", session.app);
     context.expect(stopped.folder, [interrupted(stopped)]);

@@ -1,6 +1,6 @@
-import type { JourneyContext } from "@antelopejs/tooling-configs/verify";
+import { interrupted, type JourneyContext } from "@antelopejs/tooling-configs/verify";
 
-import { owner, server, type ModuleConfig } from "./session.ts";
+import { begin, open, owner, pick, server, type Answer, type ModuleConfig, type Session } from "./session.ts";
 
 export const CLIENT = "erp";
 export const PASSWORD = "erp-password";
@@ -54,3 +54,45 @@ export const ERP_SCHEMA = `{
   numbered: { fields: { _id: "string", no: "number", label: "string" }, indexes: {} },
   lines: { fields: { _id: "string", qty: "number" }, indexes: {} },
 }`;
+
+/** The interface an external instance does not implement, which the project lists in `disabledExports`. */
+export const NO_RETHINKDB = ["@antelopejs/interface-rethinkdb"];
+/** The start of a scenario body on the client database: the schema `erp`, `t(name)` for its tables and `attempt` recording each answer or error in `out`. */
+export const PREAMBLE = `const ERP = ${ERP_SCHEMA};
+const schema = new db.Schema("erp", ERP);
+const t = (name) => schema.instance().table(name);
+const out = {};
+const attempt = async (label, fn) => {
+  try { out[label] = await fn(); } catch (error) { out[label] = { error: error.name, kind: error.kind, message: String(error.message) }; }
+};
+`;
+
+/** The answer narrowed to one key of its value. */
+export function part(result: Answer, key: string): Answer {
+  return { ...result, value: pick(result.value, key) };
+}
+
+/** The client's databases, tables and indexes, read as its owner. */
+export async function structure(context: JourneyContext, label: string): Promise<{ folder: string; value: string }> {
+  const read = await owner(
+    context,
+    label,
+    `const out = { databases: await r.dbList().run(c), tables: {} };
+for (const table of await r.db("erp").tableList().run(c)) out.tables[table] = (await r.db("erp").table(table).indexList().run(c)).sort();
+return out;`,
+  );
+  return { folder: read.folder, value: JSON.stringify(read.value) };
+}
+
+/** Empties the server, seeds the client database and opens an external instance for `account`. */
+export async function external(context: JourneyContext, account: "erp_reader" | "erp_writer"): Promise<Session> {
+  await begin(context);
+  await seedClient(context);
+  return open(context, externalConfig(context, account), NO_RETHINKDB);
+}
+
+/** Stops the project with Ctrl+C and checks it exited as interrupted. */
+export async function stopped(session: Session): Promise<void> {
+  const result = await session.context.stop("SIGINT", session.app);
+  session.context.expect(result.folder, [interrupted(result)]);
+}

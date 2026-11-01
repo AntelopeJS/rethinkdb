@@ -13,7 +13,7 @@ The fixed journey every verdict runs, whatever the diff touches: load the module
 
 ## Sub-features
 
-- `module-dev`: the pack's journey.
+- `module-dev`: the pack's journey, registered again in `verify.config.ts` under the same id so it is guarded like every repository journey: a RethinkDB that stops answering after `ajs project dev` starts ends it NOT VERIFIED, not FAIL. The copy keeps the pack's steps and checks.
 - `insert-values`: as in [writes](writes.md).
 
 ## How to get to it (user POV)

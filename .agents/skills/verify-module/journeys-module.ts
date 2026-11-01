@@ -1,6 +1,7 @@
-import { has, interrupted, type Journey } from "@antelopejs/tooling-configs/verify";
+import { has, interrupted, refused, type Journey } from "@antelopejs/tooling-configs/verify";
 
-import { answered, begin, open, owner, path, poolConfig, server, same, sees, type Answer, type ModuleConfig, type Session } from "./session.ts";
+import { externalConfig, NO_RETHINKDB, part, PREAMBLE, seedClient, stopped } from "./external-seed.ts";
+import { answered, begin, open, owner, path, pick, poolConfig, server, same, sees, type Answer, type ModuleConfig, type Session } from "./session.ts";
 
 const ROUND_TRIP = `const schema = new db.Schema("verify-config", { notes: { fields: { title: "string" }, indexes: {} } });
 await schema.createInstance("a");
@@ -50,6 +51,8 @@ const REFUSALS: [string, ModuleConfig, RegExp][] = [
   ["a pool.db that disagrees with the url", { mode: "external", url: "rethinkdb://admin:@127.0.0.1:1/erp", pool: { db: "other" } }, /pool\.db \(other\) disagrees with the database of config\.url \(erp\)/],
   ["an unknown mode", { mode: "shared", pool: { host: "127.0.0.1", port: 1 } }, /mode must be one of owned, external, received shared/],
   ["a statementTimeoutMs of zero", { mode: "external", url: "rethinkdb://admin:@127.0.0.1:1/erp", statementTimeoutMs: 0 }, /statementTimeoutMs must be a positive safe integer, received 0/],
+  ["a fractional statementTimeoutMs", { mode: "external", url: "rethinkdb://admin:@127.0.0.1:1/erp", statementTimeoutMs: 1.5 }, /statementTimeoutMs must be a positive safe integer, received 1\.5/],
+  ["a negative statementTimeoutMs", { mode: "external", url: "rethinkdb://admin:@127.0.0.1:1/erp", statementTimeoutMs: -5 }, /statementTimeoutMs must be a positive safe integer, received -5/],
   ["a url that is not rethinkdb://", { url: "http://127.0.0.1:1/erp" }, /url must start with rethinkdb:\/\/, received http:\/\//],
 ];
 
@@ -66,5 +69,53 @@ export const configRefused: Journey = {
         has(`the refusal says why (${label})`, started.stderr, message),
       ]);
     }
+  },
+};
+
+/**
+ * The pack's `module-dev` journey, kept under its id so `guardedAll` can guard it: the pack runs its own copy unguarded, so a RethinkDB
+ * outage right after `ajs project dev` starts would fail it as if the module were broken (tooling-configs#132).
+ */
+export const moduleDev: Journey = {
+  title: "the module loads from its local source against its backing services and stops on Ctrl+C",
+  entryPoint: "`ajs project dev` on a project that installs the module as `local`",
+  async run(context) {
+    const project = context.fixture();
+    const app = await context.dev("ajs project dev", project);
+    const surface = await context.http("implemented interfaces", `http://127.0.0.1:${app.port}/surface`, { method: "POST", body: "{}" });
+    context.expect(surface.folder, [{ name: "the consumer loaded every implemented interface", pass: pick(surface.json, "ok") === true, detail: surface.body.slice(0, 300) }]);
+    const stopped = await context.stop("SIGINT", app);
+    context.expect(stopped.folder, [interrupted(stopped)]);
+    const after = await context.http("port after stop", `http://127.0.0.1:${app.port}/health`);
+    context.expect(after.folder, [refused(after)]);
+  },
+};
+
+export const externalOptions: Journey = {
+  title: "an external instance merges pool options under the url, so the url's server wins, and closes a read that outlasts statementTimeoutMs with a timeout",
+  entryPoint: "`pool` and `statementTimeoutMs` beside `url` in the config of an external instance, read with a reader account",
+  async run(context) {
+    await begin(context);
+    await seedClient(context);
+    const orders = await owner(context, "add 40000 orders to the client database", `await r.db("erp").table("orders").insert(Array.from({ length: 40000 }, (_, n) => ({ id: "o" + n, customer_id: "c" + n, total: n }))).run(c); return "added";`);
+    context.expect(orders.folder, [same("the orders are stored", orders.exitCode, 0)], { critical: true });
+    const base = externalConfig(context, "erp_reader");
+    const scan = `${PREAMBLE}
+await attempt("count", () => t("customers").count());
+await attempt("scan", async () => (await t("orders").filter((row) => row.key("total").eq(-1))).length);
+return out;`;
+    const merged = await open(context, { ...base, pool: { host: "127.0.0.1", port: 1, pool: true, cursor: false, silent: true, discovery: false } }, NO_RETHINKDB);
+    const unlimited = await merged.run("read with a pool pointing at a dead server and no time limit", scan);
+    context.expect(unlimited.folder, [answered(unlimited)], { critical: true });
+    context.expect(unlimited.folder, [
+      sees("the url's server wins over the pool's host and port", part(unlimited, "count"), 4),
+      sees("without a limit the scan reads every order and matches none", part(unlimited, "scan"), 0),
+    ]);
+    await stopped(merged);
+    const limited = await open(context, { ...base, statementTimeoutMs: 1 }, NO_RETHINKDB);
+    const timed = await limited.run("read with statementTimeoutMs 1", scan);
+    context.expect(timed.folder, [answered(timed)], { critical: true });
+    context.expect(timed.folder, [has("a read that outlasts statementTimeoutMs rejects with a timeout", JSON.stringify(pick(timed.value, "scan")), /"error":".*time/i)]);
+    await stopped(limited);
   },
 };

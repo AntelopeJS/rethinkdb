@@ -89,6 +89,7 @@ export const readStreams: Journey = {
       "read streams",
       `${SEED}
 out.keys = (await products.key("name")).sort();
+out.keysByProxy = (await products.key(db.ValueProxy.constant("name"))).sort();
 out.defaulted = await products.get("p1").key("missing").default("N/A");
 out.map = (await products.map((p) => ({ label: p.key("name"), double: p.key("price").mul(2) }))).sort((a, b) => a.double - b.double).slice(0, 2);
 out.union = names(await products.filter((p) => p.key("category").eq("art")).union(products.filter((p) => p.key("category").eq("books")))).sort();
@@ -125,6 +126,7 @@ return out;`,
     context.expect(result.folder, [answered(result)], { critical: true });
     context.expect(result.folder, [
       sees("key reads one field of every row", part(result, "keys"), ["Atlas", "Bible", "Cable", "Drill", "Easel"]),
+      sees("key with a ValueProxy yielding the field name reads that field of every row", part(result, "keysByProxy"), ["Atlas", "Bible", "Cable", "Drill", "Easel"]),
       sees("default replaces a missing field", part(result, "defaulted"), "N/A"),
       sees("map builds the computed documents", part(result, "map"), [{ double: 20, label: "Atlas" }, { double: 40, label: "Bible" }]),
       sees("union concatenates two streams", part(result, "union"), ["Atlas", "Bible", "Easel"]),
