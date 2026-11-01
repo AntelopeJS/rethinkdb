@@ -19,7 +19,7 @@ An external instance reading a database it does not own: `_id` by key type, null
 ## Sub-features
 
 - `external-reads`: reads by key class, by index and by scan, with the client structure compared before and after.
-- `external-registration`: a missing table, `_id` over multi-type keys and an unknown field type fail with their message; a partial sample and a missing index only warn.
+- `external-registration`: a missing table, `_id` over multi-type keys and an unknown field type fail with their message, in the query's error or the logs, and no query on that schema answers; a partial sample and a missing index only warn.
 
 ## How to get to it (user POV)
 

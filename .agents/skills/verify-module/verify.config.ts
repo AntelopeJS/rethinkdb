@@ -4,10 +4,12 @@ import { atomicOutcomes } from "./journeys-atomic.ts";
 import { catalogDescribe, catalogRefused, rawClient } from "./journeys-catalog.ts";
 import { externalReads, externalRefusals, externalRegistration, externalWrites } from "./journeys-external.ts";
 import { configRefused, connectionModes } from "./journeys-module.ts";
-import { instances, storageLayout, uniqueRefused } from "./journeys-owned.ts";
+import { crossInstanceIndexes, instances, refusedIndexes, storageLayout } from "./journeys-owned.ts";
+import { readExpressions } from "./journeys-expressions.ts";
+import { changeFeeds } from "./journeys-feeds.ts";
 import { readSelections, readStreams } from "./journeys-reads.ts";
-import { poolConfig } from "./session.ts";
-import { insertConflicts, insertValues, unstorableValues, updateReplaceDelete } from "./journeys-writes.ts";
+import { guardedAll, poolConfig } from "./session.ts";
+import { insertConflicts, insertValues, storedValues, unstorableValues, updateReplaceDelete } from "./journeys-writes.ts";
 
 const config: VerifyConfig = {
   doors: {
@@ -60,19 +62,23 @@ const config: VerifyConfig = {
     const found = services.find((service) => service.name === "rethinkdb");
     return poolConfig({ name: "rethinkdb", container: found?.container ?? "", host: found?.host ?? "127.0.0.1", port: found?.port ?? 28015 });
   },
-  journeys: {
+  journeys: guardedAll({
     "connection-modes": connectionModes,
     "config-refused": configRefused,
     "storage-layout": storageLayout,
-    "unique-refused": uniqueRefused,
+    "refused-indexes": refusedIndexes,
     instances,
+    "cross-instance-indexes": crossInstanceIndexes,
     "insert-values": insertValues,
     "unstorable-values": unstorableValues,
+    "stored-values": storedValues,
     "insert-conflicts": insertConflicts,
     "update-replace-delete": updateReplaceDelete,
     "atomic-outcomes": atomicOutcomes,
     "read-selections": readSelections,
     "read-streams": readStreams,
+    "read-expressions": readExpressions,
+    "change-feeds": changeFeeds,
     "external-reads": externalReads,
     "external-registration": externalRegistration,
     "external-writes": externalWrites,
@@ -80,7 +86,7 @@ const config: VerifyConfig = {
     "catalog-describe": catalogDescribe,
     "catalog-refused": catalogRefused,
     "raw-client": rawClient,
-  },
+  }),
 };
 
 export default config;

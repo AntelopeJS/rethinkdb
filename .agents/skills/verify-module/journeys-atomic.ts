@@ -44,6 +44,14 @@ out.deleteIfEqualArray = await jobs.atomicMutation("stamp", { type: "deleteIfEqu
 out.deleteIfEqualMissingField = await jobs.atomicMutation("stamp", { type: "deleteIfEqual", field: "title2", expectedValue: "x" });
 out.deleteIfEqualDate = await jobs.atomicMutation("stamp", { type: "deleteIfEqual", field: "seenAt", expectedValue: seen });
 out.left = (await jobs).map((job) => job._id).sort();
+const { CROSS_INSTANCE } = load("@antelopejs/interface-database/schema");
+await schema.createInstance();
+const home = schema.instance().table("jobs");
+await home.insert([{ _id: "h1", title: "Home", revision: "r1", count: 1 }, { _id: "typed", title: "Typed", count: 1 }]);
+try { await schema.instance(CROSS_INSTANCE).table("jobs").atomicMutation("h1", { type: "update", revisionField: "revision", expectedRevision: "r1", nextRevision: "r2", patch: { title: "Cross" } }); out.crossInstance = "applied"; } catch (error) { out.crossInstance = "refused"; }
+out.defaultInstance = await home.atomicMutation("h1", { type: "update", revisionField: "revision", expectedRevision: "r1", nextRevision: "r2", patch: { seenAt: new Date("2024-06-01T12:00:00.250Z") } });
+out.typeSensitive = await home.atomicMutation("typed", { type: "deleteIfEqual", field: "count", expectedValue: "1" });
+out.numberEqual = await home.atomicMutation("typed", { type: "deleteIfEqual", field: "count", expectedValue: 1 });
 return out;`,
     );
     context.expect(result.folder, [answered(result)], { critical: true });
@@ -70,9 +78,27 @@ return out;`,
       sees("deleteIfEqual on a missing field never matches", part(result, "deleteIfEqualMissingField"), "not-applied"),
       sees("deleteIfEqual with the stored instant is applied", part(result, "deleteIfEqualDate"), "applied"),
       sees("only the untouched records are left", part(result, "left"), ["legacy", "nullrev"]),
+      sees("a CROSS_INSTANCE atomic mutation is refused", part(result, "crossInstance"), "refused"),
+      sees("the default instance is supported", part(result, "defaultInstance"), "applied"),
+      sees("deleteIfEqual is type-sensitive: the text 1 does not match the number 1", part(result, "typeSensitive"), "not-applied"),
+      sees("deleteIfEqual with the stored number is applied", part(result, "numberEqual"), "applied"),
     ]);
-    const native = await owner(context, "read the bootstrapped record back", `return await r.db("verify-atomic").table("jobs").get("legacy").run(c);`);
-    context.expect(native.folder, [same("the bootstrapped record holds its new revision", pick(native.value, "revision"), "r1"), same("and its new title", pick(native.value, "title"), "Bootstrapped")]);
+    const native = await owner(
+      context,
+      "read the bootstrapped and patched records back",
+      `const t = r.db("verify-atomic").table("jobs");
+return { legacy: await t.get("legacy").run(c), home: await t.get("h1").run(c), seenType: await t.get("h1")("seenAt").typeOf().run(c), seenEpoch: await t.get("h1")("seenAt").toEpochTime().run(c), typed: await t.get("typed").run(c) };`,
+    );
+    const home = pick(native.value, "home");
+    context.expect(native.folder, [
+      same("the bootstrapped record holds its new revision", pick(native.value, "legacy", "revision"), "r1"),
+      same("and its new title", pick(native.value, "legacy", "title"), "Bootstrapped"),
+      same("the CROSS_INSTANCE mutation changed nothing and the default-instance one installed its revision", pick(home, "revision"), "r2"),
+      same("the default-instance patch kept the title", pick(home, "title"), "Home"),
+      same("a Date in a patch is stored as a time", pick(native.value, "seenType"), "PTYPE<TIME>"),
+      same("with its milliseconds", pick(native.value, "seenEpoch"), 1717243200.25),
+      same("the record deleted by its number is gone", pick(native.value, "typed"), null),
+    ]);
     const stopped = await context.stop("SIGINT", session.app);
     context.expect(stopped.folder, [interrupted(stopped)]);
   },

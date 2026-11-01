@@ -226,3 +226,83 @@ return out;`,
     context.expect(stopped.folder, [interrupted(stopped)]);
   },
 };
+
+const MIXED_TYPES = ["NULL", "NUMBER", "NUMBER", "BOOL", "BOOL", "STRING", "PTYPE<TIME>", "OBJECT", "ARRAY", "ARRAY"];
+const MIXED_JSON: Json = [null, 1, -2.5, true, false, "s", "2024-03-01T10:00:00.125Z", { k: [1, { deep: null }] }, [], [null]];
+const WRITTEN_BY = ["insert", "batch", "update", "replace", "upsert"];
+
+export const storedValues: Journey = {
+  title: "a list of mixed values, an empty list, an empty document and a date with milliseconds are stored and read back as given, whether written by insert, a batch insert, update, replace or a conflict upsert",
+  entryPoint: "`table.insert/update/replace(...)` with those values from a consumer module, read back through the module and with rethinkdb-ts",
+  async run(context) {
+    await begin(context);
+    const session = await open(context, poolConfig(server(context)));
+    const result = await session.run(
+      "write the documented values every way",
+      `const schema = new db.Schema("verify-stored", { docs: { fields: {}, indexes: {} } });
+await schema.createInstance("a");
+const docs = schema.instance("a").table("docs");
+const at = new Date("2024-03-01T10:00:00.125Z");
+const values = () => ({ mixed: [null, 1, -2.5, true, false, "s", at, { k: [1, { deep: null }] }, [], [null]], empty: [], emptyDoc: {}, at, nested: { list: [null, 0, ""] } });
+await docs.insert({ _id: "insert", ...values() });
+await docs.insert([{ _id: "batch", ...values() }, { _id: "other", title: "other" }]);
+await docs.insert({ _id: "update", mixed: "old", empty: "old", emptyDoc: "old", at: "old", nested: "old" });
+const updated = await docs.get("update").update(values());
+await docs.insert({ _id: "replace", gone: true });
+const replaced = await docs.get("replace").replace({ _id: "replace", ...values() });
+await docs.insert({ _id: "upsert", mixed: "old" });
+await docs.insert({ _id: "upsert", ...values() }, { conflict: "update" });
+const read = await docs.get("insert");
+return { updated, replaced, read: { mixed: read.mixed, empty: read.empty, emptyDoc: read.emptyDoc, at: read.at, nested: read.nested } };`,
+    );
+    context.expect(result.folder, [answered(result)], { critical: true });
+    const read = (key: string): Json | undefined => pick(result.value, "read", key);
+    context.expect(result.folder, [
+      sees("the update resolves to 1", { ...result, value: pick(result.value, "updated") }, 1),
+      sees("the replace resolves to 1", { ...result, value: pick(result.value, "replaced") }, 1),
+      same("the module reads the mixed list back as written", read("mixed"), MIXED_JSON),
+      same("the module reads the empty list back", read("empty"), []),
+      same("the module reads the empty document back", read("emptyDoc"), {}),
+      same("the module reads the date back to the millisecond", read("at"), "2024-03-01T10:00:00.125Z"),
+      same("the module reads a nested list of falsy values back", read("nested"), { list: [null, 0, ""] }),
+    ]);
+    const native = await owner(
+      context,
+      "read the stored values with rethinkdb-ts",
+      `const t = r.db("verify-stored").table("docs");
+const out = {};
+for (const id of ${JSON.stringify(WRITTEN_BY)}) {
+  const d = t.get(id);
+  out[id] = {
+    types: await d("mixed").map((v) => v.typeOf()).run(c),
+    mixed: await d("mixed").run(c),
+    empty: [await d("empty").typeOf().run(c), await d("empty").count().run(c)],
+    emptyDoc: [await d("emptyDoc").typeOf().run(c), await d("emptyDoc").keys().count().run(c)],
+    atType: await d("at").typeOf().run(c),
+    atEpoch: await d("at").toEpochTime().run(c),
+    nested: await d("nested").run(c),
+    gone: await d.hasFields("gone").run(c),
+  };
+}
+return out;`,
+    );
+    context.expect(
+      native.folder,
+      WRITTEN_BY.flatMap((by) => {
+        const stored = (key: string): Json | undefined => pick(native.value, by, key);
+        return [
+          same(`${by}: each value of the mixed list keeps its ReQL type`, stored("types"), MIXED_TYPES),
+          same(`${by}: the mixed list is stored as written`, stored("mixed"), MIXED_JSON),
+          same(`${by}: the empty list is stored as an empty list`, stored("empty"), ["ARRAY", 0]),
+          same(`${by}: the empty document is stored as an empty document`, stored("emptyDoc"), ["OBJECT", 0]),
+          same(`${by}: the date is stored as a time`, stored("atType"), "PTYPE<TIME>"),
+          same(`${by}: with its milliseconds`, stored("atEpoch"), 1709287200.125),
+          same(`${by}: a nested list of null, 0 and empty text is stored as written`, stored("nested"), { list: [null, 0, ""] }),
+          same(`${by}: no field outside the written document`, stored("gone"), false),
+        ];
+      }),
+    );
+    const stopped = await context.stop("SIGINT", session.app);
+    context.expect(stopped.folder, [interrupted(stopped)]);
+  },
+};

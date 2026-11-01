@@ -13,7 +13,7 @@ journeys:
 
 ## Sub-features
 
-- `atomic-outcomes`: applied, not-applied and the refusal of a patch naming `_id`.
+- `atomic-outcomes`: applied, not-applied, the refusal of a patch naming `_id` and of `CROSS_INSTANCE`, the default instance, a Date patch stored as a time and the type-sensitive equality of `deleteIfEqual`.
 
 ## How to get to it (user POV)
 

@@ -1,4 +1,4 @@
-import type { App, Check, JourneyContext, ServiceEndpoint } from "@antelopejs/tooling-configs/verify";
+import { has, type App, type Check, type Journey, type JourneyContext, type ServiceEndpoint } from "@antelopejs/tooling-configs/verify";
 
 import { APP_SOURCE } from "./app-source.ts";
 import { canonical, isRecord, parseJson, pick, text, type Json } from "./json.ts";
@@ -135,4 +135,73 @@ export async function begin(context: JourneyContext): Promise<void> {
     context.notVerified(`the run's RethinkDB did not answer: ${cleared.stderr.trim().slice(-200)}`);
   }
   context.expect(cleared.folder, [same("only the system databases remain", cleared.value, ["rethinkdb", "test"])], { critical: true });
+}
+
+/** Ends the journey as not verified when the run's RethinkDB no longer answers. */
+async function requireServer(context: JourneyContext): Promise<void> {
+  const probe = await owner(context, "probe the run's RethinkDB after a failure", `return await r.dbList().run(c);`);
+  if (probe.exitCode !== 0) {
+    context.notVerified(`the run's RethinkDB stopped answering during the journey: ${probe.stderr.trim().slice(-200)}`);
+  }
+}
+
+/** The journey, ended as not verified when a check fails or it throws while the run's RethinkDB no longer answers: an outage after `begin` says nothing about the product. */
+export function guarded(journey: Journey): Journey {
+  return {
+    title: journey.title,
+    entryPoint: journey.entryPoint,
+    async run(context) {
+      let failed = false;
+      const watched: JourneyContext = {
+        repo: context.repo,
+        work: context.work,
+        home: context.home,
+        command: context.command.bind(context),
+        edit: context.edit.bind(context),
+        tree: context.tree.bind(context),
+        http: context.http.bind(context),
+        expect(folder, checks, options) {
+          if (checks.some((check) => !check.pass)) failed = true;
+          return context.expect(folder, checks, options);
+        },
+        notVerified: context.notVerified.bind(context),
+        service: context.service.bind(context),
+        native: context.native.bind(context),
+        fixture: context.fixture.bind(context),
+        dev: context.dev.bind(context),
+        call: context.call.bind(context),
+        stop: context.stop.bind(context),
+        scaffold: context.scaffold.bind(context),
+      };
+      try {
+        await journey.run(watched);
+      } catch (error) {
+        await requireServer(context);
+        throw error;
+      }
+      if (failed) await requireServer(context);
+    },
+  };
+}
+
+/** Every journey of `journeys`, {@link guarded}. */
+export function guardedAll(journeys: Record<string, Journey>): Record<string, Journey> {
+  return Object.fromEntries(Object.entries(journeys).map(([id, journey]) => [id, guarded(journey)]));
+}
+
+/**
+ * Declares a schema its registration must refuse, then queries it. docs/external-mode.md says every query on a refused schema fails with the
+ * refusal's message, while today the refusal ends `ajs project dev` and prints it (interface-database#61), so the checks hold either way: the
+ * message is in the query's error or the project's errors, and no query on the schema answers.
+ */
+export async function refusedRegistration(session: Session, label: string, declaration: string, query: string, message: RegExp): Promise<void> {
+  const refused = await session.run(
+    `declare and query ${label}`,
+    `const schema = ${declaration};\nawait waitFor(2000);\ntry {\n${query}\nreturn { query: "answered" };\n} catch (error) { return { query: String(error && error.message) }; }`,
+  );
+  const said = `${JSON.stringify(refused.value ?? null)}\n${await logs(session)}`;
+  session.context.expect(refused.folder, [
+    has(`${label}: the refusal is said, in the query's error or the project's output`, said, message),
+    { name: `${label}: no query on the refused schema answers`, pass: pick(refused.value, "query") !== "answered", detail: JSON.stringify(refused.value ?? null) },
+  ]);
 }

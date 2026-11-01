@@ -1,7 +1,7 @@
 import { has, interrupted, type Journey, type JourneyContext } from "@antelopejs/tooling-configs/verify";
 
 import { ERP_SCHEMA, externalConfig, seedClient } from "./external-seed.ts";
-import { answered, begin, keysOf, logs, open, owner, pick, same, sees, type Answer, type Session } from "./session.ts";
+import { answered, begin, keysOf, logs, open, owner, pick, refusedRegistration, same, sees, type Answer, type Session } from "./session.ts";
 
 const NO_RETHINKDB = ["@antelopejs/interface-rethinkdb"];
 const PREAMBLE = `const ERP = ${ERP_SCHEMA};
@@ -214,20 +214,19 @@ return out;`,
 };
 
 const BASE_TABLES = `notes: { fields: { _id: "string", id: "string", body: "string" }, indexes: {} }`;
-const REGISTRATIONS: [string, string, RegExp][] = [
-  ["a declared table the database does not have", `{ ghost: { fields: { a: "string" }, indexes: {} }, ${BASE_TABLES} }`, /Table 'bad\.ghost' reads table ghost, which database erp does not have/],
-  ["_id declared on a table whose primary keys have two types", `{ products_mixed: { fields: { _id: "string", label: "string" }, indexes: {} } }`, /Field 'bad\.products_mixed\._id' is declared, but table products_mixed has no usable _id: its primary keys range from NUMBER to STRING, more than one type/],
-  ["a field type the module does not know", `{ notes: { fields: { _id: "string", id: "string", body: "mystery" }, indexes: {} } }`, /Unsupported field type 'mystery' for 'bad\.notes\.body'/],
+const REGISTRATIONS: [string, string, string, RegExp][] = [
+  ["a declared table the database does not have", `{ ghost: { fields: { a: "string" }, indexes: {} }, ${BASE_TABLES} }`, "notes", /Table 'bad\.ghost' reads table ghost, which database erp does not have/],
+  ["_id declared on a table whose primary keys have two types", `{ products_mixed: { fields: { _id: "string", label: "string" }, indexes: {} } }`, "products_mixed", /Field 'bad\.products_mixed\._id' is declared, but table products_mixed has no usable _id: its primary keys range from NUMBER to STRING, more than one type/],
+  ["a field type the module does not know", `{ notes: { fields: { _id: "string", id: "string", body: "mystery" }, indexes: {} } }`, "notes", /Unsupported field type 'mystery' for 'bad\.notes\.body'/],
 ];
 
 export const externalRegistration: Journey = {
-  title: "registration reads the database once and fails with a named reason for a missing table, an _id over multi-type keys or an unknown field type, and only warns about a partial sample or a missing index",
-  entryPoint: "`new Schema(id, definition)` against an external instance, read from the run's logs",
+  title: "registration reads the database once and fails with a named reason for a missing table, an _id over multi-type keys or an unknown field type, so no query on that schema answers, and only warns about a partial sample or a missing index",
+  entryPoint: "`new Schema(id, definition)` against an external instance and a query on it, read from the query's answer and the run's logs",
   async run(context) {
-    for (const [label, definition, message] of REGISTRATIONS) {
+    for (const [label, definition, table, message] of REGISTRATIONS) {
       const session = await external(context, "erp_writer");
-      await session.run(`declare ${label}`, `new db.Schema("bad", ${definition});\nawait waitFor(2500);\nreturn "declared";`);
-      context.expect(context.work, [has(`registration fails for ${label}`, await logs(session), message)]);
+      await refusedRegistration(session, label, `new db.Schema("bad", ${definition})`, `await schema.instance().table("${table}").count();`, message);
       await context.stop("SIGINT", session.app);
     }
     const session = await external(context, "erp_writer");

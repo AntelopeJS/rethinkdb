@@ -5,15 +5,17 @@ docs:
   - README.md
 journeys:
   - unstorable-values
+  - stored-values
 ---
 
 # Write values
 
-How a document handed to `insert`, `update` or `replace` is turned into stored values, as the `WriteValue` page of `@antelopejs/interface-database` documents it: a bigint is refused, a symbol is dropped, `undefined` writes no value, and a date is stored as a time wherever it sits in a list or a nested document.
+How a document handed to `insert`, `update` or `replace` is turned into stored values, as the `WriteValue` page of `@antelopejs/interface-database` documents it: a bigint is refused, a symbol is dropped, `undefined` writes no value, a date is stored as a time to the millisecond wherever it sits in a list or a nested document, and lists of mixed values, empty lists and empty documents are stored as given.
 
 ## Sub-features
 
 - `unstorable-values`: a bigint insert, replace and update reject and store nothing; an undefined field is absent after an insert and keeps the stored field on an update; a symbol field is absent; dates in a list, a nested document and a list inside one read back as `PTYPE<TIME>` with rethinkdb-ts.
+- `stored-values`: a list holding null, numbers, booleans, text, a date, a document and lists, an empty list, an empty document and a date with milliseconds, written by insert, a batch insert, update, replace and a conflict upsert, read back through the module and with rethinkdb-ts.
 
 ## How to get to it (user POV)
 

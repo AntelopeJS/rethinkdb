@@ -7,7 +7,7 @@ function part(result: Answer, key: string): Answer {
 }
 
 const SEED = `const schema = new db.Schema("verify-reads", {
-  products: { fields: { name: "string", price: "number", category: "string", addedAt: "date", secret: "string" }, indexes: { category: {}, price: {}, addedAt: {} } },
+  products: { fields: { name: "string", price: "number", category: "string", addedAt: "date", secret: "string", note: "string", meta: "object" }, indexes: { category: {}, price: {}, addedAt: {}, cat_name: { fields: ["category", "name"] } } },
   orders: { fields: { productId: "string", qty: "number" }, indexes: {} },
 });
 await schema.createInstance("a");
@@ -18,7 +18,7 @@ await products.insert([
   { _id: "p2", name: "Bible", price: 20, category: "books", addedAt: new Date("2024-02-01T00:00:00.000Z"), secret: "s2" },
   { _id: "p3", name: "Cable", price: 30, category: "tools", addedAt: new Date("2024-03-01T00:00:00.000Z"), secret: "s3" },
   { _id: "p4", name: "Drill", price: 30, category: "tools", addedAt: new Date("2024-04-01T00:00:00.000Z"), secret: "s4" },
-  { _id: "p5", name: "Easel", price: 50, category: "art", addedAt: new Date("2024-05-01T00:00:00.000Z"), secret: "s5" },
+  { _id: "p5", name: "Easel", price: 50, category: "art", addedAt: new Date("2024-05-01T00:00:00.000Z"), secret: "s5", note: null, meta: { dims: { w: 3 } } },
 ]);
 await orders.insert([{ _id: "o1", productId: "p1", qty: 2 }, { _id: "o2", productId: "p1", qty: 3 }, { _id: "o3", productId: "p3", qty: 1 }, { _id: "o4", productId: "none", qty: 9 }]);
 const names = (rows) => rows.map((row) => row.name);
@@ -80,8 +80,8 @@ return out;`,
 };
 
 export const readStreams: Journey = {
-  title: "map, key, default, union, distinct, aggregates, group, join, joinInner and lookup compute the answers docs/1.query_types/5.stream.md describes",
-  entryPoint: "`table.map/key/union/distinct/sum/avg/min/max/group/join/joinInner/lookup` from a consumer module",
+  title: "map, key, a document's key with a fallback, default, do, union, distinct, count, count(field), sum, avg, min, max, group, join, joinInner, lookup, nth, orderBy on a compound index, cursor and run compute the answers docs/1.query_types describes",
+  entryPoint: "`table.map/key/default/do/union/distinct/count/sum/avg/min/max/group/join/joinInner/lookup/nth/orderBy/cursor/run` from a consumer module",
   async run(context) {
     await begin(context);
     const session = await open(context, poolConfig(server(context)));
@@ -100,6 +100,26 @@ out.max = await products.max("price");
 out.group = (await products.group("category", (stream, category) => ({ category, total: stream.count(), sum: stream.sum("price") }))).sort((a, b) => a.category < b.category ? -1 : 1);
 out.joinInner = (await products.joinInner(orders, (p, o) => o.key("productId").eq(p.key("_id")), (p, o) => ({ name: p.key("name"), qty: o.key("qty") }))).sort((a, b) => a.qty - b.qty);
 out.join = (await orders.join(products, (o, p) => p.key("_id").eq(o.key("productId")), (o, p) => ({ order: o.key("_id"), name: p.key("name").default("-") }))).map((row) => row.order + ":" + row.name).sort();
+out.lookupOne = (await orders.lookup(products, "productId", "_id")).filter((o) => o._id !== "o4").map((o) => [o._id, o.productId.name]).sort();
+const looked = await orders.get("o3").lookup(products, "productId", "_id");
+out.lookupDatum = [looked._id, looked.qty, looked.productId.name, looked.productId.price];
+out.nthFirst = (await products.orderBy("price").nth(0)).name;
+out.nthFourth = (await products.orderBy("addedAt").nth(3)).name;
+out.countField = await products.count("category");
+out.countAll = await orders.count();
+out.datumKeyFallback = [await products.get("p5").key("note", "none"), await products.get("p2").key("name", "none"), await products.get("p2").key("color", "plain")];
+out.datumKeyChain = await products.get("p5").key("meta").key("dims").key("w");
+out.datumDefault = await products.get("nope").default({ name: "Guest" });
+out.datumDo = await products.get("p1").do((p) => ({ label: p.key("name"), twice: p.key("price").mul(2) }));
+out.distinctMapped = (await orders.map((o) => o.key("productId")).distinct()).sort();
+out.sumStream = await products.key("price").sum();
+out.orderCompoundDesc = names(await products.orderBy("cat_name", "desc"));
+out.orderCompoundAsc = names(await products.orderBy("cat_name"));
+const cursor = products.orderBy("addedAt", "desc").cursor();
+const pulled = [];
+for (let step = await cursor.next(); !step.done; step = await cursor.next()) pulled.push(step.value.name);
+out.cursor = pulled;
+out.run = (await products.filter((p) => p.key("category").ne("books")).run()).length;
 return out;`,
     );
     context.expect(result.folder, [answered(result)], { critical: true });
@@ -120,6 +140,22 @@ return out;`,
       ]),
       sees("joinInner keeps the pairs that match", part(result, "joinInner"), [{ name: "Cable", qty: 1 }, { name: "Atlas", qty: 2 }, { name: "Atlas", qty: 3 }]),
       sees("join keeps every left row, with the default for an unmatched one", part(result, "join"), ["o1:Atlas", "o2:Atlas", "o3:Cable", "o4:-"]),
+      sees("lookup of a single key replaces it with the document it names", part(result, "lookupOne"), [["o1", "Atlas"], ["o2", "Atlas"], ["o3", "Cable"]]),
+      sees("lookup on a single document replaces its key with the document and keeps its fields", part(result, "lookupDatum"), ["o3", 1, "Cable", 30]),
+      sees("nth(0) reads the first row in order", part(result, "nthFirst"), "Atlas"),
+      sees("nth(3) reads the fourth row in order", part(result, "nthFourth"), "Drill"),
+      sees("count(field) counts the distinct values of the field", part(result, "countField"), 3),
+      sees("count() counts every row", part(result, "countAll"), 4),
+      sees("key(field, fallback) of a document reads the fallback for null and missing, and the value otherwise", part(result, "datumKeyFallback"), ["none", "Bible", "plain"]),
+      sees("key chains read a nested field", part(result, "datumKeyChain"), 3),
+      sees("default replaces a missing document", part(result, "datumDefault"), { name: "Guest" }),
+      sees("do builds a value from the document", part(result, "datumDo"), { label: "Atlas", twice: 20 }),
+      sees("distinct() of a mapped stream reads each value once", part(result, "distinctMapped"), ["none", "p1", "p3"]),
+      sees("sum() of a stream of numbers adds them", part(result, "sumStream"), 140),
+      sees("orderBy on a compound index descending orders by every field of the index", part(result, "orderCompoundDesc"), ["Drill", "Cable", "Bible", "Atlas", "Easel"]),
+      sees("orderBy on a compound index ascending orders by every field of the index", part(result, "orderCompoundAsc"), ["Easel", "Atlas", "Bible", "Cable", "Drill"]),
+      sees("cursor() yields the rows one at a time, in order", part(result, "cursor"), ["Easel", "Drill", "Cable", "Bible", "Atlas"]),
+      sees("run() executes the query", part(result, "run"), 3),
     ]);
     const stopped = await context.stop("SIGINT", session.app);
     context.expect(stopped.folder, [interrupted(stopped)]);
