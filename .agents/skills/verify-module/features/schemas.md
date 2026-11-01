@@ -35,4 +35,4 @@ pnpm exec antelopejs-verify journey "$RUN" schemas
 ## Gotchas
 
 - Each journey starts by dropping every database and account of the run's server (`begin`), because the container has no client to reset it with.
-- A refused registration is an unhandled rejection of the consumer: the journey reads the project's logs, not a rejected query (see the issue draft on schema registration failures).
+- `unique-refused` does not assert whether the registering request completes: docs/external-mode.md says queries on the schema fail with the message, while the module today ends the project (interface-database#61). It asserts the named refusal and that no database was created.

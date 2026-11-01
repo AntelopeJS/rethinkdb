@@ -34,4 +34,5 @@ pnpm exec antelopejs-verify journey "$RUN" writes
 ## Gotchas
 
 - Each journey starts by dropping every database and account of the run's server (`begin`), because the container has no client to reset it with.
+- Values RethinkDB cannot store (a bigint, `undefined`, a symbol) and dates inside lists and nested documents are [write-values](write-values.md).
 - A plain `insert` of a document with a provided `_id` resolves to no id (drafted as an issue); the journeys assert the stored row instead.

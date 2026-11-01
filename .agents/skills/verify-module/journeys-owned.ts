@@ -55,7 +55,6 @@ export const uniqueRefused: Journey = {
     const refused = await session.run("declare a schema with a unique index", `new db.Schema("verify-unique", { users: { fields: { email: "string" }, indexes: { email: { unique: true } } } });\nawait waitFor(2000);\nreturn "declared";`);
     const stderr = await readText(context, "read the project's errors", path(session.app.folder, "stderr.txt"));
     context.expect(refused.folder, [
-      same("the scenario did not complete", refused.ok, false),
       has("the refusal names the index and its table", stderr, /Index 'email' of table 'verify-unique\.users' is declared unique: true/),
     ]);
     const native = await owner(context, "list the databases", `return await r.dbList().run(c);`);

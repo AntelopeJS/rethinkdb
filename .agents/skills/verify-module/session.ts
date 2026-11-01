@@ -128,12 +128,11 @@ for (const name of await r.dbList().run(c)) if (!keep.includes(name)) await r.db
 for (const user of await r.db("rethinkdb").table("users").getField("id").run(c)) if (user !== "admin") await r.db("rethinkdb").table("users").get(user).delete().run(c);
 return await r.dbList().run(c);`;
 
-/** Drops every database and account a previous journey left, so each journey starts from the container's empty state; a server still starting is asked again. */
+/** Drops every database and account a previous journey left, so each journey starts from the container's empty state; a server that cannot be reached is an environment failure, never a check. */
 export async function begin(context: JourneyContext): Promise<void> {
-  let cleared = await owner(context, "empty the server", EMPTY_SERVER);
-  for (let attempt = 2; attempt <= 4 && cleared.exitCode !== 0; attempt += 1) {
-    await context.command(`wait before attempt ${attempt}`, "sleep", ["3"]);
-    cleared = await owner(context, `empty the server, attempt ${attempt}`, EMPTY_SERVER);
+  const cleared = await owner(context, "empty the server", EMPTY_SERVER);
+  if (cleared.exitCode !== 0) {
+    context.notVerified(`the run's RethinkDB did not answer: ${cleared.stderr.trim().slice(-200)}`);
   }
   context.expect(cleared.folder, [same("only the system databases remain", cleared.value, ["rethinkdb", "test"])], { critical: true });
 }

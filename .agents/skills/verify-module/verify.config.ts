@@ -7,7 +7,7 @@ import { configRefused, connectionModes } from "./journeys-module.ts";
 import { instances, storageLayout, uniqueRefused } from "./journeys-owned.ts";
 import { readSelections, readStreams } from "./journeys-reads.ts";
 import { poolConfig } from "./session.ts";
-import { insertConflicts, insertValues, updateReplaceDelete } from "./journeys-writes.ts";
+import { insertConflicts, insertValues, unstorableValues, updateReplaceDelete } from "./journeys-writes.ts";
 
 const config: VerifyConfig = {
   doors: {
@@ -67,6 +67,7 @@ const config: VerifyConfig = {
     "unique-refused": uniqueRefused,
     instances,
     "insert-values": insertValues,
+    "unstorable-values": unstorableValues,
     "insert-conflicts": insertConflicts,
     "update-replace-delete": updateReplaceDelete,
     "atomic-outcomes": atomicOutcomes,

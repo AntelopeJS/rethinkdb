@@ -10,7 +10,7 @@ function part(result: Answer, key: string): Answer {
 const DEFINITION = `{ docs: { fields: { title: "string", n: "number", done: "boolean", at: "date", tags: "string[]", meta: "object" }, indexes: {} } }`;
 
 export const insertValues: Journey = {
-  title: "insert returns the ids and stores text, numbers, booleans, null, dates, lists and nested documents as those types",
+  title: "insert resolves to one generated id per document and stores text, numbers, booleans, null, dates, lists and nested documents as those types",
   entryPoint: "`table.insert(document | documents)` from a consumer module, read back with rethinkdb-ts",
   async run(context) {
     await begin(context);
@@ -50,6 +50,74 @@ return { one, thirdHasN: Object.hasOwn(third, "n"), thirdN: third.n, count: awai
       same("null is stored as null", pick(types.value, "thirdN"), null),
       same("the null field exists", pick(types.value, "thirdHasN"), true),
       same("three documents are stored", pick(types.value, "count"), 3),
+    ]);
+    const stopped = await context.stop("SIGINT", session.app);
+    context.expect(stopped.folder, [interrupted(stopped)]);
+  },
+};
+
+export const unstorableValues: Journey = {
+  title: "a bigint is refused and nothing is stored, undefined writes no value and keeps the stored field, a symbol is dropped, and dates in lists and nested documents are stored as times",
+  entryPoint: "`table.insert/update/replace(...)` with a bigint, undefined, a symbol and dates from a consumer module, read back with rethinkdb-ts",
+  async run(context) {
+    await begin(context);
+    const session = await open(context, poolConfig(server(context)));
+    const result = await session.run(
+      "write values RethinkDB cannot store and dates in containers",
+      `const schema = new db.Schema("verify-values", { docs: { fields: {}, indexes: {} } });
+await schema.createInstance("a");
+const docs = schema.instance("a").table("docs");
+const refusal = async (write) => { try { await write(); return "stored"; } catch (error) { return "refused"; } };
+const at = new Date("2024-03-01T10:00:00.000Z");
+const out = {};
+out.insertBigint = await refusal(() => docs.insert({ _id: "big", n: 10n }));
+await docs.insert({ _id: "keep", title: "kept", n: 1 });
+out.replaceBigint = await refusal(() => docs.get("keep").replace({ _id: "keep", title: "changed", n: 5n }));
+out.updateBigint = await refusal(() => docs.get("keep").update({ title: "changed", n: 7n }));
+await docs.insert({ _id: "undef", title: "x", gone: undefined });
+out.updateUndefined = await docs.get("undef").update({ title: undefined, other: "z" });
+await docs.insert({ _id: "sym", title: "y", sym: Symbol("k") });
+await docs.insert({ _id: "dates", list: [at], nested: { at }, deep: { list: [at] } });
+return out;`,
+    );
+    context.expect(result.folder, [answered(result)], { critical: true });
+    context.expect(result.folder, [
+      sees("a bigint insert is refused", part(result, "insertBigint"), "refused"),
+      sees("a bigint replace is refused", part(result, "replaceBigint"), "refused"),
+      sees("a bigint update is refused", part(result, "updateBigint"), "refused"),
+      sees("an update that leaves a field undefined still resolves to 1", part(result, "updateUndefined"), 1),
+    ]);
+    const native = await owner(
+      context,
+      "read the stored rows",
+      `const t = r.db("verify-values").table("docs");
+const get = (id) => t.get(id).run(c);
+const dates = t.get("dates");
+return {
+  big: await get("big"),
+  keep: await get("keep"),
+  undef: await get("undef"),
+  sym: await get("sym"),
+  listType: await dates("list").nth(0).typeOf().run(c),
+  nestedType: await dates("nested")("at").typeOf().run(c),
+  deepType: await dates("deep")("list").nth(0).typeOf().run(c),
+};`,
+    );
+    const keep = pick(native.value, "keep");
+    const undef = pick(native.value, "undef");
+    const sym = pick(native.value, "sym");
+    context.expect(native.folder, [
+      same("the refused bigint insert stored no row", pick(native.value, "big"), null),
+      same("the refused replace left the title as it was", pick(keep, "title"), "kept"),
+      same("the refused replace and update left the number as it was", pick(keep, "n"), 1),
+      same("an undefined field on insert is not stored", pick(undef, "gone"), undefined),
+      same("an undefined field on update keeps the stored one", pick(undef, "title"), "x"),
+      same("the other fields of that update are written", pick(undef, "other"), "z"),
+      same("a symbol field is dropped", pick(sym, "sym"), undefined),
+      same("the fields beside a symbol are stored", pick(sym, "title"), "y"),
+      same("a date in a list is stored as a time", pick(native.value, "listType"), "PTYPE<TIME>"),
+      same("a date in a nested document is stored as a time", pick(native.value, "nestedType"), "PTYPE<TIME>"),
+      same("a date in a list of a nested document is stored as a time", pick(native.value, "deepType"), "PTYPE<TIME>"),
     ]);
     const stopped = await context.stop("SIGINT", session.app);
     context.expect(stopped.folder, [interrupted(stopped)]);
