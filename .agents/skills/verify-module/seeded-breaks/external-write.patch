@@ -1,0 +1,13 @@
+diff --git a/src/implementations/database/external-writes.ts b/src/implementations/database/external-writes.ts
+index b12f875..a10b24f 100644
+--- a/src/implementations/database/external-writes.ts
++++ b/src/implementations/database/external-writes.ts
+@@ -52,7 +52,7 @@ interface Payload {
+ }
+ 
+ const ID_FIELD = "_id";
+-const DROPPED_KEYS = new Set(["_instance", "tenant_id"]);
++const DROPPED_KEYS = new Set(["_instance"]);
+ const SCALAR_KINDS = new Set(["string", "number", "boolean", "date"]);
+ const PERMISSION_ERROR = /does not have the required `write` permission/;
+ 

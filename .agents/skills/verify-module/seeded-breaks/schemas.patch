@@ -1,0 +1,12 @@
+diff --git a/src/implementations/database/schema.ts b/src/implementations/database/schema.ts
+index 365fbba..203f354 100644
+--- a/src/implementations/database/schema.ts
++++ b/src/implementations/database/schema.ts
+@@ -80,7 +80,6 @@ export const Schemas = {
+ 
+ async function initializeSchema(schemaId: string, schema: SchemaDefinition) {
+   assertValidIndexNames(schema);
+-  assertNoUniqueIndexes(schemaId, schema);
+   await retryWithBackoff(async () => {
+     await InitializeSchemaDatabase(schemaId, schema);
+     await hydrateInstances(schemaId);
