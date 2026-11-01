@@ -93,6 +93,7 @@ out.keysByProxy = (await products.key(db.ValueProxy.constant("name"))).sort();
 out.defaulted = await products.get("p1").key("missing").default("N/A");
 out.map = (await products.map((p) => ({ label: p.key("name"), double: p.key("price").mul(2) }))).sort((a, b) => a.double - b.double).slice(0, 2);
 out.union = names(await products.filter((p) => p.key("category").eq("art")).union(products.filter((p) => p.key("category").eq("books")))).sort();
+out.unionOverlap = names(await products.filter((p) => p.key("price").ge(20)).union(products.filter((p) => p.key("category").eq("tools")))).sort();
 out.distinct = (await products.distinct("category")).sort();
 out.sum = await products.sum("price");
 out.avg = await products.avg("price");
@@ -101,6 +102,7 @@ out.max = await products.max("price");
 out.group = (await products.group("category", (stream, category) => ({ category, total: stream.count(), sum: stream.sum("price") }))).sort((a, b) => a.category < b.category ? -1 : 1);
 out.joinInner = (await products.joinInner(orders, (p, o) => o.key("productId").eq(p.key("_id")), (p, o) => ({ name: p.key("name"), qty: o.key("qty") }))).sort((a, b) => a.qty - b.qty);
 out.join = (await orders.join(products, (o, p) => p.key("_id").eq(o.key("productId")), (o, p) => ({ order: o.key("_id"), name: p.key("name").default("-") }))).map((row) => row.order + ":" + row.name).sort();
+out.joinRight = (await orders.join(products, (o, p) => p.key("_id").eq(o.key("productId")), (o, p) => ({ order: o.key("_id"), product: p }))).filter((row) => row.order === "o4").map((row) => row.product);
 out.lookupOne = (await orders.lookup(products, "productId", "_id")).filter((o) => o._id !== "o4").map((o) => [o._id, o.productId.name]).sort();
 const looked = await orders.get("o3").lookup(products, "productId", "_id");
 out.lookupDatum = [looked._id, looked.qty, looked.productId.name, looked.productId.price];
@@ -130,6 +132,7 @@ return out;`,
       sees("default replaces a missing field", part(result, "defaulted"), "N/A"),
       sees("map builds the computed documents", part(result, "map"), [{ double: 20, label: "Atlas" }, { double: 40, label: "Bible" }]),
       sees("union concatenates two streams", part(result, "union"), ["Atlas", "Bible", "Easel"]),
+      sees("union keeps a row both streams hold, twice", part(result, "unionOverlap"), ["Bible", "Cable", "Cable", "Drill", "Drill", "Easel"]),
       sees("distinct of a field reads each value once", part(result, "distinct"), ["art", "books", "tools"]),
       sees("sum adds the field", part(result, "sum"), 140),
       sees("avg averages the field", part(result, "avg"), 28),
@@ -142,6 +145,7 @@ return out;`,
       ]),
       sees("joinInner keeps the pairs that match", part(result, "joinInner"), [{ name: "Cable", qty: 1 }, { name: "Atlas", qty: 2 }, { name: "Atlas", qty: 3 }]),
       sees("join keeps every left row, with the default for an unmatched one", part(result, "join"), ["o1:Atlas", "o2:Atlas", "o3:Cable", "o4:-"]),
+      sees("join answers null for the right side of a left row nothing matches, without a default", part(result, "joinRight"), [null]),
       sees("lookup of a single key replaces it with the document it names", part(result, "lookupOne"), [["o1", "Atlas"], ["o2", "Atlas"], ["o3", "Cable"]]),
       sees("lookup on a single document replaces its key with the document and keeps its fields", part(result, "lookupDatum"), ["o3", 1, "Cable", 30]),
       sees("nth(0) reads the first row in order", part(result, "nthFirst"), "Atlas"),

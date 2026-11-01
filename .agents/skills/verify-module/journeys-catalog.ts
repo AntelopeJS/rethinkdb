@@ -63,7 +63,7 @@ await attempt("measures", async () => {
     emailNulls: column("email").nulls, emailDistinct: column("email").distinct, emailLength: column("email").length, emailRange: column("email").range === undefined, emailCategories: column("email").categories,
     segmentCategories: column("segment").categories, segmentRange: column("segment").range === undefined,
     createdRange: created.range && created.range.status === "ok" ? [new Date(created.range.value.min).toISOString(), new Date(created.range.value.max).toISOString()] : created.range,
-    createdMonths: created.months, idTraits: column("id").traits,
+    createdMonths: created.months, idTraits: column("id").traits, createdTraits: created.traits, segmentTraits: column("segment").traits,
   };
 });
 await attempt("spread", async () => { const columns = (await catalog.Profile({ relation: "erp.lines", columns: ["wide", "narrow"] })).columns; const named = (name) => { const found = columns.find((entry) => entry.name === name); return found && found.categories && found.categories.status === "ok" ? found.categories.value.values.length : 0; }; return { wide: named("wide"), narrow: named("narrow") }; });
@@ -115,6 +115,8 @@ return out;`,
       sees("SampleRows answers a binary value by its length only", part(result, "binary"), [{ bytes: 4 }]),
       sees("Profile answers the ends of a date column as ISO instants", measure("createdRange"), ["2024-02-01T00:00:00.000Z", "2024-06-01T00:00:00.000Z"]),
       sees("Profile counts the rows of a date column per calendar month", measure("createdMonths"), { status: "ok", value: [{ month: "2024-02", rows: 1 }, { month: "2024-03", rows: 1 }, { month: "2024-04", rows: 1 }, { month: "2024-05", rows: 1 }, { month: "2024-06", rows: 4 }] }),
+      sees("a column with 5 distinct values over 8 rows is not identifier-like", { ...measure("createdTraits"), value: JSON.stringify(measure("createdTraits").value).includes("identifier-like") }, false),
+      sees("a column with 2 distinct values over 8 rows is not identifier-like", { ...measure("segmentTraits"), value: JSON.stringify(measure("segmentTraits").value).includes("identifier-like") }, false),
       has("a column with one distinct value per row, never null, is identifier-like", JSON.stringify(measure("idTraits").value), /"identifier-like"/),
       sees("Profile answers the ends of a number column", part(result, "ordersRange"), { status: "ok", value: { max: 31.5, min: 10.5 } }),
       sees("Profile with columns profiles only those columns", part(result, "profileColumns"), ["email"]),

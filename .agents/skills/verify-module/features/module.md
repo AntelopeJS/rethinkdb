@@ -20,7 +20,7 @@ How the module is configured and connects: `pool`, `connection` or `url`, `pool`
 
 ## Sub-features
 
-- `connection-modes`: a round trip works with `connection` alone, with `url` alone and with a `pool` beside a dead `connection`.
+- `connection-modes`: the default configuration in `package.json` is a pool to 127.0.0.1:28015 as admin, read without connecting to that port; a round trip works with `connection` alone, with `url` alone and with a `pool` beside a dead `connection`.
 - `config-refused`: no connection option, an external instance without a url or database, a `pool.db` that disagrees, an unknown mode, a zero, fractional or negative `statementTimeoutMs` and a non-rethinkdb url each stop `ajs project dev` and say why.
 - `external-options`: an external instance whose `pool` points at a dead server still reads through the url's server, since pool options are merged under the url; with `statementTimeoutMs: 1`, a scan of 40000 rows rejects with a timeout, while the same scan without a limit answers.
 

@@ -1,6 +1,7 @@
 import { has, interrupted, refused, type Journey } from "@antelopejs/tooling-configs/verify";
 
 import { externalConfig, NO_RETHINKDB, part, PREAMBLE, seedClient, stopped } from "./external-seed.ts";
+import { parseJson, tuple } from "./json.ts";
 import { answered, begin, open, owner, path, pick, poolConfig, server, same, sees, type Answer, type ModuleConfig, type Session } from "./session.ts";
 
 const ROUND_TRIP = `const schema = new db.Schema("verify-config", { notes: { fields: { title: "string" }, indexes: {} } });
@@ -25,6 +26,11 @@ export const connectionModes: Journey = {
   title: "the module connects through pool, through connection, or through url, and pool wins when both pool and connection are set",
   entryPoint: "`pool`, `connection` and `url` in the module's config in antelope.config.ts",
   async run(context) {
+    const manifest = await context.command("read the module's package.json, where the default configuration `ajs project modules add` writes lives", "cat", [path(context.repo, "package.json")]);
+    const defaults = pick(parseJson(manifest.stdout), "antelopeJs", "defaultConfig", "pool");
+    context.expect(manifest.folder, [
+      same("the default configuration is a connection pool to 127.0.0.1:28015 as admin", tuple(pick(defaults, "pool"), pick(defaults, "host"), pick(defaults, "port"), pick(defaults, "user")), [true, "127.0.0.1", "28015", "admin"]),
+    ]);
     const endpoint = server(context);
     const direct: ModuleConfig = { host: endpoint.host, port: endpoint.port, user: "admin", password: "" };
     const dead: ModuleConfig = { host: "127.0.0.1", port: 1, user: "admin", password: "" };

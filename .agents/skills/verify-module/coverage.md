@@ -15,7 +15,7 @@ Doc keys: R = rethinkdb README.md, X = rethinkdb docs/external-mode.md, I = inte
 | 5 | refuses to start without `url`, `pool`, `connection` | R | module/config-refused |
 | 6 | external without url / database, `pool.db` disagreeing, unknown mode, non-rethinkdb url, and a `statementTimeoutMs` that is not a positive safe integer (zero, 1.5, -5) | R, X, `config.ts` TSDoc | module/config-refused: "the refusal says why (...)" for each, including "a fractional statementTimeoutMs" and "a negative statementTimeoutMs" |
 | 7 | installed as `local`, loads every implemented interface, Ctrl+C exits 130, the port refuses afterwards | R Install | smoke/module-dev: the repository's guarded copy of the pack journey ("the consumer loaded every implemented interface", interrupted, port refused) |
-| 8 | default config is a pool to 127.0.0.1:28015 as admin | R Install | not asserted: the journeys point at the run's own container on a free port, never at 28015 |
+| 8 | `ajs project modules add` writes the default config: a pool to 127.0.0.1:28015 as admin | R Install | module/connection-modes: "the default configuration is a connection pool to 127.0.0.1:28015 as admin" (reads `package.json`'s `antelopeJs.defaultConfig`, which the command copies; binds no port) |
 
 ### Storage layout (R)
 
@@ -112,12 +112,12 @@ Doc keys: R = rethinkdb README.md, X = rethinkdb docs/external-mode.md, I = inte
 | 69 | key chains on a document | I 8.datum.md | reads/read-streams: "key chains read a nested field" |
 | 70 | `default` on a missing field and a missing document | I 8.datum.md | reads/read-streams: "default replaces a missing field", "default replaces a missing document" |
 | 71 | `do()` | I 8.datum.md | reads/read-streams: "do builds a value from the document" |
-| 72 | map, union | I | reads/read-streams |
+| 72 | map; union concatenates two streams without deduplication | I 5.stream.md | reads/read-streams: "union keeps a row both streams hold, twice", "union concatenates two streams" |
 | 73 | distinct(field), distinct() | I | reads/read-streams: "distinct of a field ...", "distinct() of a mapped stream reads each value once" |
 | 74 | count(), count(field) counts distinct values | I 5.stream.md | reads/read-streams: "count() counts every row", "count(field) counts the distinct values of the field"; cross-instance-indexes: count |
 | 75 | sum, avg, min, max of a field; sum of a number stream | I | reads/read-streams |
 | 76 | group with a mapper | I | reads/read-streams |
-| 77 | join (left, null right side), joinInner | I | reads/read-streams |
+| 77 | join (left) answers `null` for the right side when no match exists; joinInner keeps the pairs that match | I 5.stream.md | reads/read-streams: "join answers null for the right side of a left row nothing matches, without a default", "joinInner keeps the pairs that match" |
 | 78 | lookup of a single key on a stream | I 7.lookup.md | reads/read-streams: "lookup of a single key replaces it with the document it names" |
 | 79 | lookup on a single document | I 7.lookup.md, 8.datum.md | reads/read-streams: "lookup on a single document replaces its key with the document and keeps its fields" |
 | 80 | lookup of a list of keys answers a list of documents | I 7.lookup.md | not asserted: head answers an empty list (rethinkdb#75) |
@@ -184,7 +184,7 @@ Doc keys: R = rethinkdb README.md, X = rethinkdb docs/external-mode.md, I = inte
 | --- | --- | --- | --- |
 | 120 | never changes structure; registration writes nothing | X | external-read/external-reads: "no database, table or index was created or dropped" |
 | 121 | rows answer `_id` and declared fields only; wrong-type values read null | X | external-read/external-reads |
-| 122 | `_id` by key type (text, number, compound); unparsable key matches nothing | X | external-read/external-reads |
+| 122 | `_id` by key type (text, number, compound); a key that does not parse as the table's type matches nothing (array key `"[bad"`, number key `"abc"`) | X | external-read/external-reads: "a number key answers its text", "a compound key answers its JSON text", "a key that does not parse matches nothing", "a key that does not parse as the number key's type matches nothing" |
 | 123 | multi-type key table: counts and filters work, read without `_id`, `get` refused | X | external-read/external-reads |
 | 124 | `get`, `getAll` (one key, a list of keys, number keys) and `between` by `_id` or a declared index; `orderBy` by a declared index, ascending and descending | X, I 5.stream.md | external-read/external-reads: "getAll by a declared index ...", "getAll with a list of keys reads each row", "getAll with a list of number keys reads each row", "between by a declared index ...", "between by _id includes the lower bound and excludes the upper", "rows come back in the order of the index asked for", "orderBy a declared index descending reverses the order" |
 | 125 | registration failures (missing table, multi-type `_id`, unknown field type) fail every query with the message | X | external-read/external-registration: "<label>: the refusal is said, in the query's error or the project's output", "<label>: no query on the refused schema answers" |
@@ -197,6 +197,7 @@ Doc keys: R = rethinkdb README.md, X = rethinkdb docs/external-mode.md, I = inte
 | 145 | a field a read answered as null keeps its stored value, or its absence, when the row is written back | X | external-write/external-writes: "a row whose field read as null, written back whole, changes nothing", "a row missing a declared field, written back whole, changes nothing", native "a field read as null kept its stored value", "a field read as absent kept its absence" |
 | 146 | a field declared with an io-ts codec is a known field type | I 3.results/4.table_changes.md, X | external-read/external-registration: "a field declared with an io-ts codec is a known type ..." |
 | 147 | the schema id is a label: the tables are always read from the url's database | X | external-read/external-registration: "the schema registers and reads" (schema `warn`), "... labelled codec, registers and reads the url's notes" |
+| 165 | registration reads the types of the fields of the first 1000 rows | X | external-read/external-registration: "registration samples the first 1000 rows: a table of 1200 text values in a number field warns about 1000 of 1000" |
 | 128 | refused: multi-type key writes, mapper update, `changes()`, atomicMutation, `createInstance`, `destroyInstance`, and a named instance for reads; listInstances empty | X | external-write/external-refusals (each "is refused with its reason", "listInstances is empty"); external-read/external-reads: "a named instance of an external table is refused" |
 | 129 | `statementTimeoutMs` closes a read that outlasts it, and the read rejects with a timeout | X, R | module/external-options: "a read that outlasts statementTimeoutMs rejects with a timeout" (a 40000-row scan, limit 1 ms), against "without a limit the scan reads every order and matches none" |
 | 130 | an external instance does not implement interface-rethinkdb | X | external-write/external-refusals (project lists it in `disabledExports`), catalog journeys |
@@ -215,7 +216,7 @@ Doc keys: R = rethinkdb README.md, X = rethinkdb docs/external-mode.md, I = inte
 | 153 | Profile counts nulls and distinct values, and measures text lengths | C | catalog/catalog-describe: "Profile counts a column's nulls", "Profile counts a column's distinct values", "Profile measures the lengths of a text column" |
 | 154 | Profile answers the ends of number and date columns, dates as ISO strings | C | catalog/catalog-describe: "Profile answers the ends of a number column", "Profile answers the ends of a date column as ISO instants" |
 | 155 | Profile counts the rows of a date column per calendar month, `YYYY-MM` in UTC | C | catalog/catalog-describe: "Profile counts the rows of a date column per calendar month" |
-| 156 | a column with one distinct value per row, never null, is `identifier-like` | C | catalog/catalog-describe: "a column with one distinct value per row, never null, is identifier-like" |
+| 156 | `identifier-like` is assigned only to a column with one distinct value per row, never null: a column with fewer distinct values than rows is not | C | catalog/catalog-describe: "a column with one distinct value per row, never null, is identifier-like", "a column with 5 distinct values over 8 rows is not identifier-like", "a column with 2 distinct values over 8 rows is not identifier-like" |
 | 157 | other traits (`enum-like`, `label-candidate`, `time-axis`, `measure`) | C | not asserted: their thresholds ("enough rows", "short enough") are not documented |
 | 158 | Profile with `columns` profiles only those columns | C | catalog/catalog-describe: "Profile with columns profiles only those columns" |
 | 159 | CheckReference answers containment, the rows checked, whether it sampled and whether the target is a key | C | catalog/catalog-describe: "CheckReference finds every value of a referring column in the key it names", "CheckReference of a column whose values the other does not hold ..." |
@@ -227,4 +228,3 @@ Doc keys: R = rethinkdb README.md, X = rethinkdb docs/external-mode.md, I = inte
 | 134 | `RunQuery` runs a query on the module's connection; `r` is rethinkdb-ts | Q | raw-client/raw-client |
 | 164 | a table named without a database is read from the configured default database | Q docs/1.introduction.md | raw-client/raw-client: "a table named without a database is read from the configured default database" |
 | 135 | run options pass through to the driver | Q | not asserted: `readMode`, `durability` have no observable answer on a single server |
-

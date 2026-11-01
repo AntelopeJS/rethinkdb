@@ -1,7 +1,7 @@
 import { has, type Journey } from "@antelopejs/tooling-configs/verify";
 
 import { external, part, PREAMBLE, stopped, structure } from "./external-seed.ts";
-import { answered, logs, pick, refusedRegistration, same, sees } from "./session.ts";
+import { answered, logs, owner, pick, refusedRegistration, same, sees } from "./session.ts";
 
 export const externalReads: Journey = {
   title: "an external instance reads the client's tables verbatim: _id by key type, null for a value the declaration does not read, no undeclared fields, and the structure is never changed",
@@ -24,6 +24,7 @@ await attempt("numberKeys", async () => (await t("numbered").orderBy("no")).map(
 await attempt("numberKeyGet", async () => (await t("numbered").get("7")).label);
 await attempt("arrayKeys", async () => (await t("lines").orderBy("qty")).map((row) => row._id));
 await attempt("arrayKeyGet", async () => (await t("lines").get('["0c000000-0000-4000-8000-000000000101",2]')).qty);
+await attempt("unparsableNumberKey", async () => (await t("numbered").get("abc")) == null ? "absent" : "present");
 await attempt("unparsableKey", async () => (await t("lines").get("[bad")) == null ? "absent" : "present");
 await attempt("mixedCount", () => t("products_mixed").count());
 await attempt("mixedFilter", async () => (await t("products_mixed").filter((row) => row.key("label").eq("number key"))).length);
@@ -51,6 +52,7 @@ return out;`,
       sees("a number key is addressed by the number", part(result, "numberKeyGet"), "seven"),
       sees("a compound key answers its JSON text", part(result, "arrayKeys"), ['["0c000000-0000-4000-8000-000000000101",1]', '["0c000000-0000-4000-8000-000000000101",2]']),
       sees("a compound key is addressed by the parsed array", part(result, "arrayKeyGet"), 3),
+      sees("a key that does not parse as the number key's type matches nothing", part(result, "unparsableNumberKey"), "absent"),
       sees("a key that does not parse matches nothing", part(result, "unparsableKey"), "absent"),
       sees("a table with keys of two types still counts", part(result, "mixedCount"), 2),
       sees("a table with keys of two types still filters", part(result, "mixedFilter"), 1),
@@ -103,9 +105,25 @@ await waitFor(2000);
 return await schema.instance().table("notes").count();`,
     );
     context.expect(codec.folder, [answered(codec), sees("a field declared with an io-ts codec is a known type: the schema, labelled codec, registers and reads the url's notes", codec, 2)]);
+    const bulk = await owner(
+      context,
+      "create a table of 1200 rows whose price is text",
+      `await r.db("erp").tableCreate("bulk").run(c);
+await r.db("erp").table("bulk").insert(Array.from({ length: 1200 }, (_, n) => ({ id: "b" + n, price: "text" }))).run(c);
+return await r.db("erp").table("bulk").count().run(c);`,
+    );
+    context.expect(bulk.folder, [same("the table holds 1200 rows", bulk.value, 1200)], { critical: true });
+    const sampled = await session.run(
+      "declare a number field over a table of 1200 text values",
+      `new db.Schema("sampled", { bulk: { fields: { _id: "string", id: "string", price: "number" }, indexes: {} } });
+await waitFor(3000);
+return "declared";`,
+    );
+    context.expect(sampled.folder, [answered(sampled)]);
     const warnings = await logs(session);
     context.expect(context.work, [
       has("a field some of whose sampled values are not read warns with their share", warnings, /Field 'warn\.products\.price' is declared number, but 1 of 2 sampled values \(50\.0%\) are STRING/),
+      has("registration samples the first 1000 rows: a table of 1200 text values in a number field warns about 1000 of 1000", warnings, /Field 'sampled\.bulk\.price' is declared number, but 1000 of 1000 sampled values \(100\.0%\) are STRING/),
       has("a declared index the table has no index for warns", warnings, /Index 'label' on 'warn\.products' is declared, but table products has no index over \(label\)/),
     ]);
     await stopped(session);
