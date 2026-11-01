@@ -132,6 +132,7 @@ return await r.dbList().run(c);`;
 export async function begin(context: JourneyContext): Promise<void> {
   let cleared = await owner(context, "empty the server", EMPTY_SERVER);
   for (let attempt = 2; attempt <= 4 && cleared.exitCode !== 0; attempt += 1) {
+    await context.command(`wait before attempt ${attempt}`, "sleep", ["3"]);
     cleared = await owner(context, `empty the server, attempt ${attempt}`, EMPTY_SERVER);
   }
   context.expect(cleared.folder, [same("only the system databases remain", cleared.value, ["rethinkdb", "test"])], { critical: true });

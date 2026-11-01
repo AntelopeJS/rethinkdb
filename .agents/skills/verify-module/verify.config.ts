@@ -49,7 +49,11 @@ const config: VerifyConfig = {
     rethinkdb: {
       image: "rethinkdb:2.4",
       port: 28015,
-      ready: ["curl", "-sf", "-o", "/dev/null", "http://127.0.0.1:8080/"],
+      ready: [
+        "bash",
+        "-c",
+        'exec 3<>/dev/tcp/127.0.0.1/28015 && printf "\\xc3\\xbd\\xc2\\x34" >&3 && IFS= read -r -t 5 -d "" -u 3 reply; case "$reply" in *\\"success\\":true*) exit 0;; *) exit 1;; esac',
+      ],
     },
   },
   moduleConfig(services) {
