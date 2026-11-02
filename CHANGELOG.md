@@ -1,5 +1,44 @@
 # Changelog
 
+## v1.6.0
+
+[compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.5.0...v1.6.0)
+
+### 🚀 Enhancements
+
+- External mode and the database catalog ([#45](https://github.com/AntelopeJS/rethinkdb/pull/45))
+
+### 🩹 Fixes
+
+- **deps:** Cap @antelopejs/interface-rethinkdb below 0.1.0 ([#43](https://github.com/AntelopeJS/rethinkdb/pull/43))
+
+### 💅 Refactors
+
+- Clean the repo with the guardrail pack ([#46](https://github.com/AntelopeJS/rethinkdb/pull/46))
+- Clear the residual ratchet findings ([#50](https://github.com/AntelopeJS/rethinkdb/pull/50))
+- Narrow primitive values without constructor comparisons ([#52](https://github.com/AntelopeJS/rethinkdb/pull/52))
+
+### 📖 Documentation
+
+- **changelog:** Upgrade notes of rethinkdb 1.5.0 ([#40](https://github.com/AntelopeJS/rethinkdb/pull/40))
+- **readme:** Align the compatibility table with package.json ranges ([#44](https://github.com/AntelopeJS/rethinkdb/pull/44))
+
+### 📦 Build
+
+- **deps:** Adopt @antelopejs/interface-rethinkdb 0.1.0 ([#49](https://github.com/AntelopeJS/rethinkdb/pull/49))
+- **deps:** Adopt @antelopejs/interface-database 0.2.0 ([#48](https://github.com/AntelopeJS/rethinkdb/pull/48))
+- **deps:** Bump @antelopejs/tooling-configs to 0.2.17 ([#53](https://github.com/AntelopeJS/rethinkdb/pull/53))
+
+### 🏡 Chore
+
+- Adopt the guardrail pack from tooling-configs 0.2.0 ([#41](https://github.com/AntelopeJS/rethinkdb/pull/41))
+- Configure Renovate with the shared preset ([#42](https://github.com/AntelopeJS/rethinkdb/pull/42))
+
+### ❤️ Contributors
+
+- Antony Rizzitelli ([@Upd4ting](http://github.com/Upd4ting))
+- Thomas ([@Thomasims](http://github.com/Thomasims))
+
 ## v1.5.0
 
 [compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.4.1...v1.5.0)

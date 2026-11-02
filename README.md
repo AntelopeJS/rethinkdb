@@ -3,7 +3,7 @@
 <div align="center">
 <a href="https://www.npmjs.com/package/@antelopejs/rethinkdb"><img alt="npm" src="https://img.shields.io/npm/v/@antelopejs/rethinkdb?style=for-the-badge&labelColor=000000&color=000000"></a>
 <a href="./LICENSE"><img alt="License" src="https://img.shields.io/npm/l/@antelopejs/rethinkdb?style=for-the-badge&labelColor=000000&color=000000"></a>
-<a href="https://discord.gg/sjK28QHrA7"><img src="https://img.shields.io/badge/Discord-18181B?logo=discord&style=for-the-badge&color=000000" alt="Discord"></a>
+<a href="https://discord.gg/g4pFt6eXqu"><img src="https://img.shields.io/badge/Discord-18181B?logo=discord&style=for-the-badge&color=000000" alt="Discord"></a>
 <a href="https://interfaces.antelopejs.com/docs/database"><img src="https://img.shields.io/badge/Docs-18181B?style=for-the-badge&color=000000" alt="Documentation"></a>
 </div>
 
@@ -87,7 +87,7 @@ In the module that stores data, add the database interface:
 pnpm add @antelopejs/interface-database
 ```
 
-Then follow the [database interface guide](https://framework.antelopejs.com/docs/guides/database) to declare a schema and query it. The same code runs on [`@antelopejs/mongodb`](https://github.com/AntelopeJS/mongodb).
+Then follow the [database interface guide](https://framework.antelopejs.com/docs/guides/database) to declare a schema and query it. The same code runs on [`@antelopejs/postgres`](https://github.com/AntelopeJS/postgres) and [`@antelopejs/mongodb`](https://github.com/AntelopeJS/mongodb).
 
 To use the driver directly instead, add `@antelopejs/interface-rethinkdb` and read its [documentation](https://interfaces.antelopejs.com/docs/rethinkdb/introduction).
 
