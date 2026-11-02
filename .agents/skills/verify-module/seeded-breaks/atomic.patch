@@ -1,0 +1,15 @@
+diff --git a/src/implementations/database/atomic.ts b/src/implementations/database/atomic.ts
+index 0afa3f3..5b8d10a 100644
+--- a/src/implementations/database/atomic.ts
++++ b/src/implementations/database/atomic.ts
+@@ -115,8 +115,8 @@ function expectedCondition<T>(
+     return fieldEquals(doc, request.revisionField, request.expectedRevision);
+   }
+   return [
+-    TermType.NOT,
+-    [[TermType.CONTAINS, [[TermType.KEYS, [doc]], request.revisionField]]],
++    TermType.DEFAULT,
++    [[TermType.EQ, [[TermType.BRACKET, [doc, request.revisionField]], null]], true],
+   ];
+ }
+ 

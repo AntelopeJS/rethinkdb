@@ -1,0 +1,13 @@
+diff --git a/package.json b/package.json
+index ac8ba9c..9a26235 100644
+--- a/package.json
++++ b/package.json
+@@ -98,7 +98,7 @@
+         "password": "",
+         "discovery": true,
+         "host": "127.0.0.1",
+-        "port": "28015"
++        "port": "28016"
+       }
+     }
+   }

@@ -1,0 +1,13 @@
+diff --git a/src/implementations/database/indexes.ts b/src/implementations/database/indexes.ts
+index 190af73..7f4dc0d 100644
+--- a/src/implementations/database/indexes.ts
++++ b/src/implementations/database/indexes.ts
+@@ -8,7 +8,7 @@ import type {
+ import { Logger } from "../../utils/logger";
+ import { allocateArgNumber, TENANT_ID_FIELD } from "./utils";
+ 
+-const INSTANCE_INDEX_SUFFIX = "__i";
++const INSTANCE_INDEX_SUFFIX = "__x";
+ const ARRAY_TYPE_NAME = "ARRAY";
+ 
+ type TermBuilder = (value: TermJson) => TermJson;

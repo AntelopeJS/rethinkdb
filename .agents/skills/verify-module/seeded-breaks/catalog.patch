@@ -1,0 +1,13 @@
+diff --git a/src/implementations/catalog/rows.ts b/src/implementations/catalog/rows.ts
+index 389646c..3a041d5 100644
+--- a/src/implementations/catalog/rows.ts
++++ b/src/implementations/catalog/rows.ts
+@@ -31,7 +31,7 @@ function Sampled(value: RowValue | Buffer): SampledValue {
+   return text === undefined
+     ? null
+     : {
+-        text: text.slice(0, SAMPLE_TEXT_LENGTH),
++        text: text.slice(0, SAMPLE_TEXT_LENGTH + 100),
+         truncated: text.length > SAMPLE_TEXT_LENGTH,
+       };
+ }

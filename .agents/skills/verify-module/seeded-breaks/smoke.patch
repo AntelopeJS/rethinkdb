@@ -1,0 +1,13 @@
+diff --git a/src/implementations/database/selection.ts b/src/implementations/database/selection.ts
+index 435dd5a..acad265 100644
+--- a/src/implementations/database/selection.ts
++++ b/src/implementations/database/selection.ts
+@@ -290,7 +290,7 @@ export class SelectionQuery {
+       ? (result.generated_keys ?? [])
+       : [];
+     if (!this.conflictMode) {
+-      return generatedKeys;
++      return generatedKeys.slice(0, 1);
+     }
+     return this.buildConflictInsertKeys(generatedKeys);
+   }

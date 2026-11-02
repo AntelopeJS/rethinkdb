@@ -1,0 +1,33 @@
+---
+covers:
+  - src/implementations/database/external-writes.ts
+docs:
+  - docs/external-mode.md
+journeys:
+  - external-writes
+  - external-refusals
+---
+
+# External writes
+
+Writes to the client's tables: declared fields only, dropped scope fields, read-only object and list fields, key rules, replace keeping undeclared fields, `DuplicateKeyError`, `forbidden`, and what an external instance refuses.
+
+## Sub-features
+
+- `external-writes`: insert, update, replace, delete and conflict upserts against the client rows, on text, number and compound keys, with the keys each insert answers, read back with `rethinkdb-ts`; a row whose field read as null or absent, written back whole, keeps it.
+- `external-refusals`: multi-type key writes, mapper updates, `changes()`, `atomicMutation` and instances are refused and change nothing.
+
+## How to get to it (user POV)
+
+- `insert`, `update`, `replace`, `delete` on a schema declared against an external instance with a writer account.
+
+## Driving it with antelopejs-verify
+
+```bash
+pnpm exec antelopejs-verify journey "$RUN" external-write
+```
+
+## Gotchas
+
+- Each journey starts by dropping every database and account of the run's server (`begin`), because the container has no client to reset it with.
+- The statement time limit is not reachable from a journey and is not verified.
