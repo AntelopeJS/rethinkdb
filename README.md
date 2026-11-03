@@ -99,7 +99,7 @@ To use the driver directly instead, add `@antelopejs/interface-rethinkdb` and re
 - RethinkDB cannot enforce unique secondary indexes. Schema initialization refuses a table that declares an index with `unique: true`, and the error names the schema, the table, and the index.
 - Schema initialization creates the missing databases, tables, and indexes. It makes up to five attempts, and it waits for the indexes before the schema accepts queries.
 
-Initialization builds every missing index at boot, so a boot that adds indexes to a large table takes longer. The module never drops an index. Drop an index you no longer need by hand, for example `r.db("<schema>").table("<table>").indexDrop("<name>")`. The upgrade notes in [`CHANGELOG.md`](CHANGELOG.md) list the indexes that earlier releases left behind.
+Initialization builds every missing index at boot, so a boot that adds indexes to a large table takes longer. The module never drops an index. Drop an index you no longer need by hand, for example `r.db("<schema>").table("<table>").indexDrop("<name>")`. [`CHANGELOG.md`](CHANGELOG.md) records when the index layout changed.
 
 ## Documentation
 
