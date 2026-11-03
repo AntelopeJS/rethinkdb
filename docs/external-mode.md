@@ -1,9 +1,13 @@
-# External mode
+---
+title: External mode
+description: How an external instance of the RethinkDB module reads and writes the rows of a database it did not create, and what its catalog answers.
+mode: reference
+---
 
 `mode: "external"` points the module at tables that already exist, in a database it does not own,
-and reads and writes their rows. It is for describing an existing database to AntelopeJS,
-typically a schema written from the module's catalog. It never changes that database's structure:
-no database, table or index is created, and no registry table is kept.
+and reads and writes their rows. Use it to describe an existing database to AntelopeJS, typically
+with a schema written from the catalog of the module. The module never changes the structure of
+that database. It creates no database, table, or index, and it keeps no registry table.
 
 ```typescript fragment
 {
@@ -12,44 +16,50 @@ no database, table or index is created, and no registry table is kept.
 }
 ```
 
-`url` is required, with the database as its path: an external instance without one refuses to
-construct, rather than falling back to a default. It is the one secret of the instance, so projects
-set it through `envOverrides`, and a staging copy under another database name needs only another
-value:
+`url` is required, with the database as its path. An external instance without one refuses to
+construct and does not fall back to a default. The url is the one secret of the instance, so
+projects set it through `envOverrides`. A staging copy under another database name needs only
+another value:
 
 ```typescript fragment
 envOverrides: { ERP_RETHINKDB_URL: "modules.rethinkdb-erp.config.url" },
 ```
 
-`pool` options still apply, merged under what the url gives; a `pool.db` that disagrees with the
-url's database is refused. One external instance serves one database. An external instance does
-not implement `@antelopejs/interface-rethinkdb`: no module gets its raw `r`. The project lists that
-interface in the module's `disabledExports`. The module depends on it only optionally, so the
-project still loads when no other module provides it.
+`pool` options still apply, merged under what the url gives. The module refuses a `pool.db` that
+disagrees with the database of the url. One external instance serves one database.
+
+An external instance does not implement `@antelopejs/interface-rethinkdb`, so no module gets its
+raw `r`. The project lists that interface in the `disabledExports` of the module. The module
+depends on that interface only optionally, so the project still loads when no other module
+provides it.
 
 ## The schema mirrors the database
 
-Nothing is mapped. The table id is the table, and a field is a top-level key of its rows, both
-verbatim. The schema id is a label: the tables are always read from the url's database. The
-primary key field (`id`, `sku`) is declared as a field of its own, beside `_id`.
+The module maps nothing. The table id is the name of the table, and a field is a top-level key of
+its rows, both verbatim. The schema id is a label, because the module always reads the tables from
+the database of the url. Declare the primary key field (`id`, `sku`) as a field of its own, beside
+`_id`.
 
 ## What registration does
 
-It reads, once per declared table, and writes nothing: the table list, `info()`, `indexStatus()`,
-the first and last keys of the primary index, and the types of the fields of the first 1000 rows.
-A failure here fails the schema's registration, so every query on it fails with the same message:
+Registration reads once per declared table and writes nothing. It reads the table list, `info()`,
+`indexStatus()`, the types of the first and last keys of the primary index, and the types of the
+fields of the first 1000 rows. A failure here fails the registration of the schema, so every query
+on that schema fails with the same message. Registration fails on:
 
-- a declared table the database does not have
-- `_id` declared on a table whose primary keys have more than one type (below)
-- a field type the module does not know
+- a declared table that the database does not have
+- `_id` declared on a table whose primary keys have more than one type (see below)
+- a field type that the module does not know
 
-A field some of whose sampled values are of a type the declaration does not read is accepted with
-a warning giving their share, and so is a declared index the table has no index for.
+Registration accepts two cases with a warning. The first is a field where some sampled values have
+a type that the declaration does not read, and the warning gives their share. The second is a
+declared index that has no matching index on the table.
 
 ## Values and `_id`
 
-A row answers `_id` and its declared fields, nothing else. A value of a type the declaration does
-not read is null: `price: "12"` in a `number` field reads as null, since strings are never parsed.
+A row answers `_id` and its declared fields, nothing else. A value of a type that the declaration
+does not read is null. For example, `price: "12"` in a `number` field reads as null, because the
+module never parses strings.
 
 | Primary key type     | `_id` answered | A key addresses  |
 | -------------------- | -------------- | ---------------- |
@@ -57,44 +67,47 @@ not read is null: `price: "12"` in a `number` field reads as null, since strings
 | number               | its text       | the number       |
 | array (compound key) | its JSON text  | the parsed array |
 
-A key that does not parse as the table's type, such as `"[bad"` for an array key, matches nothing:
-`get` answers not found. A table whose primary keys have more than one type is read without `_id`:
-queries, counts and aggregations work, `get`, `getAll` by `_id` and writes are refused.
+A key that does not parse as the type of the table, such as `"[bad"` for an array key, matches
+nothing, and `get` answers not found. The module reads a table whose primary keys have more than
+one type without `_id`. Queries, counts, and aggregations work on that table. `get`, `getAll` by
+`_id`, and writes are refused.
 
-`get`, `getAll` and `between` by `_id` or by a declared index read the table's primary index or
-its own index over the same fields; an `orderBy` that comes first sorts by such an index too.
-Everything after them compares the declared values, so a filter scans, as any ReQL `filter` does.
+`get`, `getAll`, and `between` by `_id` or by a declared index read the primary index of the table,
+or its own index over the same fields. An `orderBy` that comes first sorts by such an index too.
+Every later stage compares the declared values, so a filter scans the table, as any ReQL `filter`
+does.
 
-RethinkDB has no server-side time limit. `statementTimeoutMs` runs each read on a connection of
-its own and closes it when the limit passes, which stops the query on the server, and the read
-rejects with a timeout.
+RethinkDB has no server-side time limit. With `statementTimeoutMs` set, the module runs each read
+on a connection of its own and closes that connection when the limit passes. Closing the
+connection stops the query on the server, and the read rejects with a `QueryTimeoutError`.
 
 ## Writing
 
-`insert`, `update`, `replace` and `delete` work on every table whose keys share one type.
+`insert`, `update`, `replace`, and `delete` work on every table whose keys share one type.
 
-- A payload names declared fields only: any other key, `_internal` included, is refused by name.
-  `_instance` and `tenant_id` are dropped
-- `object` and array fields are read-only: a value for one is refused by `insert` and ignored by
-  `update` and `replace`
-- `_id` and the primary key field say which row is written: an `update` whose `_id` names another
-  row writes nothing and answers 0. On `insert` they are the new row's key, and must agree
-- An insert without a key lets the server generate a uuid when the table's keys are uuids, and is
-  refused otherwise
-- Only the fields whose read differs from the written value are written, so a row read and
-  written back whole changes nothing and answers 0, and a field a read answered as null keeps its
-  stored value or its absence
-- `replace` removes the declared fields it leaves out and keeps undeclared ones: `replace()` is
-  never used, since it would drop them
-- A duplicate key raises the interface's `DuplicateKeyError`, quoting no row; a write the account
-  may not make raises an error of kind `forbidden`
+- A payload names declared fields only. The module refuses any other key by name, `_internal`
+  included. It drops `_instance` and `tenant_id`.
+- `object` and array fields are read-only. `insert` refuses a value for one, and `update` and
+  `replace` ignore it.
+- `_id` and the primary key field say which row the module writes. An `update` whose `_id` names
+  another row writes nothing and answers 0. On `insert`, they are the key of the new row, and they
+  must agree.
+- An insert without a key lets the server generate a uuid when the keys of the table are uuids.
+  Otherwise the module refuses the insert.
+- The module writes only the fields whose read value differs from the written value. A row read
+  and written back whole changes nothing and answers 0. A field that a read answered as null keeps
+  its stored value, or stays absent.
+- `replace` removes the declared fields it leaves out and keeps the undeclared ones. The module
+  never calls the ReQL `replace()`, because that call would drop them.
+- A duplicate key raises the `DuplicateKeyError` of the interface, which quotes no row. A write
+  that the account may not make raises an error of kind `forbidden`.
 
 ## What is refused
 
 - writes to a table whose keys have more than one type, and `atomicMutation`
 - `update` with an expression mapper (`update(row => …)`)
 - `changes()`
-- a named instance, `createInstance` and `destroyInstance`; `listInstances` is empty
+- a named instance, `createInstance`, and `destroyInstance` (`listInstances` answers an empty list)
 
 ## The account to connect with
 
@@ -104,27 +117,32 @@ r.db("erp").grant("dms", { read: true });
 r.db("erp").table("orders").grant("dms", { read: true, write: true });
 ```
 
-RethinkDB has no read-only session: the module sends reads only, apart from the writes it is asked
-for and the catalog's write probe below, and an account with `read` only is the guarantee.
+RethinkDB has no read-only session. The module sends only reads, apart from the writes that a
+caller asks for and the write probe of the catalog (see below). An account with only `read` is the
+guarantee.
 
 ## The catalog
 
 An external instance also implements `@antelopejs/interface-database-catalog`, which describes and
-profiles the database for a generator. It answers under `ajs project dev` and `ajs project run`,
-and refuses under `ajs project start` unless enabled with `catalog: { enabled: true }`. An owned
-instance refuses it.
+profiles the database for a generator. The catalog answers under `ajs project dev` and
+`ajs project run`. Under `ajs project start`, it refuses unless `catalog: { enabled: true }` is
+set. An owned instance refuses every catalog call.
 
-- **Fields come from a sample:** each top-level key with its ReQL types and their shares, the
-  declaration that reads at least 80% of them, and what it loses. Indexes list the fields of a
-  `getField` or an array of fields; any other function index lists none.
-- **Write privileges** come from deleting a key no row has: a reader gets a permission error, a
-  writer `skipped: 1`, and nothing changes. RethinkDB lets an account read neither its own
-  permissions nor the table configuration.
-- **Measures** each run on a connection of their own, closed at 5 s, and answer
-  `{ status: "timeout" }` then; the rest of the profile stands. Calls run one at a time.
-- **Large tables** (above one million estimated rows) are read through 1000 rows after each of 50
-  evenly spaced uuids when the keys are uuids, so a second profile reads the same rows, and through
-  `sample(50000)` otherwise, which reads the whole table under the time limit.
-- **Values** are named only as categories of a field with at most 25 distinct values, each counted
-  at least 5 times; text answers no minimum or maximum. `SampleRows` answers at most 20 rows, as
-  text cut at 200 characters, for a person to look at.
+- **Fields come from a sample.** The catalog lists each top-level key with its ReQL types and
+  their shares, the declaration that reads at least 80% of the values, and what that declaration
+  loses. Indexes list the fields of a `getField` or of an array of fields. Any other function
+  index lists none.
+- **Write privileges come from a delete.** The catalog deletes a key that no row has. A reader
+  gets a permission error, a writer gets `skipped: 1`, and nothing changes. RethinkDB lets an
+  account read neither its own permissions nor the table configuration.
+- **Measures run on their own connections.** The catalog closes each connection at 5 s, and the
+  measure then answers `{ status: "timeout" }`. The rest of the profile stands. Catalog calls run
+  one at a time.
+- **Large tables are sampled.** Above one million estimated rows, a uuid-keyed table is read
+  through the 1000 rows after each of 50 evenly spaced uuids, so a second profile reads the same
+  rows. Any other large table is read through `sample(50000)`, which reads the whole table under
+  the time limit.
+- **Values appear only as categories.** The catalog names values only as the categories of a
+  field with at most 25 distinct values, each counted at least 5 times. A text field answers no
+  minimum or maximum value, only the minimum, average, and maximum of its lengths. `SampleRows`
+  answers at most 20 rows, as text cut at 200 characters, for a person to look at.
