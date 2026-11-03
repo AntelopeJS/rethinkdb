@@ -89,6 +89,9 @@
       "@antelopejs/interface-rethinkdb"
     ],
     "test": "src/test/antelope.test.ts",
+    "docs": {
+      "standard": true
+    },
     "defaultConfig": {
       "pool": {
         "pool": true,
