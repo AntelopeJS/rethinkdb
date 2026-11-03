@@ -1,13 +1,13 @@
-# @antelopejs/rethinkdb
+# `@antelopejs/rethinkdb`
 
 <div align="center">
-<a href="https://www.npmjs.com/package/@antelopejs/rethinkdb"><img alt="npm" src="https://img.shields.io/npm/v/@antelopejs/rethinkdb?style=for-the-badge&labelColor=000000&color=000000"></a>
-<a href="./LICENSE"><img alt="License" src="https://img.shields.io/npm/l/@antelopejs/rethinkdb?style=for-the-badge&labelColor=000000&color=000000"></a>
-<a href="https://discord.gg/g4pFt6eXqu"><img src="https://img.shields.io/badge/Discord-18181B?logo=discord&style=for-the-badge&color=000000" alt="Discord"></a>
-<a href="https://interfaces.antelopejs.com/docs/database"><img src="https://img.shields.io/badge/Docs-18181B?style=for-the-badge&color=000000" alt="Documentation"></a>
+<a href="https://www.npmjs.com/package/@antelopejs/rethinkdb"><img data-illustration alt="npm" src="https://img.shields.io/npm/v/@antelopejs/rethinkdb?style=for-the-badge&labelColor=000000&color=000000"></a>
+<a href="./LICENSE"><img data-illustration alt="License" src="https://img.shields.io/npm/l/@antelopejs/rethinkdb?style=for-the-badge&labelColor=000000&color=000000"></a>
+<a href="https://discord.gg/g4pFt6eXqu"><img data-illustration src="https://img.shields.io/badge/Discord-18181B?logo=discord&style=for-the-badge&color=000000" alt="Discord"></a>
+<a href="https://interfaces.antelopejs.com/docs/database"><img data-illustration src="https://img.shields.io/badge/Docs-18181B?style=for-the-badge&color=000000" alt="Documentation"></a>
 </div>
 
-The RethinkDB backend of AntelopeJS: it runs the database interface's queries on RethinkDB with [`rethinkdb-ts`](https://github.com/rethinkdb/rethinkdb-ts), and exposes that driver to modules that need it directly.
+The RethinkDB backend of AntelopeJS. It runs the queries of the database interface on RethinkDB through [`rethinkdb-ts`](https://github.com/rethinkdb/rethinkdb-ts), and gives that driver to the modules that need it directly.
 
 ## Interfaces
 
@@ -17,7 +17,7 @@ The RethinkDB backend of AntelopeJS: it runs the database interface's queries on
 | [`@antelopejs/interface-rethinkdb`](https://github.com/AntelopeJS/interface-rethinkdb)               | [RethinkDB](https://interfaces.antelopejs.com/docs/rethinkdb/introduction) |
 | [`@antelopejs/interface-database-catalog`](https://github.com/AntelopeJS/interface-database-catalog) | [External mode](docs/external-mode.md#the-catalog)                         |
 
-Schemas, tables, queries, change feeds and atomic mutations are documented on the database interface pages.
+The database interface pages document schemas, tables, queries, change feeds, and atomic mutations.
 
 ## Install
 
@@ -25,11 +25,11 @@ Schemas, tables, queries, change feeds and atomic mutations are documented on th
 ajs project modules add @antelopejs/rethinkdb
 ```
 
-The command writes the module's default configuration: a connection pool to `127.0.0.1:28015` as `admin`.
+The command writes the default configuration of the module, which opens a connection pool to `127.0.0.1:28015` as `admin`.
 
 ## Configuration
 
-The module connects either through a connection pool (`pool`) or through a single connection (`connection`). When both are set, `pool` wins.
+The module connects through a connection pool (`pool`) or through a single connection (`connection`). When both are set, `pool` wins. When `url` is set, the module builds the pool from it and ignores `connection`.
 
 ```typescript [antelope.config.ts]
 import { defineConfig } from "@antelopejs/interface-core/config";
@@ -68,16 +68,16 @@ config: {
 },
 ```
 
-| Key                  | Description                                                                                                                                                                               |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pool`               | `rethinkdb-ts` pool options (`RPoolConnectionOptions`), passed to `r.connectPool()`.                                                                                                      |
-| `connection`         | `rethinkdb-ts` connection options (`RConnectionOptions`), passed to `r.connect()`. Used when `pool` is unset.                                                                             |
-| `url`                | `rethinkdb://user:password@host:port/database`, parsed into pool options. Required in external mode.                                                                                      |
-| `mode`               | `owned` (default): the module creates a database per schema and scopes rows to instances. `external`: it serves a database it did not create, see [External mode](docs/external-mode.md). |
-| `statementTimeoutMs` | Time limit of each read of an external instance, enforced by closing that read's connection.                                                                                              |
-| `catalog`            | `{ enabled?: boolean }`: whether an external instance answers the catalog outside development.                                                                                            |
+| Key                  | Description                                                                                                                                                                       |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pool`               | `rethinkdb-ts` pool options (`RPoolConnectionOptions`), passed to `r.connectPool()`.                                                                                              |
+| `connection`         | `rethinkdb-ts` connection options (`RConnectionOptions`), passed to `r.connect()`. Used when `pool` and `url` are unset.                                                          |
+| `url`                | `rethinkdb://user:password@host:port/database`, parsed into pool options. The port defaults to `28015` and the user to `admin`. Required in external mode.                        |
+| `mode`               | `owned` (default) creates a database per schema and scopes rows to instances. `external` serves a database the module did not create. See [External mode](docs/external-mode.md). |
+| `statementTimeoutMs` | Time limit, in milliseconds, of each read of an external instance. The module closes the connection of a read that runs past it. It must be a positive safe integer.              |
+| `catalog`            | `{ enabled?: boolean }`. Turns the catalog of an external instance on or off. Unset, the catalog answers under `ajs project dev` and `ajs project run` only.                      |
 
-The module refuses to start when none of `url`, `pool` and `connection` is set. The option types come from [`rethinkdb-ts`](https://github.com/rethinkdb/rethinkdb-ts).
+The module refuses to start when none of `url`, `pool`, or `connection` is set, and when `mode` is neither `owned` nor `external`. The option types come from [`rethinkdb-ts`](https://github.com/rethinkdb/rethinkdb-ts).
 
 ## Quick start
 
@@ -93,20 +93,20 @@ To use the driver directly instead, add `@antelopejs/interface-rethinkdb` and re
 
 ## Storage layout
 
-- Each schema is a RethinkDB database, and each schema table is a table in it. Every table has a `tenant_id` index that scopes it to one instance.
-- Each declared index `<name>` becomes a `<name>__i` index led by the instance. An index declared with `crossInstance: true` also gets an unprefixed `<name>` index for `CROSS_INSTANCE` queries; without it, those queries scan the table and log a one-time warning. Index names ending in `__i` are reserved.
-- The primary key is the `_id` field, shared by all instances of a table: inserting an `_id` that any instance already uses throws a `DuplicateKeyError` on `_id`.
-- RethinkDB cannot enforce unique secondary indexes, so schema initialization refuses a table that declares an index with `unique: true` and names the schema, table and index.
-- Schema initialization creates missing databases, tables and indexes, retries up to five times, and waits for the indexes before the schema accepts queries.
+- Each schema is a RethinkDB database, and each schema table is a table in it. Every table has a `tenant_id` index that scopes it to one instance. The database also holds an `__instances__` table that records the instances of the schema.
+- Each declared index `<name>` becomes a `<name>__i` index led by the instance. An index declared with `crossInstance: true` also gets an unprefixed `<name>` index for `CROSS_INSTANCE` queries. Without that index, those queries scan the table and log a warning once per index. Initialization refuses a declared index whose name ends in `__i`.
+- The primary key is the `_id` field, which all instances of a table share. An insert of an `_id` that any instance already uses throws a `DuplicateKeyError` on `_id`.
+- RethinkDB cannot enforce unique secondary indexes. Schema initialization refuses a table that declares an index with `unique: true`, and the error names the schema, the table, and the index.
+- Schema initialization creates the missing databases, tables, and indexes. It makes up to five attempts, and it waits for the indexes before the schema accepts queries.
 
-Version 1.4 added the `<name>__i` indexes. The first boot after an upgrade builds them, which takes longer on large tables. The module never drops an index: drop the old ones you no longer need by hand, for example `r.db("<schema>").table("<table>").indexDrop("<name>")`.
+Initialization builds every missing index at boot, so a boot that adds indexes to a large table takes longer. The module never drops an index. Drop an index you no longer need by hand, for example `r.db("<schema>").table("<table>").indexDrop("<name>")`. [`CHANGELOG.md`](CHANGELOG.md) records when the index layout changed.
 
 ## Documentation
 
-- [Database](https://interfaces.antelopejs.com/docs/database): the `@antelopejs/interface-database` contract this module implements
-- [RethinkDB](https://interfaces.antelopejs.com/docs/rethinkdb/introduction): the `@antelopejs/interface-rethinkdb` contract this module implements
-- [External mode](docs/external-mode.md): serving a database the module did not create, and its catalog
-- [Configuration](https://framework.antelopejs.com/docs/concepts/configuration): module sources, `config` blocks and config variables in `antelope.config.ts`
+- [Database](https://interfaces.antelopejs.com/docs/database) documents `@antelopejs/interface-database`, which this module implements.
+- [RethinkDB](https://interfaces.antelopejs.com/docs/rethinkdb/introduction) documents `@antelopejs/interface-rethinkdb`, which this module implements.
+- [External mode](docs/external-mode.md) explains how the module serves a database it did not create, and what its catalog answers.
+- [Configuration](https://framework.antelopejs.com/docs/concepts/configuration) documents module sources, `config` blocks, and config variables in `antelope.config.ts`.
 
 ## Compatibility
 
@@ -121,7 +121,7 @@ Version 1.4 added the `<name>__i` indexes. The first boot after an upgrade build
 
 <!-- antelopejs-docs-compat:end -->
 
-The module is developed and tested on Node.js 24, with `rethinkdb-ts` `^2.7.0` and RethinkDB 2.4.
+The repository pins its Node.js version in `.nvmrc`. The `rethinkdb-ts` range is in the `dependencies` of `package.json`. The RethinkDB image that the tests run against is in `.github/release-services.yml`.
 
 ## Contributing
 
@@ -139,10 +139,10 @@ pnpm lint
 pnpm format:check
 pnpm typecheck
 pnpm knip
-pnpm test           # build, then ajs module test
+pnpm test           # build, then the owned and external-mode suites
 ```
 
-The tests also run the shared conformance suite of `@antelopejs/interface-database`. Read the [contribution guidelines](CONTRIBUTING.md) before opening a pull request.
+The tests also run the shared conformance suites of `@antelopejs/interface-database`. Read the [contribution guidelines](CONTRIBUTING.md) before opening a pull request.
 
 ## License
 
