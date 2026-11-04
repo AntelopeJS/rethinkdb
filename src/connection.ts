@@ -13,7 +13,7 @@ import { RethinkDBConnection } from "rethinkdb-ts/lib/connection/connection";
 import { MasterConnectionPool } from "rethinkdb-ts/lib/connection/master-pool";
 
 import { Logger } from "./utils/logger";
-import { validateWriteResult } from "./write-result";
+import { IsWriteResult, validateWriteResult } from "./write-result";
 
 let connection:
   | {
@@ -109,8 +109,9 @@ async function Resolve(
   }
   const cursorType = cursor.getType();
   if (cursorType === "Atom") {
-    validateWriteResult(term, results[0]);
-    return results[0];
+    const atom: unknown = results[0];
+    validateWriteResult(term, IsWriteResult(atom) ? atom : undefined);
+    return atom;
   }
   if (cursorType === "Cursor") {
     return await cursor.toArray();

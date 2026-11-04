@@ -1,0 +1,13 @@
+diff --git a/src/implementations/database/external-read.ts b/src/implementations/database/external-read.ts
+index 5d804d4..883d9f2 100644
+--- a/src/implementations/database/external-read.ts
++++ b/src/implementations/database/external-read.ts
+@@ -68,7 +68,7 @@ export function ReadField(
+ 
+ const KEY_RENDERINGS: Record<KeyClass, (key: TermJson) => TermJson> = {
+   string: (key) => key,
+-  number: (key) => [TermType.COERCE_TO, [key, "STRING"]],
++  number: (key) => key,
+   array: (key) => [TermType.TO_JSON_STRING, [key]],
+ };
+ 

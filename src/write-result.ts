@@ -2,9 +2,15 @@ import { TermType } from "rethinkdb-ts/lib/proto/enums";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import { DuplicateKeyError } from "@antelopejs/interface-database";
 
-import { PRIMARY_KEY_FIELD } from "./implementations/database/utils";
+import {
+  IsNumber,
+  IsObject,
+  IsText,
+  IsTextList,
+  PRIMARY_KEY_FIELD,
+} from "./implementations/database/utils";
 
-const WRITE_TERMS = new Set([
+const WRITE_TERMS = new Set<unknown>([
   TermType.INSERT,
   TermType.UPDATE,
   TermType.REPLACE,
@@ -12,6 +18,39 @@ const WRITE_TERMS = new Set([
 ]);
 
 const DUPLICATE_PRIMARY_KEY_PATTERN = /^Duplicate primary key/;
+
+/** The counters RethinkDB answers a write with, and its first error and generated keys when it has them. */
+export interface WriteResult {
+  inserted: number;
+  replaced: number;
+  unchanged: number;
+  errors: number;
+  deleted: number;
+  skipped: number;
+  first_error?: string;
+  generated_keys?: string[];
+}
+
+/** Whether `value` is a write result: its six counters numbers, its first error text, its generated keys a list of text. */
+export function IsWriteResult(value: unknown): value is WriteResult {
+  return (
+    IsObject(value) &&
+    "inserted" in value &&
+    IsNumber(value.inserted) &&
+    "replaced" in value &&
+    IsNumber(value.replaced) &&
+    "unchanged" in value &&
+    IsNumber(value.unchanged) &&
+    "errors" in value &&
+    IsNumber(value.errors) &&
+    "deleted" in value &&
+    IsNumber(value.deleted) &&
+    "skipped" in value &&
+    IsNumber(value.skipped) &&
+    (!("first_error" in value) || IsText(value.first_error)) &&
+    (!("generated_keys" in value) || IsTextList(value.generated_keys))
+  );
+}
 
 function toWriteError(firstError: string | undefined): Error {
   if (firstError && DUPLICATE_PRIMARY_KEY_PATTERN.test(firstError)) {
@@ -28,11 +67,14 @@ function toWriteError(firstError: string | undefined): Error {
  * a query error: `errors > 0` with `Duplicate primary key` leading
  * `first_error`.
  */
-export function validateWriteResult(term: TermJson, result: any): void {
+export function validateWriteResult(
+  term: TermJson,
+  result: WriteResult | undefined,
+): void {
   if (!Array.isArray(term) || !WRITE_TERMS.has(term[0])) {
     return;
   }
-  if (result?.errors > 0) {
+  if (result !== undefined && result.errors > 0) {
     throw toWriteError(result.first_error);
   }
 }

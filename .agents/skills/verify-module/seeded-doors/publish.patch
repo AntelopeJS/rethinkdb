@@ -1,0 +1,13 @@
+diff --git a/.release-it.json b/.release-it.json
+index a7604b6..2993303 100644
+--- a/.release-it.json
++++ b/.release-it.json
+@@ -2,7 +2,7 @@
+   "git": {
+     "commitMessage": "chore(release): v${version}",
+     "tagName": "v${version}",
+-    "requireCommits": true
++    "requireCommits": false
+   },
+   "github": {
+     "release": true,

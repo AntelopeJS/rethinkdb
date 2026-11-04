@@ -1,5 +1,4 @@
 import { TermType } from "rethinkdb-ts/lib/proto/enums";
-import type { Stream } from "@antelopejs/interface-database";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 
 // oxlint-disable-next-line import/no-cycle -- join and union right-hand sides are sub-queries; see expression.ts
@@ -12,12 +11,13 @@ import {
   warnUnindexedCrossInstance,
 } from "./indexes";
 // oxlint-disable-next-line import/no-cycle -- stream stages decode values; see expression.ts
-import { DecodeFunction, DecodeValue } from "./expression";
+import { DecodeFunction, DecodeOperand, DecodeValue } from "./expression";
 import {
   allocateArgNumber,
   type DecodingContext,
   PRIMARY_KEY_FIELD,
   type QueryStage,
+  StageNamed,
   TENANT_ID_FIELD,
 } from "./utils";
 
@@ -34,28 +34,28 @@ type StreamStageHandler = (
   singleElement: boolean,
 ) => TermJson;
 
-const STREAM_STAGE_MAP: Record<string, StreamStageHandler> = {
-  changes: handleChanges,
-  key: handleKey,
-  default: handleDefault,
-  map: handleMap,
-  filter: handleFilter,
-  pluck: handlePluck,
-  without: handleWithout,
-  union: handleUnion,
-  join: handleJoin,
-  lookup: handleLookup,
-  group: handleGroup,
-  orderBy: handleOrderBy,
-  slice: handleSlice,
-  nth: handleNth,
-  count: handleCount,
-  sum: handleSum,
-  avg: handleAvg,
-  min: handleMin,
-  max: handleMax,
-  distinct: handleDistinct,
-};
+const STREAM_STAGE_MAP = new Map<string, StreamStageHandler>([
+  ["changes", handleChanges],
+  ["key", handleKey],
+  ["default", handleDefault],
+  ["map", handleMap],
+  ["filter", handleFilter],
+  ["pluck", handlePluck],
+  ["without", handleWithout],
+  ["union", handleUnion],
+  ["join", handleJoin],
+  ["lookup", handleLookup],
+  ["group", handleGroup],
+  ["orderBy", handleOrderBy],
+  ["slice", handleSlice],
+  ["nth", handleNth],
+  ["count", handleCount],
+  ["sum", handleFieldReduction("sum", TermType.SUM)],
+  ["avg", handleFieldReduction("avg", TermType.AVG)],
+  ["min", handleFieldExtreme("min", TermType.MIN)],
+  ["max", handleFieldExtreme("max", TermType.MAX)],
+  ["distinct", handleDistinct],
+]);
 
 const REDUCTION_STAGES = new Set(["nth", "count", "sum", "avg", "min", "max"]);
 
@@ -81,7 +81,7 @@ export function applyStreamStages(
       term = handleMapSingle(term, stage, context);
       continue;
     }
-    const handler = STREAM_STAGE_MAP[stage.stage];
+    const handler = STREAM_STAGE_MAP.get(stage.stage);
     if (!handler) {
       throw new Error(`Unimplemented stream stage: ${stage.stage}`);
     }
@@ -95,10 +95,16 @@ function handleChanges(prev: TermJson): TermJson {
   return [TermType.CHANGES, [prev]];
 }
 
-function handleKey(prev: TermJson, stage: QueryStage): TermJson {
-  const fieldName = stage.args[0];
-  const defaultValue = stage.args[1];
-  const bracket: TermJson = [TermType.BRACKET, [prev, fieldName]];
+function handleKey(
+  prev: TermJson,
+  stage: QueryStage,
+  context: DecodingContext,
+): TermJson {
+  const [fieldName, defaultValue] = StageNamed(stage, "key").args;
+  const bracket: TermJson = [
+    TermType.BRACKET,
+    [prev, DecodeValue(fieldName, context)],
+  ];
   if (defaultValue !== undefined) {
     return [TermType.DEFAULT, [bracket, defaultValue]];
   }
@@ -110,7 +116,8 @@ function handleDefault(
   stage: QueryStage,
   context: DecodingContext,
 ): TermJson {
-  return [TermType.DEFAULT, [prev, DecodeValue(stage.args[0], context)]];
+  const [value] = StageNamed(stage, "default").args;
+  return [TermType.DEFAULT, [prev, DecodeOperand(value, context)]];
 }
 
 function handleMap(
@@ -118,7 +125,7 @@ function handleMap(
   stage: QueryStage,
   context: DecodingContext,
 ): TermJson {
-  const func = stage.args[0];
+  const [func] = StageNamed(stage, "map").args;
   const argId = allocateArgNumber();
   const row: TermJson = [TermType.VAR, [argId]];
 
@@ -131,10 +138,10 @@ function handleMap(
 
 function handleMapSingle(
   prev: TermJson,
-  stage: QueryStage,
+  stage: QueryStage<"map">,
   context: DecodingContext,
 ): TermJson {
-  const func = stage.args[0];
+  const [func] = stage.args;
   const argId = allocateArgNumber();
   const row: TermJson = [TermType.VAR, [argId]];
 
@@ -155,7 +162,7 @@ function handleFilter(
   stage: QueryStage,
   context: DecodingContext,
 ): TermJson {
-  const func = stage.args[0];
+  const [func] = StageNamed(stage, "filter").args;
   const argId = allocateArgNumber();
   const row: TermJson = [TermType.VAR, [argId]];
 
@@ -167,17 +174,19 @@ function handleFilter(
 }
 
 function handlePluck(prev: TermJson, stage: QueryStage): TermJson {
-  const fields = stage.args[0];
+  const [fields] = StageNamed(stage, "pluck").args;
   return [TermType.PLUCK, [prev, ...fields]];
 }
 
 function handleWithout(prev: TermJson, stage: QueryStage): TermJson {
-  const fields = stage.args[0];
+  const [fields] = StageNamed(stage, "without").args;
   return [TermType.WITHOUT, [prev, ...fields]];
 }
 
-function buildRightStages(stage: QueryStage): QueryStage[] {
-  return (stage.args[0] as Stream<any>).build();
+function buildRightStages(
+  stage: QueryStage<"union" | "join" | "lookup">,
+): QueryStage[] {
+  return stage.args[0].build();
 }
 
 function handleUnion(
@@ -185,7 +194,7 @@ function handleUnion(
   stage: QueryStage,
   context: DecodingContext,
 ): TermJson {
-  const rightStages = buildRightStages(stage);
+  const rightStages = buildRightStages(StageNamed(stage, "union"));
   const rightTerm = SelectionQuery.buildTermJson(rightStages, context);
   return [TermType.UNION, [prev, rightTerm]];
 }
@@ -195,11 +204,11 @@ function handleJoin(
   stage: QueryStage,
   context: DecodingContext,
 ): TermJson {
-  const innerOnly = stage.options?.innerOnly ?? false;
-  const rightStages = buildRightStages(stage);
+  const join = StageNamed(stage, "join");
+  const innerOnly = join.options?.innerOnly ?? false;
+  const rightStages = buildRightStages(join);
   const rightTerm = SelectionQuery.buildTermJson(rightStages, context);
-  const predicate = stage.args[1];
-  const mapper = stage.args[2];
+  const [, predicate, mapper] = join.args;
 
   const joinType = innerOnly ? TermType.INNER_JOIN : TermType.OUTER_JOIN;
 
@@ -231,11 +240,6 @@ function handleJoin(
   return [TermType.MAP, [joinResult, mapperTerm]];
 }
 
-interface LookupOptions {
-  localKey: string;
-  otherKey: string;
-}
-
 function handleLookup(
   prev: TermJson,
   stage: QueryStage,
@@ -243,12 +247,11 @@ function handleLookup(
   _table: StreamTable,
   singleElement: boolean,
 ): TermJson {
-  const rightStages = buildRightStages(stage);
+  const lookup = StageNamed(stage, "lookup");
+  const rightStages = buildRightStages(lookup);
   const rightQuery = SelectionQuery.decode(rightStages, context);
   const rightTerm = rightQuery.buildTerm();
-  const options = stage.options as LookupOptions;
-  const localKey = options.localKey;
-  const otherKey = options.otherKey;
+  const { localKey, otherKey } = lookup.options;
 
   const mapArgId = allocateArgNumber();
   const row: TermJson = [TermType.VAR, [mapArgId]];
@@ -335,9 +338,10 @@ function handleGroup(
   context: DecodingContext,
   table: StreamTable,
 ): TermJson {
-  const field = stage.options.index;
-  const func = stage.args[0];
-  const argNumbers: number[] = func.args[0];
+  const group = StageNamed(stage, "group");
+  const field = group.options.index;
+  const [func] = group.args;
+  const [argNumbers] = func.args;
 
   const mapArgId = allocateArgNumber();
   const row: TermJson = [TermType.VAR, [mapArgId]];
@@ -356,7 +360,7 @@ function handleGroup(
   };
   context.args[argNumbers[1]] = () => groupAccess;
 
-  const body = DecodeValue(func.args[1], context);
+  const body = DecodeOperand(func.args[1], context);
 
   if (oldArgs0 !== undefined) {
     context.args[argNumbers[0]] = oldArgs0;
@@ -435,8 +439,9 @@ function handleOrderBy(
   _context: DecodingContext,
   { schemaId, tableName }: StreamTable,
 ): TermJson {
-  const indexName = stage.options.index;
-  const isDescending = stage.options.direction === "desc";
+  const { options } = StageNamed(stage, "orderBy");
+  const indexName = options.index;
+  const isDescending = options.direction === "desc";
 
   const definition = FindIndex(schemaId, tableName, indexName);
   if (definition && isTableTerm(prev)) {
@@ -459,10 +464,10 @@ function handleSlice(
   stage: QueryStage,
   context: DecodingContext,
 ): TermJson {
-  const offset = DecodeValue(stage.args[0], context);
+  const offset = DecodeOperand(stage.args[0], context);
   const count =
     stage.args[1] !== undefined
-      ? DecodeValue(stage.args[1], context)
+      ? DecodeOperand(stage.args[1], context)
       : undefined;
 
   let result = prev;
@@ -480,7 +485,7 @@ function handleNth(
   stage: QueryStage,
   context: DecodingContext,
 ): TermJson {
-  const n = DecodeValue(stage.args[0], context);
+  const n = DecodeOperand(stage.args[0], context);
   return [TermType.NTH, [prev, n]];
 }
 
@@ -517,7 +522,7 @@ function handleCount(
   _context: DecodingContext,
   { schemaId, tableName }: StreamTable,
 ): TermJson {
-  const field = stage.options?.field;
+  const field = StageNamed(stage, "count").options?.field;
   if (!field) {
     return [TermType.COUNT, [prev]];
   }
@@ -527,34 +532,26 @@ function handleCount(
   ];
 }
 
-function handleSum(prev: TermJson, stage: QueryStage): TermJson {
-  if (stage.options?.field) {
-    return [TermType.SUM, [prev, stage.options.field]];
-  }
-  return [TermType.SUM, [prev]];
+function handleFieldReduction(
+  name: "sum" | "avg",
+  term: number,
+): StreamStageHandler {
+  return (prev, stage) => {
+    const field = StageNamed(stage, name).options?.field;
+    return field ? [term, [prev, field]] : [term, [prev]];
+  };
 }
 
-function handleAvg(prev: TermJson, stage: QueryStage): TermJson {
-  if (stage.options?.field) {
-    return [TermType.AVG, [prev, stage.options.field]];
-  }
-  return [TermType.AVG, [prev]];
-}
-
-function handleMin(prev: TermJson, stage: QueryStage): TermJson {
-  if (stage.options?.field) {
-    const field = stage.options.field;
-    return [TermType.BRACKET, [[TermType.MIN, [prev, field]], field]];
-  }
-  return [TermType.MIN, [prev]];
-}
-
-function handleMax(prev: TermJson, stage: QueryStage): TermJson {
-  if (stage.options?.field) {
-    const field = stage.options.field;
-    return [TermType.BRACKET, [[TermType.MAX, [prev, field]], field]];
-  }
-  return [TermType.MAX, [prev]];
+function handleFieldExtreme(
+  name: "min" | "max",
+  term: number,
+): StreamStageHandler {
+  return (prev, stage) => {
+    const field = StageNamed(stage, name).options?.field;
+    return field
+      ? [TermType.BRACKET, [[term, [prev, field]], field]]
+      : [term, [prev]];
+  };
 }
 
 function handleDistinct(
@@ -563,7 +560,7 @@ function handleDistinct(
   _context: DecodingContext,
   { schemaId, tableName }: StreamTable,
 ): TermJson {
-  const field = stage.options?.field;
+  const field = StageNamed(stage, "distinct").options?.field;
   if (!field) {
     return [TermType.DISTINCT, [prev]];
   }

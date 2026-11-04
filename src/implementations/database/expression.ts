@@ -11,6 +11,7 @@ import {
   type DecodingContext,
   IsObject,
   type QueryStage,
+  StageNamed,
 } from "./utils";
 
 type StageHandler = (expr: ExpressionBuilder, ...args: any[]) => TermJson;
@@ -18,162 +19,249 @@ type StageHandler = (expr: ExpressionBuilder, ...args: any[]) => TermJson;
 interface ExpressionBuilder {
   value: TermJson;
   context: DecodingContext;
-  options?: QueryStage["options"];
+  stage?: QueryStage;
 }
 
-const SIMPLE_STAGE_MAP: Record<string, number> = {
-  default: TermType.DEFAULT,
-  and: TermType.AND,
-  or: TermType.OR,
-  not: TermType.NOT,
-  eq: TermType.EQ,
-  ne: TermType.NE,
-  add: TermType.ADD,
-  sub: TermType.SUB,
-  mul: TermType.MUL,
-  div: TermType.DIV,
-  mod: TermType.MOD,
-  round: TermType.ROUND,
-  ceil: TermType.CEIL,
-  floor: TermType.FLOOR,
-  bit_and: TermType.BIT_AND,
-  bit_or: TermType.BIT_OR,
-  bit_xor: TermType.BIT_XOR,
-  bit_not: TermType.BIT_NOT,
-  bit_lshift: TermType.BIT_SAL,
-  bit_rshift: TermType.BIT_SAR,
-  cmp_gt: TermType.GT,
-  cmp_ge: TermType.GE,
-  cmp_lt: TermType.LT,
-  cmp_le: TermType.LE,
-  str_upcase: TermType.UPCASE,
-  str_downcase: TermType.DOWNCASE,
-  str_concat: TermType.ADD,
-  arr_empty: TermType.IS_EMPTY,
-  arr_count: TermType.COUNT,
-  arr_sum: TermType.SUM,
-  arr_avg: TermType.AVG,
-  arr_min: TermType.MIN,
-  arr_max: TermType.MAX,
-  arr_includes: TermType.CONTAINS,
-  obj_merge: TermType.MERGE,
-  obj_keys: TermType.KEYS,
-  obj_values: TermType.VALUES,
-  date_tod: TermType.TIME_OF_DAY,
-  date_year: TermType.YEAR,
-  date_month: TermType.MONTH,
-  date_day: TermType.DAY,
-  date_dow: TermType.DAY_OF_WEEK,
-  date_doy: TermType.DAY_OF_YEAR,
-  date_hours: TermType.HOURS,
-  date_minutes: TermType.MINUTES,
-  date_seconds: TermType.SECONDS,
-  date_epoch: TermType.TO_EPOCH_TIME,
-  date_during: TermType.DURING,
-};
+const SIMPLE_STAGE_MAP = new Map<string, number>([
+  ["default", TermType.DEFAULT],
+  ["and", TermType.AND],
+  ["or", TermType.OR],
+  ["not", TermType.NOT],
+  ["eq", TermType.EQ],
+  ["ne", TermType.NE],
+  ["sub", TermType.SUB],
+  ["mul", TermType.MUL],
+  ["div", TermType.DIV],
+  ["mod", TermType.MOD],
+  ["round", TermType.ROUND],
+  ["ceil", TermType.CEIL],
+  ["floor", TermType.FLOOR],
+  ["bit_and", TermType.BIT_AND],
+  ["bit_or", TermType.BIT_OR],
+  ["bit_xor", TermType.BIT_XOR],
+  ["bit_not", TermType.BIT_NOT],
+  ["bit_lshift", TermType.BIT_SAL],
+  ["bit_rshift", TermType.BIT_SAR],
+  ["cmp_gt", TermType.GT],
+  ["cmp_ge", TermType.GE],
+  ["cmp_lt", TermType.LT],
+  ["cmp_le", TermType.LE],
+  ["str_upcase", TermType.UPCASE],
+  ["str_downcase", TermType.DOWNCASE],
+  ["str_concat", TermType.ADD],
+  ["arr_empty", TermType.IS_EMPTY],
+  ["arr_count", TermType.COUNT],
+  ["arr_sum", TermType.SUM],
+  ["arr_avg", TermType.AVG],
+  ["arr_min", TermType.MIN],
+  ["arr_max", TermType.MAX],
+  ["arr_includes", TermType.CONTAINS],
+  ["obj_merge", TermType.MERGE],
+  ["obj_keys", TermType.KEYS],
+  ["obj_values", TermType.VALUES],
+  ["date_tod", TermType.TIME_OF_DAY],
+  ["date_year", TermType.YEAR],
+  ["date_month", TermType.MONTH],
+  ["date_day", TermType.DAY],
+  ["date_dow", TermType.DAY_OF_WEEK],
+  ["date_doy", TermType.DAY_OF_YEAR],
+  ["date_hours", TermType.HOURS],
+  ["date_minutes", TermType.MINUTES],
+  ["date_seconds", TermType.SECONDS],
+  ["date_epoch", TermType.TO_EPOCH_TIME],
+]);
 
-const COMPLEX_STAGE_MAP: Record<string, StageHandler> = {
-  arg: (expr, num: number) => {
-    const provider = expr.context.args[num];
-    if (provider) {
-      return provider([{ stage: "arg", args: [num] }]);
-    }
-    return [TermType.VAR, [num]];
-  },
-  constant: (_expr, constant: TermJson) => constant,
-  date_with_timezone: (expr, timezone: TermJson) => [
-    TermType.IN_TIMEZONE,
-    [expr.value, timezone],
-  ],
-  str_split: (expr) => {
-    const sep = expr.options?.separator ?? " ";
-    const result: TermJson = [TermType.SPLIT, [expr.value, sep]];
-    if (expr.options?.maxSplits) {
-      return [TermType.SLICE, [result, 0, expr.options.maxSplits]];
-    }
-    return result;
-  },
-  str_len: (expr) => [
+const MILLISECONDS_PER_SECOND = 1000;
+
+/** `ADD` refuses a null, which the contract answers null for, and only the server knows an expression's value. */
+function AddTerm(value: TermJson, operand: TermJson): TermJson {
+  if (operand === null) {
+    return null;
+  }
+  const sum: TermJson = [TermType.ADD, [value, operand]];
+  return Array.isArray(operand)
+    ? [TermType.BRANCH, [[TermType.EQ, [operand, null]], null, sum]]
+    : sum;
+}
+
+/** A bound of `during` as a time: a number is milliseconds since the UNIX epoch, as `new Date(n)` reads it. */
+function DuringBound(bound: TermJson): TermJson {
+  const time: TermJson = [
+    TermType.EPOCH_TIME,
+    [[TermType.DIV, [bound, MILLISECONDS_PER_SECOND]]],
+  ];
+  if (Array.isArray(bound)) {
+    return [
+      TermType.BRANCH,
+      [[TermType.EQ, [[TermType.TYPE_OF, [bound]], "NUMBER"]], time, bound],
+    ];
+  }
+  return Number.isFinite(bound) ? time : bound;
+}
+
+/** ReQL filters keep everything but false and null, where the contract rejects a 0 too. */
+function FilterBody(body: TermJson | undefined): TermJson {
+  const argId = allocateArgNumber();
+  const result: TermJson = [TermType.VAR, [argId]];
+  return [
     TermType.FUNCALL,
     [
       [
         TermType.FUNC,
         [
-          [TermType.MAKE_ARRAY, [allocateArgNumber()]],
-          [TermType.COUNT, [[TermType.SPLIT, [expr.value, ""]]]],
+          [TermType.MAKE_ARRAY, [argId]],
+          [TermType.AND, [result, [TermType.NE, [result, 0]]]],
         ],
       ],
-      expr.value,
+      body,
+    ],
+  ];
+}
+
+const COMPLEX_STAGE_MAP = new Map<string, StageHandler>([
+  [
+    "add",
+    (expr, ...operands: TermJson[]) => operands.reduce(AddTerm, expr.value),
+  ],
+  [
+    "date_during",
+    (expr, ...bounds: TermJson[]) => [
+      TermType.DURING,
+      [expr.value, ...bounds.map(DuringBound)],
     ],
   ],
-  str_match: (expr, regex: TermJson) => {
-    const argId = allocateArgNumber();
-    return [
+  [
+    "arg",
+    (expr, num: number) => {
+      const provider = expr.context.args[num];
+      if (provider) {
+        return provider([{ stage: "arg", args: [num] }]);
+      }
+      return [TermType.VAR, [num]];
+    },
+  ],
+  ["constant", (_expr, constant: TermJson) => constant],
+  [
+    "date_with_timezone",
+    (expr, timezone: TermJson) => [
+      TermType.IN_TIMEZONE,
+      [expr.value, timezone],
+    ],
+  ],
+  [
+    "str_split",
+    (expr) => {
+      const { options } = StageNamed(expr.stage, "str_split");
+      const sep = options?.separator ?? " ";
+      const result: TermJson = [TermType.SPLIT, [expr.value, sep]];
+      if (options?.maxSplits) {
+        return [TermType.SLICE, [result, 0, options.maxSplits]];
+      }
+      return result;
+    },
+  ],
+  [
+    "str_len",
+    (expr) => [
       TermType.FUNCALL,
       [
         [
           TermType.FUNC,
           [
-            [TermType.MAKE_ARRAY, [argId]],
-            [TermType.NE, [[TermType.MATCH, [expr.value, regex]], null]],
+            [TermType.MAKE_ARRAY, [allocateArgNumber()]],
+            [TermType.COUNT, [[TermType.SPLIT, [expr.value, ""]]]],
           ],
         ],
         expr.value,
       ],
-    ];
-  },
-  arr_index: (expr, key: TermJson) => [TermType.BRACKET, [expr.value, key]],
-  arr_slice: (expr, start: TermJson, end?: TermJson) => {
-    if (end !== undefined) {
-      return [TermType.SLICE, [expr.value, start, end]];
-    }
-    return [TermType.SLICE, [expr.value, start]];
-  },
-  obj_index: (expr, key: TermJson, def?: TermJson) => {
-    const bracket: TermJson = [TermType.BRACKET, [expr.value, key]];
-    if (def !== undefined) {
-      return [TermType.DEFAULT, [bracket, def]];
-    }
-    return bracket;
-  },
-};
+    ],
+  ],
+  [
+    "str_match",
+    (expr, regex: TermJson) => {
+      const argId = allocateArgNumber();
+      return [
+        TermType.FUNCALL,
+        [
+          [
+            TermType.FUNC,
+            [
+              [TermType.MAKE_ARRAY, [argId]],
+              [TermType.NE, [[TermType.MATCH, [expr.value, regex]], null]],
+            ],
+          ],
+          expr.value,
+        ],
+      ];
+    },
+  ],
+  ["arr_index", (expr, key: TermJson) => [TermType.BRACKET, [expr.value, key]]],
+  [
+    "arr_slice",
+    (expr, start: TermJson, end?: TermJson) => {
+      if (end !== undefined) {
+        return [TermType.SLICE, [expr.value, start, end]];
+      }
+      return [TermType.SLICE, [expr.value, start]];
+    },
+  ],
+  [
+    "obj_index",
+    (expr, key: TermJson, def?: TermJson) => {
+      const bracket: TermJson = [TermType.BRACKET, [expr.value, key]];
+      if (def !== undefined) {
+        return [TermType.DEFAULT, [bracket, def]];
+      }
+      return bracket;
+    },
+  ],
+]);
 
 type FuncStageHandler = (
   expr: ExpressionBuilder,
   stage: QueryStage,
 ) => TermJson;
 
-const FUNC_STAGE_MAP: Record<string, FuncStageHandler> = {
-  obj_has: (expr, stage) => {
-    const fields = stage.args[0] as string[];
-    return [TermType.HAS_FIELDS, [expr.value, ...fields]];
-  },
-  arr_filter: (expr, stage) => {
-    const func = stage.args[0];
-    const argId = allocateArgNumber();
-    const row: TermJson = [TermType.VAR, [argId]];
-    const body = DecodeFunction(func, expr.context, [row]);
-    return [
-      TermType.FILTER,
-      [expr.value, [TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], body]]],
-    ];
-  },
-  arr_map: (expr, stage) => {
-    const func = stage.args[0];
-    const argId = allocateArgNumber();
-    const row: TermJson = [TermType.VAR, [argId]];
-    const body = DecodeFunction(func, expr.context, [row]);
-    return [
-      TermType.MAP,
-      [expr.value, [TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], body]]],
-    ];
-  },
-};
+const FUNC_STAGE_MAP = new Map<string, FuncStageHandler>([
+  [
+    "obj_has",
+    (expr, stage) => {
+      const [fields] = StageNamed(stage, "obj_has").args;
+      return [TermType.HAS_FIELDS, [expr.value, ...fields]];
+    },
+  ],
+  [
+    "arr_filter",
+    (expr, stage) => {
+      const [func] = StageNamed(stage, "arr_filter").args;
+      const argId = allocateArgNumber();
+      const row: TermJson = [TermType.VAR, [argId]];
+      const body = FilterBody(DecodeFunction(func, expr.context, [row]));
+      return [
+        TermType.FILTER,
+        [expr.value, [TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], body]]],
+      ];
+    },
+  ],
+  [
+    "arr_map",
+    (expr, stage) => {
+      const [func] = StageNamed(stage, "arr_map").args;
+      const argId = allocateArgNumber();
+      const row: TermJson = [TermType.VAR, [argId]];
+      const body = DecodeFunction(func, expr.context, [row]);
+      return [
+        TermType.MAP,
+        [expr.value, [TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], body]]],
+      ];
+    },
+  ],
+]);
 
 function applySimpleStage(
   prev: TermJson,
   termType: number,
-  args: TermJson[],
+  args: (TermJson | undefined)[],
 ): TermJson {
   if (args.length === 0) {
     return [termType, [prev]];
@@ -189,19 +277,19 @@ function decodeExpression(
   const builder: ExpressionBuilder = { value: startValue, context };
 
   for (const stage of stages) {
-    builder.options = stage.options;
-    const funcHandler = FUNC_STAGE_MAP[stage.stage];
+    builder.stage = stage;
+    const funcHandler = FUNC_STAGE_MAP.get(stage.stage);
     if (funcHandler) {
       builder.value = funcHandler(builder, stage);
       continue;
     }
-    const decodedArgs = stage.args.map((arg) => DecodeValue(arg, context));
-    const simpleType = SIMPLE_STAGE_MAP[stage.stage];
+    const decodedArgs = stage.args.map((arg) => DecodeOperand(arg, context));
+    const simpleType = SIMPLE_STAGE_MAP.get(stage.stage);
     if (simpleType !== undefined) {
       builder.value = applySimpleStage(builder.value, simpleType, decodedArgs);
       continue;
     }
-    const complexHandler = COMPLEX_STAGE_MAP[stage.stage];
+    const complexHandler = COMPLEX_STAGE_MAP.get(stage.stage);
     if (complexHandler) {
       builder.value = complexHandler(builder, ...decodedArgs);
       continue;
@@ -209,12 +297,12 @@ function decodeExpression(
     throw new Error(`Unimplemented expression stage: ${stage.stage}`);
   }
 
-  delete builder.options;
+  delete builder.stage;
   return builder.value;
 }
 
 export function DecodeValue(
-  value: Value<unknown>,
+  value: NonNullable<Value<unknown>> | null,
   context: DecodingContext,
 ): TermJson {
   if (value instanceof ValueProxy) {
@@ -229,7 +317,7 @@ export function DecodeValue(
     if (Array.isArray(value)) {
       return [
         TermType.MAKE_ARRAY,
-        value.map((val) => DecodeValue(val, context)),
+        value.map((val) => DecodeOperand(val, context)),
       ];
     }
     if (value instanceof Date) {
@@ -239,17 +327,21 @@ export function DecodeValue(
       return Object.fromEntries(
         Object.entries(value).map(([key, val]) => [
           key,
-          DecodeValue(val, context),
+          DecodeOperand(val, context),
         ]),
       );
     }
   }
 
-  if (value === undefined) {
-    return undefined as any;
-  }
-
   return value;
+}
+
+/** A value a stage may leave out, as {@link DecodeValue} reads it: an absent one stays `undefined`. */
+export function DecodeOperand(
+  value: Value<unknown>,
+  context: DecodingContext,
+): TermJson | undefined {
+  return value === undefined ? undefined : DecodeValue(value, context);
 }
 
 function dateToReql(date: Date): TermJson {
@@ -279,18 +371,18 @@ function decodeSubquery(
 }
 
 export function DecodeFunction(
-  func: QueryStage,
+  func: QueryStage<"func">,
   context: DecodingContext,
   argTerms: TermJson[],
-): TermJson {
-  const argNumbers: number[] = func.args[0];
+): TermJson | undefined {
+  const [argNumbers] = func.args;
   const oldArgs: DecodingContext["args"] = {};
   for (let i = 0; i < argNumbers.length; ++i) {
     oldArgs[argNumbers[i]] = context.args[argNumbers[i]];
     const argTerm = argTerms[i];
     context.args[argNumbers[i]] = () => argTerm;
   }
-  const val = DecodeValue(func.args[1], context);
+  const val = DecodeOperand(func.args[1], context);
   for (let i = 0; i < argNumbers.length; ++i) {
     if (oldArgs[argNumbers[i]] !== undefined) {
       context.args[argNumbers[i]] = oldArgs[argNumbers[i]];

@@ -1,12 +1,18 @@
+import assert from "node:assert";
 import { TermType } from "rethinkdb-ts/lib/proto/enums";
 import {
   DuplicateKeyError,
   IsDuplicateKeyError,
 } from "@antelopejs/interface-database";
+import type {
+  WriteDocument,
+  WriteValue,
+} from "@antelopejs/interface-database/common";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 
 import { GetOptions } from "../../config";
 import { executeBounded, executeTermJson } from "../../connection";
+import { IsWriteResult } from "../../write-result";
 import type {
   ExternalTable,
   FieldDescriptor,
@@ -14,12 +20,12 @@ import type {
 } from "./external-descriptor";
 import {
   Func,
-  type KeyData,
+  IsKeyData,
   KeyDataTerm,
   KeyValue,
   ReadField,
 } from "./external-read";
-import { allocateArgNumber, IsText } from "./utils";
+import { allocateArgNumber, IsList, IsTermJson, IsText } from "./utils";
 
 /** What went wrong with a write, in terms a caller can act on. */
 type ExternalWriteErrorKind = "invalid" | "forbidden";
@@ -37,21 +43,6 @@ class ExternalWriteError extends Error {
 }
 
 type WriteMode = "insert" | "update" | "replace";
-
-/** A plain value of a payload, as data-api and the DMS send it. */
-type PayloadValue =
-  | string
-  | number
-  | boolean
-  | Date
-  | null
-  | undefined
-  | PayloadValue[]
-  | PayloadObject;
-
-interface PayloadObject {
-  [field: string]: PayloadValue;
-}
 
 interface Payload {
   key?: TermJson;
@@ -78,7 +69,7 @@ const CONSTRUCTORS = new Map<string, unknown>([
 ]);
 
 /** A primitive value as text; undefined for null, documents and arrays. */
-function Text(value: PayloadValue | TermJson): string | undefined {
+function Text(value: WriteValue | TermJson): string | undefined {
   if (value === null || value === undefined || value instanceof Object) {
     return undefined;
   }
@@ -96,7 +87,7 @@ function TimeOf(date: Date): TermJson {
 /** A value as its declared kind writes it, or undefined when it is not of that kind. */
 function Written(
   descriptor: FieldDescriptor,
-  value: PayloadValue,
+  value: WriteValue,
 ): TermJson | undefined {
   if (value === null || value === undefined) {
     return null;
@@ -139,7 +130,7 @@ function RequireKey(table: ExternalTable): KeyClass {
 /** The key a payload names, through `_id` or the primary key field, which must agree. */
 function KeyOf(
   table: ExternalTable,
-  value: PayloadObject,
+  value: WriteDocument,
   failures: [string, string][],
 ): TermJson | undefined {
   const key = RequireKey(table);
@@ -147,7 +138,11 @@ function KeyOf(
     value[ID_FIELD] === undefined
       ? undefined
       : KeyValue(key, Text(value[ID_FIELD]) ?? "");
-  const byField = KeyFieldTerm(value[table.primaryKey]);
+  const byField = KeyFieldTerm(
+    Object.prototype.hasOwnProperty.call(value, table.primaryKey)
+      ? value[table.primaryKey]
+      : undefined,
+  );
   for (const [field, term] of [
     [ID_FIELD, byId],
     [table.primaryKey, byField],
@@ -167,7 +162,7 @@ function KeyOf(
 }
 
 /** A key field's value as a query term: arrays, at any depth, built as such, never read as terms. */
-function KeyFieldTerm(value: PayloadValue): TermJson | undefined {
+function KeyFieldTerm(value: WriteValue): TermJson | undefined {
   if (value === undefined || value === null) {
     return undefined;
   }
@@ -184,15 +179,21 @@ function KeyClassOf(term: TermJson): KeyClass | undefined {
 
 /** A key term as the plain value the table stores. */
 function KeyData(term: TermJson): TermJson {
-  return Array.isArray(term) && term[0] === TermType.MAKE_ARRAY
-    ? term[1].map(KeyData)
+  const elements: unknown =
+    Array.isArray(term) && term[0] === TermType.MAKE_ARRAY
+      ? term[1]
+      : undefined;
+  return IsList(elements)
+    ? elements.map((element) =>
+        IsTermJson(element) ? KeyData(element) : element,
+      )
     : term;
 }
 
 function Split(
   table: ExternalTable,
   mode: WriteMode,
-  value: PayloadObject,
+  value: WriteDocument,
 ): Payload {
   const failures: [string, string][] = [];
   const payload: Payload = {
@@ -237,7 +238,7 @@ function Split(
         (descriptor) =>
           SCALAR_KINDS.has(descriptor.kind) &&
           descriptor.field !== table.primaryKey &&
-          !(descriptor.field in value),
+          !Object.prototype.hasOwnProperty.call(value, descriptor.field),
       )
       .map((descriptor) => descriptor.field);
   }
@@ -380,7 +381,7 @@ function TableTerm(database: string, table: ExternalTable): TermJson {
 async function Insert(
   database: string,
   table: ExternalTable,
-  values: PayloadObject[],
+  values: WriteDocument[],
   conflict?: "update" | "replace",
 ): Promise<string[]> {
   const key = RequireKey(table);
@@ -396,16 +397,18 @@ async function Insert(
       : { ...payload.fields, [table.primaryKey]: payload.key };
   });
   const options = conflict ? { conflict: ConflictMerge(table, conflict) } : {};
-  const result = await executeTermJson([
+  const result: unknown = await executeTermJson([
     TermType.INSERT,
     [TableTerm(database, table), [TermType.MAKE_ARRAY, documents]],
     options,
-  ]).catch((error: Error) => {
+  ]).catch((error: unknown) => {
     throw IsDuplicateKeyError(error)
       ? new DuplicateKeyError(table.primaryKey, [table.primaryKey])
       : error;
   });
-  const generated: TermJson[] = [...(result?.generated_keys ?? [])];
+  const generated: TermJson[] = IsWriteResult(result)
+    ? [...(result.generated_keys ?? [])]
+    : [];
   return documents.map((document) => {
     const stored = document[table.primaryKey] ?? generated.shift() ?? null;
     return key === "array"
@@ -417,12 +420,12 @@ async function Insert(
 /** One write on an external table, as `SelectionQuery` hands it over. */
 export interface ExternalWrite {
   kind: string;
-  value: PayloadObject | PayloadObject[];
+  value: WriteDocument[];
   target: TermJson;
   conflict?: "update" | "replace";
 }
 
-const BY_KEY = new Set<TermJson>([TermType.GET, TermType.GET_ALL]);
+const BY_KEY = new Set<unknown>([TermType.GET, TermType.GET_ALL]);
 
 /**
  * The rows a selection names, pinned by their primary keys, so a second update reaches the rows
@@ -445,10 +448,11 @@ async function Pinned(
     [target, Func((row) => [TermType.BRACKET, [row, table.primaryKey]])],
   ];
   const timeoutMs = GetOptions().statementTimeoutMs;
-  const keys: KeyData[] =
+  const keys: unknown =
     timeoutMs === undefined
       ? await executeTermJson(read)
       : await executeBounded(read, timeoutMs);
+  assert(IsList(keys), "A map over a selection answers a list");
   if (keys.length === 0) {
     return target;
   }
@@ -456,7 +460,10 @@ async function Pinned(
     TermType.GET_ALL,
     [
       TableTerm(database, table),
-      ...keys.flatMap((key) => KeyDataTerm(key) ?? []),
+      ...keys.flatMap((key) => {
+        const term = IsKeyData(key) ? KeyDataTerm(key) : undefined;
+        return term === undefined ? [] : [term];
+      }),
     ],
   ];
 }
@@ -467,14 +474,16 @@ async function Run(
   write: ExternalWrite,
 ): Promise<number | string[]> {
   if (write.kind === "insert") {
-    return Insert(database, table, [write.value].flat(), write.conflict);
+    return Insert(database, table, write.value, write.conflict);
   }
   if (write.kind === "delete") {
-    return (
-      (await executeTermJson([TermType.DELETE, [write.target]]))?.deleted ?? 0
-    );
+    const deleted: unknown = await executeTermJson([
+      TermType.DELETE,
+      [write.target],
+    ]);
+    return IsWriteResult(deleted) ? deleted.deleted : 0;
   }
-  const [value] = [write.value].flat();
+  const [value] = write.value;
   const payload = Split(
     table,
     write.kind === "replace" ? "replace" : "update",
@@ -485,18 +494,22 @@ async function Run(
       ? await Pinned(database, table, write.target)
       : write.target;
   const target = KeyedTarget(table, selected, payload.key);
-  const updated = await executeTermJson([
+  const updated: unknown = await executeTermJson([
     TermType.UPDATE,
     [target, GuardedUpdate(payload)],
   ]);
+  const replaced = IsWriteResult(updated) ? updated.replaced : 0;
   if (payload.removed.length === 0) {
-    return updated?.replaced ?? 0;
+    return replaced;
   }
   const removals = Object.fromEntries(
     payload.removed.map((field) => [field, [TermType.LITERAL, []]]),
   );
-  const removed = await executeTermJson([TermType.UPDATE, [target, removals]]);
-  return Math.max(updated?.replaced ?? 0, removed?.replaced ?? 0);
+  const removed: unknown = await executeTermJson([
+    TermType.UPDATE,
+    [target, removals],
+  ]);
+  return Math.max(replaced, IsWriteResult(removed) ? removed.replaced : 0);
 }
 
 /**

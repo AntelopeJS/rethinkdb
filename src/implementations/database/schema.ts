@@ -22,9 +22,9 @@ import {
 
 const existingSchemas: Record<string, { definition: SchemaDefinition }> = {};
 
-const schemaReady: Record<string, Promise<void>> = {};
+const schemaReady = new Map<string, Promise<void>>();
 
-const existingInstances: Record<string, Set<string>> = {};
+const existingInstances = new Map<string, Set<string>>();
 
 const externalTables = new Map<string, Record<string, ExternalTable>>();
 
@@ -38,7 +38,7 @@ async function registerExternal(schemaId: string, schema: SchemaDefinition) {
       externalTables.set(schemaId, tables);
     },
   );
-  schemaReady[schemaId] = registration;
+  schemaReady.set(schemaId, registration);
   registration.catch(() => undefined);
   await registration;
 }
@@ -60,21 +60,21 @@ export const Schemas = {
       return registerExternal(schemaId, schema);
     }
     const ready = initializeSchema(schemaId, schema);
-    schemaReady[schemaId] = ready;
+    schemaReady.set(schemaId, ready);
     try {
       await ready;
     } catch (err) {
       delete existingSchemas[schemaId];
-      delete schemaReady[schemaId];
-      delete existingInstances[schemaId];
+      schemaReady.delete(schemaId);
+      existingInstances.delete(schemaId);
       throw err;
     }
   },
   unregister(schemaId: string) {
     externalTables.delete(schemaId);
     delete existingSchemas[schemaId];
-    delete schemaReady[schemaId];
-    delete existingInstances[schemaId];
+    schemaReady.delete(schemaId);
+    existingInstances.delete(schemaId);
   },
 };
 
@@ -92,21 +92,23 @@ async function hydrateInstances(schemaId: string) {
     TermType.TABLE,
     [[TermType.DB, [schemaId]], INSTANCE_REGISTRY_TABLE],
   ];
+  // oxlint-disable-next-line typescript/no-unsafe-assignment -- executeTermJson answers the any of rethinkdb-ts's Cursor.toArray(); only CreateInstance writes these rows as { _id, instance_id }, and typing the answer unknown moves the row to no-unknown-returns while a read-side parse of stored rows is refused
   const rows: Array<{ _id: string; instance_id: string }> =
     (await executeTermJson(table)) ?? [];
   const set = new Set<string>();
   for (const row of rows) {
     set.add(row.instance_id);
   }
-  existingInstances[schemaId] = set;
+  existingInstances.set(schemaId, set);
 }
 
 export function WaitForSchemaReady(schemaId: string): Promise<void> {
-  return schemaReady[schemaId] ?? Promise.resolve();
+  return schemaReady.get(schemaId) ?? Promise.resolve();
 }
 
 export function GetSchema(schemaId: string) {
   assert(schemaId in existingSchemas);
+  assert(Object.prototype.hasOwnProperty.call(existingSchemas, schemaId));
   return existingSchemas[schemaId].definition;
 }
 
@@ -143,7 +145,7 @@ export function IsValidInstance(
   schemaId: string,
   instanceId: string | undefined,
 ): boolean {
-  return existingInstances[schemaId]?.has(instanceId ?? "") ?? false;
+  return existingInstances.get(schemaId)?.has(instanceId ?? "") ?? false;
 }
 
 export async function CreateInstance(
@@ -161,10 +163,12 @@ export async function CreateInstance(
     [registryTable, { _id: id, [INSTANCE_REGISTRY_FIELD]: id }],
     { conflict: "replace" },
   ]);
-  if (!existingInstances[schemaId]) {
-    existingInstances[schemaId] = new Set<string>();
+  let instances = existingInstances.get(schemaId);
+  if (!instances) {
+    instances = new Set<string>();
+    existingInstances.set(schemaId, instances);
   }
-  existingInstances[schemaId].add(id);
+  instances.add(id);
   return id;
 }
 
@@ -192,7 +196,7 @@ export async function DestroyInstance(
     [[TermType.GET, [registryTable, id]]],
   ]);
 
-  existingInstances[schemaId]?.delete(id);
+  existingInstances.get(schemaId)?.delete(id);
 }
 
 async function deleteInstanceRows(
@@ -211,7 +215,7 @@ async function deleteInstanceRows(
 
 export async function ListInstances(schemaId: string): Promise<string[]> {
   await WaitForSchemaReady(schemaId);
-  const set = existingInstances[schemaId];
+  const set = existingInstances.get(schemaId);
   if (!set) {
     return [];
   }

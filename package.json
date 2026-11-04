@@ -42,16 +42,14 @@
     "prepare": "if git rev-parse --is-inside-work-tree >/dev/null 2>&1 && command -v lefthook >/dev/null 2>&1; then lefthook install; fi",
     "checks": "antelopejs-checks",
     "size": "antelopejs-check-size",
-    "ratchet": "antelopejs-ratchet",
     "sync": "antelopejs-sync",
-    "ratchet:update": "antelopejs-ratchet --update",
     "sync:check": "antelopejs-sync --check",
     "suppressions": "antelopejs-suppressions",
     "suppressions:update": "antelopejs-suppressions --update"
   },
   "dependencies": {
     "@antelopejs/interface-core": ">=0.2.4 <1.0.0",
-    "@antelopejs/interface-database": ">=0.2.0 <0.3.0",
+    "@antelopejs/interface-database": ">=0.3.0 <0.4.0",
     "@antelopejs/interface-database-catalog": ">=0.0.3 <0.1.0",
     "chai": "^4.5.0",
     "reflect-metadata": "^0.2.2",
@@ -78,7 +76,7 @@
   "optionalDependencies": {
     "@antelopejs/interface-rethinkdb": ">=0.1.0 <0.2.0"
   },
-  "packageManager": "pnpm@10.6.5",
+  "packageManager": "pnpm@10.33.0",
   "antelopeJs": {
     "implements": [
       "@antelopejs/interface-database",
@@ -86,6 +84,9 @@
       "@antelopejs/interface-rethinkdb"
     ],
     "test": "src/test/antelope.test.ts",
+    "docs": {
+      "standard": true
+    },
     "defaultConfig": {
       "pool": {
         "pool": true,

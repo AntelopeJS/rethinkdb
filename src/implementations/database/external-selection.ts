@@ -7,7 +7,7 @@ import { ExternalDatabaseName, GetOptions } from "../../config";
 import type { ExternalTable, KeyClass } from "./external-descriptor";
 import { Func, KeyExpression, KeyValue, Normalized } from "./external-read";
 import { FindIndex, GetExternalTable } from "./schema";
-import { IsText, type QueryStage } from "./utils";
+import { IsText, IsTextList, type QueryStage } from "./utils";
 
 const ID_FIELD = "_id";
 const UNSCOPED_INSTANCES: readonly (string | symbol | undefined)[] = [
@@ -24,7 +24,7 @@ export function ExternalInstanceRefusal(stage: string): Error {
 }
 
 /** Refuses `atomicMutation`, whose contract writes revision fields the client's rows do not have. */
-export function ExternalAtomicRefusal(table: string): Error {
+export function ExternalAtomicRefusal(table: string | undefined): Error {
   return new Error(
     `The 'atomicMutation' stage is not supported on table ${table}, an external table: its contract writes revision fields the client's rows do not have`,
   );
@@ -96,24 +96,25 @@ export class ExternalReads {
       [selected, Func((row) => [TermType.BRACKET, [row, ID_FIELD]])],
     ];
     const timeoutMs = GetOptions().statementTimeoutMs;
-    const ids: string[] =
+    const ids: unknown =
       timeoutMs === undefined
         ? await executeTermJson(read)
         : await executeBounded(read, timeoutMs);
     const key = this.requireKey();
     return [
       TermType.GET_ALL,
-      [this.tableTerm(), ...ids.map((id) => KeyValue(key, id))],
+      [
+        this.tableTerm(),
+        ...(IsTextList(ids) ? ids : []).map((id) => KeyValue(key, id)),
+      ],
     ];
   }
 
-  /** Refuses an update computed from the row, which the write-back guard cannot check. */
-  public refuseMapper(value: QueryStage | TermJson) {
-    if (value instanceof Object && "stage" in value && value.stage === "func") {
-      throw new Error(
-        `An update of table ${this.table.table} computed from the row is not supported on an external table: pass the new field values`,
-      );
-    }
+  /** The refusal of an update computed from the row, which the write-back guard cannot check. */
+  public mapperRefusal(): Error {
+    return new Error(
+      `An update of table ${this.table.table} computed from the row is not supported on an external table: pass the new field values`,
+    );
   }
 
   public get(decoded: TermJson): TermJson {
