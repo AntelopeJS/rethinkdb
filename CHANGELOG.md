@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.6.1
+
+[compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.6.0...v1.6.1)
+
+### 📖 Documentation
+
+- **readme:** List PostgreSQL as a backend that runs the same code ([#70](https://github.com/AntelopeJS/rethinkdb/pull/70))
+- **readme:** Use one Discord invite ([#66](https://github.com/AntelopeJS/rethinkdb/pull/66))
+- **github:** Send questions and ideas to Discord ([#76](https://github.com/AntelopeJS/rethinkdb/pull/76))
+- **readme:** Link the package to AntelopeJS and AntelopeJS DMS ([723af1c](https://github.com/AntelopeJS/rethinkdb/commit/723af1c))
+
+### ❤️ Contributors
+
+- Antony Rizzitelli ([@Upd4ting](http://github.com/Upd4ting))
+
 ## v1.6.0
 
 [compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.5.0...v1.6.0)
