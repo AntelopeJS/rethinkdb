@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.7.0
+
+[compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.6.1...v1.7.0)
+
+### 🏡 Chore
+
+- Land the cleanup campaign on main ([#83](https://github.com/AntelopeJS/rethinkdb/pull/83))
+
+### ❤️ Contributors
+
+- Antony Rizzitelli ([@Upd4ting](http://github.com/Upd4ting))
+
 ## v1.6.1
 
 [compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.6.0...v1.6.1)
