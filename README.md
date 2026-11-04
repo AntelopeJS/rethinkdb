@@ -9,6 +9,8 @@
 
 The RethinkDB backend of AntelopeJS: it runs the database interface's queries on RethinkDB with [`rethinkdb-ts`](https://github.com/rethinkdb/rethinkdb-ts), and exposes that driver to modules that need it directly.
 
+Part of [AntelopeJS](https://github.com/AntelopeJS/antelopejs). Used by [AntelopeJS DMS](https://github.com/AntelopeJS/dms), the open-source back office for your PostgreSQL, MongoDB or RethinkDB database.
+
 ## Interfaces
 
 | Interface                                                                                            | Documentation                                                              |
