@@ -18,6 +18,7 @@ jobs:
         README.md
         docs
       renovate-sync: false
+      test-job: true
     permissions:
       contents: read
 

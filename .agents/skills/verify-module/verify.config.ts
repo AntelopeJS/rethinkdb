@@ -24,19 +24,16 @@ const config: VerifyConfig = {
         "src/implementations/database/external-writes.ts",
       ],
       funnels: ["src/implementations/database/selection.ts", "src/implementations/database/atomic.ts", "src/implementations/database/external-writes.ts"],
-      containments: ["schemas/instances"],
       why: "these modules decide which database, table and instance a row is written to and read from: a change that stamps the wrong instance or writes outside the declared fields leaves rows an upgrade cannot find or a client's database holds wrong",
     },
     format: {
       globs: ["src/implementations/database/indexes.ts", "src/implementations/database/utils.ts"],
       funnels: [],
-      containments: ["schemas/storage-layout"],
       why: "the names of the tenant_id and <name>__i indexes and the instance registry table are the layout every stored table already has: an upgrade that renames them stops finding what the last release wrote",
     },
     contract: {
       globs: ["package.json", "src/config.ts"],
       funnels: [],
-      containments: [],
       why: "the config keys (`pool`, `connection`, `url`, `mode`, `statementTimeoutMs`, `catalog`), `antelopeJs.defaultConfig` and the implemented interfaces",
     },
     outbound: null,
@@ -44,7 +41,6 @@ const config: VerifyConfig = {
     publish: {
       globs: ["package.json", ".release-it.json", "changelogen.config.json", ".github/workflows/release.yml"],
       funnels: [],
-      containments: [],
       why: "the package name and release workflow claim @antelopejs/rethinkdb on npm",
     },
   },

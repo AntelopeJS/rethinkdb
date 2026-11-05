@@ -15,7 +15,7 @@ journeys:
 
 # Schemas and instances
 
-What an owned instance creates in RethinkDB: a database per schema, a table per declared table, the `tenant_id` and `<name>__i` indexes, the instance registry, the refusal of unique secondary indexes and the isolation of instances. This feature holds the Format door of the stored layout (`storage-layout`) and the Data door of instance scoping (`instances`).
+What an owned instance creates in RethinkDB: a database per schema, a table per declared table, the `tenant_id` and `<name>__i` indexes, the instance registry, the refusal of unique secondary indexes and the isolation of instances.
 
 ## Sub-features
 
