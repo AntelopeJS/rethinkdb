@@ -1,5 +1,27 @@
 # Changelog
 
+## v1.7.1
+
+[compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.7.0...v1.7.1)
+
+### 📦 Build
+
+- **deps:** Bump @antelopejs packages to the 2026-11-06 releases ([#88](https://github.com/AntelopeJS/rethinkdb/pull/88))
+- **deps:** Bump @antelopejs packages to the 2026-11-06 releases ([#89](https://github.com/AntelopeJS/rethinkdb/pull/89))
+
+### 🏡 Chore
+
+- **verify:** Remove seeded runs from the verification skill ([#85](https://github.com/AntelopeJS/rethinkdb/pull/85))
+- **ci:** Remove the weekly mutation caller ([#86](https://github.com/AntelopeJS/rethinkdb/pull/86))
+
+### 🤖 CI
+
+- Call ci-node.yml@v1 ([#87](https://github.com/AntelopeJS/rethinkdb/pull/87))
+
+### ❤️ Contributors
+
+- Antony Rizzitelli ([@Upd4ting](http://github.com/Upd4ting))
+
 ## v1.7.0
 
 [compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.6.1...v1.7.0)
