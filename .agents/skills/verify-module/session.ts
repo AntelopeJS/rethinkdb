@@ -179,6 +179,7 @@ export function guarded(journey: Journey): Journey {
         call: context.call.bind(context),
         stop: context.stop.bind(context),
         scaffold: context.scaffold.bind(context),
+        prepared: context.prepared.bind(context),
       };
       try {
         await journey.run(watched);
