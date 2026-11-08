@@ -75,9 +75,16 @@ describe("an external schema whose registration fails", () => {
     const definition = { ghost: { fields: { a: "string" }, indexes: {} } };
     await Schemas.register("erp_ghost", definition);
     const ghost = new Schema("erp_ghost", definition);
-    const message = await Refusal(() => ghost.instance().table("ghost"));
-    expect(message).to.contain(
-      "Table 'erp_ghost.ghost' reads table ghost, which database",
-    );
+    const messages = [
+      await Refusal(() => ghost.instance().table("ghost")),
+      await Refusal(() => ghost.listInstances()),
+      await Refusal(() => ghost.createInstance("t1")),
+      await Refusal(() => ghost.destroyInstance("t1")),
+    ];
+    for (const message of messages) {
+      expect(message).to.contain(
+        "Table 'erp_ghost.ghost' reads table ghost, which database",
+      );
+    }
   });
 });
