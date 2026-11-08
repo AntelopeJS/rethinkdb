@@ -9,6 +9,8 @@ interface Product {
   _id: string;
   name: string;
   sku: string;
+  pair?: never;
+  crossPair?: never;
 }
 
 interface Bundle {
@@ -16,15 +18,25 @@ interface Bundle {
   productIds: string[];
   skus: string[];
   productId: string;
+  pair: string[];
 }
 
 const schema = new Schema<{ products: Product; bundles: Bundle }>(SCHEMA_ID, {
   products: {
     fields: { name: "string", sku: "string" },
-    indexes: { sku: { crossInstance: true } },
+    indexes: {
+      sku: { crossInstance: true },
+      pair: { fields: ["sku", "name"] },
+      crossPair: { fields: ["sku", "name"], crossInstance: true },
+    },
   },
   bundles: {
-    fields: { productIds: "string[]", skus: "string[]", productId: "string" },
+    fields: {
+      productIds: "string[]",
+      skus: "string[]",
+      productId: "string",
+      pair: "string[]",
+    },
     indexes: {},
   },
 });
@@ -40,6 +52,7 @@ const BUNDLE: Bundle = {
   productIds: ["p3", "p1"],
   skus: ["s3", "s1"],
   productId: "p2",
+  pair: ["s2", "Brace"],
 };
 
 function Names(products: Product[] | undefined): string[] {
@@ -85,4 +98,15 @@ describe("lookup of a field holding a list of keys", () => {
       .run();
     assert.equal(bundle?.productId.name, "Brace");
   });
+
+  for (const index of ["pair", "crossPair"] as const) {
+    it(`reads a list as one key of the compound index ${index}`, async () => {
+      const db = schema.instance(CROSS_INSTANCE);
+      const [bundle] = await db
+        .table("bundles")
+        .lookup(db.table("products"), "pair", index)
+        .run();
+      assert.deepEqual(Names(bundle?.pair), ["Brace"]);
+    });
+  }
 });

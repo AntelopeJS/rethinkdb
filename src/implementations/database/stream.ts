@@ -260,12 +260,7 @@ function handleLookup(
 
   const lookupResult =
     rightQuery.externalLookup(otherKey, localField) ??
-    buildLookupSelection(
-      rightQuery,
-      rightTerm,
-      otherKey,
-      LookupKeys(localField),
-    );
+    buildLookupSelection(rightQuery, rightTerm, otherKey, localField);
   const coerced: TermJson = [TermType.COERCE_TO, [lookupResult, "array"]];
 
   const isArray: TermJson = [TermType.TYPE_OF, [localField]];
@@ -304,10 +299,14 @@ function buildLookupSelection(
   rightQuery: SelectionQuery,
   rightTerm: TermJson,
   otherKey: string,
-  keys: TermJson,
+  localField: TermJson,
 ): TermJson {
   const { schemaId, tableName } = rightQuery;
   const isSimpleTable = rightQuery.isSimpleTable();
+  const definition = FindIndex(schemaId, tableName, otherKey);
+  const keys: TermJson = definition?.fields?.length
+    ? [TermType.MAKE_ARRAY, [localField]]
+    : LookupKeys(localField);
   if (isSimpleTable && HasCrossInstanceIndex(schemaId, tableName, otherKey)) {
     return GetAllKeys(rightTerm, keys, { index: otherKey });
   }
@@ -315,7 +314,6 @@ function buildLookupSelection(
     TermType.CONTAINS,
     [keys, value],
   ];
-  const definition = FindIndex(schemaId, tableName, otherKey);
   const predicate =
     isSimpleTable && definition
       ? buildIndexScanPredicate(
