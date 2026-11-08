@@ -3,7 +3,7 @@ import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 
 // oxlint-disable-next-line import/no-cycle -- join and union right-hand sides are sub-queries; see expression.ts
 import { SelectionQuery } from "./selection";
-import { FindIndex, GetIndex } from "./schema";
+import { FindIndex, GetIndex, HasCrossInstanceIndex } from "./schema";
 import {
   buildIndexScanPredicate,
   buildIndexScanValues,
@@ -15,13 +15,11 @@ import { DecodeFunction, DecodeOperand, DecodeValue } from "./expression";
 import {
   allocateArgNumber,
   type DecodingContext,
-  PRIMARY_KEY_FIELD,
+  GetAllKeys,
+  LookupKeys,
   type QueryStage,
   StageNamed,
-  TENANT_ID_FIELD,
 } from "./utils";
-
-const ALWAYS_INDEXED_FIELDS = new Set([PRIMARY_KEY_FIELD, TENANT_ID_FIELD]);
 
 /** The table a stream's stages read, by schema and table name. */
 type StreamTable = Pick<DeclaredIndex, "schemaId" | "tableName">;
@@ -262,7 +260,12 @@ function handleLookup(
 
   const lookupResult =
     rightQuery.externalLookup(otherKey, localField) ??
-    buildLookupSelection(rightQuery, rightTerm, otherKey, localField);
+    buildLookupSelection(
+      rightQuery,
+      rightTerm,
+      otherKey,
+      LookupKeys(localField),
+    );
   const coerced: TermJson = [TermType.COERCE_TO, [lookupResult, "array"]];
 
   const isArray: TermJson = [TermType.TYPE_OF, [localField]];
@@ -301,16 +304,16 @@ function buildLookupSelection(
   rightQuery: SelectionQuery,
   rightTerm: TermJson,
   otherKey: string,
-  localField: TermJson,
+  keys: TermJson,
 ): TermJson {
   const { schemaId, tableName } = rightQuery;
   const isSimpleTable = rightQuery.isSimpleTable();
-  if (isSimpleTable && hasCrossInstanceIndex(schemaId, tableName, otherKey)) {
-    return [TermType.GET_ALL, [rightTerm, localField], { index: otherKey }];
+  if (isSimpleTable && HasCrossInstanceIndex(schemaId, tableName, otherKey)) {
+    return GetAllKeys(rightTerm, keys, { index: otherKey });
   }
   const matchesLocal = (value: TermJson): TermJson => [
-    TermType.EQ,
-    [value, localField],
+    TermType.CONTAINS,
+    [keys, value],
   ];
   const definition = FindIndex(schemaId, tableName, otherKey);
   const predicate =
@@ -386,17 +389,6 @@ function handleGroup(
 
 function isTableTerm(term: TermJson): boolean {
   return Array.isArray(term) && term[0] === TermType.TABLE;
-}
-
-function hasCrossInstanceIndex(
-  schemaId: string,
-  tableName: string,
-  indexName: string,
-): boolean {
-  return (
-    ALWAYS_INDEXED_FIELDS.has(indexName) ||
-    FindIndex(schemaId, tableName, indexName)?.crossInstance === true
-  );
 }
 
 function buildIndexedOrderBy(
@@ -505,7 +497,7 @@ function buildFieldDistinct(
   if (!isTableTerm(prev)) {
     return buildMappedDistinct(prev, field);
   }
-  if (hasCrossInstanceIndex(schemaId, tableName, field)) {
+  if (HasCrossInstanceIndex(schemaId, tableName, field)) {
     return [TermType.DISTINCT, [prev], { index: field }];
   }
   const definition = FindIndex(schemaId, tableName, field);

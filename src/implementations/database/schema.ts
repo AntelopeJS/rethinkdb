@@ -17,6 +17,7 @@ import { assertNoUniqueIndexes, assertValidIndexNames } from "./indexes";
 import {
   INSTANCE_REGISTRY_FIELD,
   INSTANCE_REGISTRY_TABLE,
+  PRIMARY_KEY_FIELD,
   TENANT_ID_FIELD,
 } from "./utils";
 
@@ -125,6 +126,20 @@ export function FindIndex(
 ): IndexDefinition | undefined {
   const table = GetTable(schemaId, tableId);
   return indexId in table.indexes ? table.indexes[indexId] : undefined;
+}
+
+const ALWAYS_INDEXED_FIELDS = new Set([PRIMARY_KEY_FIELD, TENANT_ID_FIELD]);
+
+/** Whether `indexName` is served by a native index across every instance of the table. */
+export function HasCrossInstanceIndex(
+  schemaId: string,
+  tableName: string,
+  indexName: string,
+): boolean {
+  return (
+    ALWAYS_INDEXED_FIELDS.has(indexName) ||
+    FindIndex(schemaId, tableName, indexName)?.crossInstance === true
+  );
 }
 
 export function GetIndex(

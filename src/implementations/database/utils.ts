@@ -1,4 +1,5 @@
 import assert from "node:assert";
+import { TermType } from "rethinkdb-ts/lib/proto/enums";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import {
   IsQueryStage,
@@ -65,6 +66,28 @@ export function IsTermJson(value: unknown): value is TermJson {
 /** Whether `value` is a list of primitive strings. */
 export function IsTextList(value: unknown): value is string[] {
   return Array.isArray(value) && value.every(IsText);
+}
+
+/** The keys a lookup's local field holds: each element of a list, or the field itself. */
+export function LookupKeys(local: TermJson): TermJson {
+  return [
+    TermType.BRANCH,
+    [
+      [TermType.EQ, [[TermType.TYPE_OF, [local]], "ARRAY"]],
+      local,
+      [TermType.MAKE_ARRAY, [local]],
+    ],
+  ];
+}
+
+/** A `getAll` term reading every key of `keys`, a term answering a list. */
+export function GetAllKeys(
+  source: TermJson,
+  keys: TermJson,
+  options?: { index: string },
+): TermJson {
+  const args: TermJson = [source, [TermType.ARGS, [keys]]];
+  return options ? [TermType.GET_ALL, args, options] : [TermType.GET_ALL, args];
 }
 
 let nextArgNumber = 0;
