@@ -1,6 +1,7 @@
 import { expect } from "chai";
-import type { Schema } from "@antelopejs/interface-database/schema";
+import { Schema } from "@antelopejs/interface-database/schema";
 
+import { Schemas } from "../implementations/database/schema";
 import { type ErpTables, RegisterErp } from "./erp";
 import { CustomerId } from "./fixture";
 
@@ -66,5 +67,17 @@ describe("what an external RethinkDB table refuses", () => {
       erp.instance().table("products_mixed").get("42"),
     );
     expect(message).to.contain("products_mixed").and.to.contain("no _id");
+  });
+});
+
+describe("an external schema whose registration fails", () => {
+  it("registers, then fails every query on it with the registration message", async () => {
+    const definition = { ghost: { fields: { a: "string" }, indexes: {} } };
+    await Schemas.register("erp_ghost", definition);
+    const ghost = new Schema("erp_ghost", definition);
+    const message = await Refusal(() => ghost.instance().table("ghost"));
+    expect(message).to.contain(
+      "Table 'erp_ghost.ghost' reads table ghost, which database",
+    );
   });
 });
