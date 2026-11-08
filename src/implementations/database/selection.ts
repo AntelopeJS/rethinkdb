@@ -25,6 +25,7 @@ import {
   IsList,
   IsObject,
   IsTermJson,
+  PRIMARY_KEY_FIELD,
   type QueryStage,
   TENANT_ID_FIELD,
 } from "./utils";
@@ -289,25 +290,10 @@ export class SelectionQuery {
     const generatedKeys = IsWriteResult(result)
       ? (result.generated_keys ?? [])
       : [];
-    if (!this.conflictMode) {
-      return generatedKeys;
-    }
-    return this.buildConflictInsertKeys(generatedKeys);
-  }
-
-  private buildConflictInsertKeys(generatedKeys: string[]): unknown[] {
-    const rawDocs: unknown[] = this.insertRawArgs;
-    let genIdx = 0;
-    return rawDocs.map((doc) => {
-      if (!IsObject(doc)) {
-        return generatedKeys[genIdx++];
-      }
-      return (
-        ("_id" in doc ? doc._id : undefined) ??
-        ("id" in doc ? doc.id : undefined) ??
-        generatedKeys[genIdx++]
-      );
-    });
+    let generatedIndex = 0;
+    return this.insertRawArgs.map(
+      (doc) => doc[PRIMARY_KEY_FIELD] ?? generatedKeys[generatedIndex++],
+    );
   }
 
   private stampTenantId(value: TermJson, tenantId: string): TermJson {
