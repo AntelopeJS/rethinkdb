@@ -11,6 +11,8 @@ interface WriteRecord {
   value: string;
   errors?: number;
   first_error?: string;
+  stage?: string;
+  args?: string[];
 }
 
 interface WriteTables {
@@ -42,6 +44,10 @@ describe("Write acknowledgements and scoped primary keys", () => {
   it("isolates scoped get writes and reads", isolateScopedGet);
   it("preserves ordinary write-error fields", readErrorFields);
   it("propagates update errors", rejectUpdate);
+  it(
+    "stores a document whose stage field reads func on an update",
+    storeFuncStageDocument,
+  );
 });
 
 function isPrimaryKeyDuplicate(error: unknown): error is DuplicateKeyError {
@@ -97,4 +103,23 @@ async function rejectUpdate() {
   await owner.insert({ _id: key, value: "original" }).run();
   await assert.rejects(owner.get(key).update({ _id: randomUUID() }).run());
   assert.equal((await owner.get(key).run()).value, "original");
+}
+
+async function storeFuncStageDocument() {
+  const key = randomUUID();
+  const withArgs = randomUUID();
+  await owner.insert({ _id: key, value: "draft", stage: "draft" }).run();
+  await owner.insert({ _id: withArgs, value: "draft" }).run();
+  await owner.get(key).update({ stage: "func" }).run();
+  await owner
+    .get(withArgs)
+    .update({ stage: "func", args: ["a", "b"] })
+    .run();
+  const stored = await owner.get(key).run();
+  const storedWithArgs = await owner.get(withArgs).run();
+  assert.deepEqual([stored.stage, stored.value], ["func", "draft"]);
+  assert.deepEqual(
+    [storedWithArgs.stage, storedWithArgs.args],
+    ["func", ["a", "b"]],
+  );
 }

@@ -125,6 +125,15 @@ describe("writing to an external RethinkDB table", () => {
     ).to.contain("'address'");
   });
 
+  it("validates a document whose stage field reads func as a document, not refusing it as computed from the row", async () => {
+    const { message } = await Refusal(() =>
+      Customers()
+        .get(CustomerId(3))
+        .update({ name: "Staged 3", stage: "func" }),
+    );
+    expect(message).to.contain("'stage'").and.to.not.contain("computed from");
+  });
+
   it("answers forbidden for a table the account may not write", async () => {
     const error = await Refusal(() =>
       erp
