@@ -7,7 +7,13 @@ import { ExternalDatabaseName, GetOptions } from "../../config";
 import type { ExternalTable, KeyClass } from "./external-descriptor";
 import { Func, KeyExpression, KeyValue, Normalized } from "./external-read";
 import { FindIndex, GetExternalTable } from "./schema";
-import { IsText, IsTextList, type QueryStage } from "./utils";
+import {
+  GetAllKeys,
+  IsText,
+  IsTextList,
+  LookupKeys,
+  type QueryStage,
+} from "./utils";
 
 const ID_FIELD = "_id";
 const UNSCOPED_INSTANCES: readonly (string | symbol | undefined)[] = [
@@ -309,19 +315,21 @@ export class ExternalReads {
     otherKey: string,
     local: TermJson,
   ): TermJson | undefined {
-    if (this.isPrimary(otherKey) && this.table.key) {
-      return this.normalized(
-        [
-          TermType.GET_ALL,
-          [this.tableTerm(), KeyExpression(this.table.key, local)],
-        ],
-        false,
-      );
+    const { key } = this.table;
+    if (this.isPrimary(otherKey) && key) {
+      const keys =
+        key === "array"
+          ? [TermType.MAKE_ARRAY, [KeyExpression(key, local)]]
+          : [
+              TermType.MAP,
+              [LookupKeys(local), Func((value) => KeyExpression(key, value))],
+            ];
+      return this.normalized(GetAllKeys(this.tableTerm(), keys), false);
     }
     const native = this.nativeIndex(schemaId, otherKey);
     return native
       ? this.normalized(
-          [TermType.GET_ALL, [this.tableTerm(), local], { index: native }],
+          GetAllKeys(this.tableTerm(), LookupKeys(local), { index: native }),
           false,
         )
       : undefined;
