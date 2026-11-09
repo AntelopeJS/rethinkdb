@@ -8,6 +8,7 @@ import {
 
 interface WriteRecord {
   _id: string;
+  id?: string;
   value: string;
   errors?: number;
   first_error?: string;
@@ -47,6 +48,11 @@ describe("Write acknowledgements and scoped primary keys", () => {
   it(
     "stores a document whose stage field reads func on an update",
     storeFuncStageDocument,
+  );
+  it("resolves insert to the provided and generated keys", answerInsertKeys);
+  it(
+    "resolves a conflict insert to the primary key, not an id field",
+    answerConflictInsertKeys,
   );
 });
 
@@ -122,4 +128,27 @@ async function storeFuncStageDocument() {
     [storedWithArgs.stage, storedWithArgs.args],
     ["func", ["a", "b"]],
   );
+}
+
+async function answerInsertKeys() {
+  const provided = randomUUID();
+  assert.deepEqual(await owner.insert({ _id: provided, value: "one" }).run(), [
+    provided,
+  ]);
+  const second = randomUUID();
+  const keys = await owner
+    .insert([{ _id: second, value: "two" }, { value: "generated" }])
+    .run();
+  assert.equal(keys.length, 2);
+  assert.equal(keys[0], second);
+  assert.equal((await owner.get(keys[1]).run()).value, "generated");
+}
+
+async function answerConflictInsertKeys() {
+  const keys = await owner
+    .insert({ id: "not-the-key", value: "conflict" }, { conflict: "update" })
+    .run();
+  assert.equal(keys.length, 1);
+  assert.notEqual(keys[0], "not-the-key");
+  assert.equal((await owner.get(keys[0]).run()).value, "conflict");
 }
