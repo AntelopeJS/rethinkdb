@@ -102,6 +102,7 @@ export async function RunQuery(stages: QueryStage[]): Promise<any> {
   const handler =
     external ?? (next ? SCHEMA_STAGE_HANDLERS.get(next) : undefined);
   assert(handler, `Unknown schema stage '${next}'`);
+  await WaitForSchemaReady(schemaId);
   return handler(schemaId, stages);
 }
 

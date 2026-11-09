@@ -58,8 +58,6 @@ interface Selectable {
 
 const SCHEMA_ID = "test-instance-indexes";
 const CONCURRENT_SCHEMA_ID = "test-instance-indexes-concurrent";
-const RESERVED_SCHEMA_ID = "test-instance-indexes-reserved";
-const UNIQUE_SCHEMA_ID = "test-instance-indexes-unique";
 const CONCURRENT_BOOTS = 4;
 const SLOW_TEST_TIMEOUT_MS = 120000;
 const TABLE = "items";
@@ -208,7 +206,6 @@ describe("Instance-prefixed indexes", function () {
   after(async () => {
     await dropDatabase(SCHEMA_ID);
     await dropDatabase(CONCURRENT_SCHEMA_ID);
-    await dropDatabase(RESERVED_SCHEMA_ID);
   });
   it(
     "adds instance-prefixed indexes to a table with legacy indexes",
@@ -236,8 +233,6 @@ describe("Instance-prefixed indexes", function () {
     "looks up multi indexes across instances without an index",
     crossInstanceLookup,
   );
-  it("rejects index names with the reserved suffix", reservedIndexSuffix);
-  it("rejects unique secondary indexes", uniqueSecondaryIndex);
   it(
     "creates the database and indexes from concurrent boots",
     concurrentInitialization,
@@ -434,26 +429,6 @@ async function crossInstanceLookup() {
     assert.ok(label.tag === null || legacy.includes(label.tag._id));
   }
   assert.ok(found.some((label) => label._id === "blue" && label.tag !== null));
-}
-
-async function reservedIndexSuffix() {
-  const reserved: SchemaDefinition = {
-    [TABLE]: { fields: {}, indexes: { status__i: {} } },
-  };
-  await assert.rejects(
-    Schemas.register(RESERVED_SCHEMA_ID, reserved),
-    /Index 'status__i' of table 'items' ends with the reserved suffix '__i'/,
-  );
-}
-
-async function uniqueSecondaryIndex() {
-  const unique: SchemaDefinition = {
-    [TABLE]: { fields: {}, indexes: { status: { unique: true } } },
-  };
-  await assert.rejects(
-    Schemas.register(UNIQUE_SCHEMA_ID, unique),
-    /Index 'status' of table 'test-instance-indexes-unique\.items' is declared unique: true, but RethinkDB cannot enforce unique secondary indexes/,
-  );
 }
 
 async function crossInstanceWarning() {

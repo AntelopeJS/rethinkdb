@@ -6,6 +6,7 @@ import { externalReads, externalRegistration } from "./journeys-external.ts";
 import { externalRefusals, externalWrites } from "./journeys-external-writes.ts";
 import { configRefused, connectionModes, externalOptions, moduleDev } from "./journeys-module.ts";
 import { crossInstanceIndexes, instances, refusedIndexes, storageLayout } from "./journeys-owned.ts";
+import { refusedRegistrationKept } from "./journeys-refusal.ts";
 import { readExpressions } from "./journeys-expressions.ts";
 import { changeFeeds } from "./journeys-feeds.ts";
 import { rawClient } from "./journeys-raw.ts";
@@ -66,6 +67,7 @@ const config: VerifyConfig = {
     "config-refused": configRefused,
     "storage-layout": storageLayout,
     "refused-indexes": refusedIndexes,
+    "refused-registration": refusedRegistrationKept,
     instances,
     "cross-instance-indexes": crossInstanceIndexes,
     "insert-values": insertValues,

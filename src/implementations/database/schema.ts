@@ -6,6 +6,7 @@ import type {
   SchemaDefinition,
 } from "@antelopejs/interface-database/schema";
 
+import { Logger } from "../../utils/logger";
 import { executeTermJson } from "../../connection";
 import { IsExternal } from "../../config";
 import {
@@ -28,19 +29,9 @@ const existingInstances = new Map<string, Set<string>>();
 
 const externalTables = new Map<string, Record<string, ExternalTable>>();
 
-/**
- * Registers an external schema: its gate keeps a failure, so every query on the schema rethrows
- * the message registration failed with, as a schema that never registered would not.
- */
 async function registerExternal(schemaId: string, schema: SchemaDefinition) {
-  const registration = RegisterExternalSchema(schemaId, schema).then(
-    (tables) => {
-      externalTables.set(schemaId, tables);
-    },
-  );
-  schemaReady.set(schemaId, registration);
-  registration.catch(() => undefined);
-  await registration;
+  const tables = await RegisterExternalSchema(schemaId, schema);
+  externalTables.set(schemaId, tables);
 }
 
 /** The table an external schema's table reads, as its registration described it. */
@@ -54,21 +45,20 @@ export function GetExternalTable(
 }
 
 export const Schemas = {
+  /**
+   * Registers a schema and never rejects, since the consumer's `Schema` constructor drops the
+   * promise: its gate keeps a failure, so every query on the schema rethrows the message
+   * registration failed with, and the failure is logged once.
+   */
   async register(schemaId: string, schema: SchemaDefinition) {
     existingSchemas[schemaId] = { definition: schema };
-    if (IsExternal()) {
-      return registerExternal(schemaId, schema);
-    }
-    const ready = initializeSchema(schemaId, schema);
+    const ready = IsExternal()
+      ? registerExternal(schemaId, schema)
+      : initializeSchema(schemaId, schema);
     schemaReady.set(schemaId, ready);
-    try {
-      await ready;
-    } catch (err) {
-      delete existingSchemas[schemaId];
-      schemaReady.delete(schemaId);
-      existingInstances.delete(schemaId);
-      throw err;
-    }
+    await ready.catch((error: unknown) => {
+      Logger.Error(`Schema '${schemaId}' failed to register:`, error);
+    });
   },
   unregister(schemaId: string) {
     externalTables.delete(schemaId);

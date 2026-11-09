@@ -198,9 +198,9 @@ export function guardedAll(journeys: Record<string, Journey>): Record<string, Jo
 }
 
 /**
- * Declares a schema its registration must refuse, then queries it. docs/external-mode.md says every query on a refused schema fails with the
- * refusal's message, while today the refusal ends `ajs project dev` and prints it (interface-database#61), so the checks hold either way: the
- * message is in the query's error or the project's errors, and no query on the schema answers.
+ * Declares a schema its registration must refuse, then queries it. Every query on a refused schema fails with the refusal's message, so the
+ * checks hold when the message is in the query's error or the project's errors and no query on the schema answers; that the project stays up
+ * is the `refused-registration` journey's check.
  */
 export async function refusedRegistration(session: Session, label: string, declaration: string, query: string, message: RegExp): Promise<void> {
   const refused = await session.run(

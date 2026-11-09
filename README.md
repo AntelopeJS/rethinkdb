@@ -100,6 +100,7 @@ To use the driver directly instead, add `@antelopejs/interface-rethinkdb` and re
 - The primary key is the `_id` field, which all instances of a table share. An insert of an `_id` that any instance already uses throws a `DuplicateKeyError` on `_id`.
 - RethinkDB cannot enforce unique secondary indexes. Schema initialization refuses a table that declares an index with `unique: true`, and the error names the schema, the table, and the index.
 - Schema initialization creates the missing databases, tables, and indexes. It makes up to five attempts, and it waits for the indexes before the schema accepts queries.
+- When schema initialization fails or refuses a schema, the module logs the error and every query on that schema fails with the same message. The project keeps running.
 
 Initialization builds every missing index at boot, so a boot that adds indexes to a large table takes longer. The module never drops an index. Drop an index you no longer need by hand, for example `r.db("<schema>").table("<table>").indexDrop("<name>")`. [`CHANGELOG.md`](CHANGELOG.md) records when the index layout changed.
 
