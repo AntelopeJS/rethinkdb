@@ -99,16 +99,27 @@ function handleKey(
   prev: TermJson,
   stage: QueryStage,
   context: DecodingContext,
+  _table: StreamTable,
+  singleElement: boolean,
 ): TermJson {
   const [fieldName, defaultValue] = StageNamed(stage, "key").args;
-  const bracket: TermJson = [
-    TermType.BRACKET,
-    [prev, DecodeValue(fieldName, context)],
-  ];
-  if (defaultValue !== undefined) {
-    return [TermType.DEFAULT, [bracket, defaultValue]];
+  const field = DecodeValue(fieldName, context);
+  if (defaultValue === undefined) {
+    return [TermType.BRACKET, [prev, field]];
   }
-  return bracket;
+  const withFallback = (target: TermJson): TermJson => [
+    TermType.DEFAULT,
+    [[TermType.BRACKET, [target, field]], defaultValue],
+  ];
+  return singleElement
+    ? withFallback(prev)
+    : [TermType.MAP, [prev, rowFunction(withFallback)]];
+}
+
+function rowFunction(body: (row: TermJson) => TermJson | undefined): TermJson {
+  const argId = allocateArgNumber();
+  const row: TermJson = [TermType.VAR, [argId]];
+  return [TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], body(row)]];
 }
 
 function handleDefault(
@@ -126,14 +137,8 @@ function handleMap(
   context: DecodingContext,
 ): TermJson {
   const [func] = StageNamed(stage, "map").args;
-  const argId = allocateArgNumber();
-  const row: TermJson = [TermType.VAR, [argId]];
-
-  const body = DecodeFunction(func, context, [row]);
-  return [
-    TermType.MAP,
-    [prev, [TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], body]]],
-  ];
+  const mapper = rowFunction((row) => DecodeFunction(func, context, [row]));
+  return [TermType.MAP, [prev, mapper]];
 }
 
 function handleMapSingle(
@@ -142,18 +147,10 @@ function handleMapSingle(
   context: DecodingContext,
 ): TermJson {
   const [func] = stage.args;
-  const argId = allocateArgNumber();
-  const row: TermJson = [TermType.VAR, [argId]];
-
-  const body = DecodeFunction(func, context, [row]);
-  const found: TermJson = [
+  const funcTerm = rowFunction((row) => [
     TermType.BRANCH,
-    [[TermType.EQ, [row, null]], null, body],
-  ];
-  const funcTerm: TermJson = [
-    TermType.FUNC,
-    [[TermType.MAKE_ARRAY, [argId]], found],
-  ];
+    [[TermType.EQ, [row, null]], null, DecodeFunction(func, context, [row])],
+  ]);
   return [TermType.FUNCALL, [funcTerm, prev]];
 }
 
@@ -163,14 +160,8 @@ function handleFilter(
   context: DecodingContext,
 ): TermJson {
   const [func] = StageNamed(stage, "filter").args;
-  const argId = allocateArgNumber();
-  const row: TermJson = [TermType.VAR, [argId]];
-
-  const body = DecodeFunction(func, context, [row]);
-  return [
-    TermType.FILTER,
-    [prev, [TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], body]]],
-  ];
+  const predicate = rowFunction((row) => DecodeFunction(func, context, [row]));
+  return [TermType.FILTER, [prev, predicate]];
 }
 
 function handlePluck(prev: TermJson, stage: QueryStage): TermJson {
@@ -327,9 +318,7 @@ function buildFieldFunction(
   field: string,
   transform: (value: TermJson) => TermJson = (value) => value,
 ): TermJson {
-  const argId = allocateArgNumber();
-  const value: TermJson = [TermType.BRACKET, [[TermType.VAR, [argId]], field]];
-  return [TermType.FUNC, [[TermType.MAKE_ARRAY, [argId]], transform(value)]];
+  return rowFunction((row) => transform([TermType.BRACKET, [row, field]]));
 }
 
 function handleGroup(
