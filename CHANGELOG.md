@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.7.2
+
+[compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.7.1...v1.7.2)
+
+### 🔥 Performance
+
+- **verify:** Seed the client database with concurrent queries ([#90](https://github.com/AntelopeJS/rethinkdb/pull/90))
+
+### 🩹 Fixes
+
+- **database:** Read an update as a function only by the recorded func shape ([#91](https://github.com/AntelopeJS/rethinkdb/pull/91))
+- **stream:** Give each row the key fallback for a null or missing field ([#93](https://github.com/AntelopeJS/rethinkdb/pull/93))
+- **schema:** Keep a refused registration in the schema gate instead of rejecting ([#95](https://github.com/AntelopeJS/rethinkdb/pull/95))
+- **database:** Resolve insert to the provided and generated keys ([#92](https://github.com/AntelopeJS/rethinkdb/pull/92))
+- **lookup:** Read each key of a field holding a list of keys ([#94](https://github.com/AntelopeJS/rethinkdb/pull/94))
+
+### 📦 Build
+
+- **deps:** Bump @antelopejs/tooling-configs to 0.4.0 ([#96](https://github.com/AntelopeJS/rethinkdb/pull/96))
+
+### ❤️ Contributors
+
+- Antony Rizzitelli ([@Upd4ting](http://github.com/Upd4ting))
+
 ## v1.7.1
 
 [compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.7.0...v1.7.1)
