@@ -8,7 +8,6 @@ import {
 } from "rethinkdb-ts";
 import type { Cursor } from "rethinkdb-ts/lib/response/cursor";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
-import { backtraceTerm } from "rethinkdb-ts/lib/error/term-backtrace";
 import { RethinkDBConnection } from "rethinkdb-ts/lib/connection/connection";
 import { MasterConnectionPool } from "rethinkdb-ts/lib/connection/master-pool";
 
@@ -120,7 +119,6 @@ async function Resolve(
 }
 
 export async function executeTermJson(term: TermJson): Promise<any> {
-  Logger.Debug("Executing query:", backtraceTerm(term)[0]);
   return Resolve(term, await SendQuery(term));
 }
 
