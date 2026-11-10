@@ -1,5 +1,27 @@
 # Changelog
 
+## v1.8.0
+
+[compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.7.2...v1.8.0)
+
+### 🔥 Performance
+
+- **connection:** Stop building a query backtrace on every query ([#100](https://github.com/AntelopeJS/rethinkdb/pull/100))
+- **external:** Reuse the connections of bounded reads that finish in time ([#101](https://github.com/AntelopeJS/rethinkdb/pull/101))
+
+### 📖 Documentation
+
+- **verify:** Add the features index the verify-module skill points to ([#98](https://github.com/AntelopeJS/rethinkdb/pull/98))
+
+### 📦 Build
+
+- **deps:** Bump @antelopejs/tooling-configs to 0.5.0 ([#97](https://github.com/AntelopeJS/rethinkdb/pull/97))
+- **deps:** Bump @antelopejs/tooling-configs to 0.5.1 ([#99](https://github.com/AntelopeJS/rethinkdb/pull/99))
+
+### ❤️ Contributors
+
+- Antony Rizzitelli ([@Upd4ting](http://github.com/Upd4ting))
+
 ## v1.7.2
 
 [compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.7.1...v1.7.2)
