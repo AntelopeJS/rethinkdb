@@ -4,6 +4,7 @@ import type {
 } from "@antelopejs/interface-database/schema";
 
 import type { TableFacts } from "./external-probe";
+import { IsObject } from "./utils";
 
 /** A declaration's kind, as `TableDefinition.fields` spells it. */
 export type DeclaredKind =
@@ -109,12 +110,7 @@ function ParseToken(token: string, path: string): DeclaredKind {
 }
 
 function IsCodec(type: FieldType): boolean {
-  return (
-    type instanceof Object &&
-    "decode" in type &&
-    "encode" in type &&
-    "is" in type
-  );
+  return IsObject(type) && "decode" in type && "encode" in type && "is" in type;
 }
 
 function DeclaredKindOf(type: FieldType, path: string): DeclaredKind {
@@ -124,7 +120,7 @@ function DeclaredKindOf(type: FieldType, path: string): DeclaredKind {
   if (IsCodec(type)) {
     return "any";
   }
-  return type instanceof Object ? "object" : ParseToken(String(type), path);
+  return IsObject(type) ? "object" : ParseToken(String(type), path);
 }
 
 function ElementKindOf(
@@ -134,7 +130,7 @@ function ElementKindOf(
   if (Array.isArray(type)) {
     return type.length > 0 ? DeclaredKindOf(type[0], path) : undefined;
   }
-  if (type instanceof Object) {
+  if (IsObject(type)) {
     return undefined;
   }
   const token = String(type).trim().toLowerCase();

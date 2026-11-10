@@ -323,14 +323,12 @@ export function DecodeValue(
     if (value instanceof Date) {
       return dateToReql(value);
     }
-    if (value instanceof Object) {
-      return Object.fromEntries(
-        Object.entries(value).map(([key, val]) => [
-          key,
-          DecodeOperand(val, context),
-        ]),
-      );
-    }
+    return Object.fromEntries(
+      Object.entries(value).map(([key, val]) => [
+        key,
+        DecodeOperand(val, context),
+      ]),
+    );
   }
 
   return value;

@@ -25,7 +25,13 @@ import {
   KeyValue,
   ReadField,
 } from "./external-read";
-import { allocateArgNumber, IsList, IsTermJson, IsText } from "./utils";
+import {
+  allocateArgNumber,
+  IsList,
+  IsObject,
+  IsTermJson,
+  IsText,
+} from "./utils";
 
 /** What went wrong with a write, in terms a caller can act on. */
 type ExternalWriteErrorKind = "invalid" | "forbidden";
@@ -70,7 +76,7 @@ const CONSTRUCTORS = new Map<string, unknown>([
 
 /** A primitive value as text; undefined for null, documents and arrays. */
 function Text(value: WriteValue | TermJson): string | undefined {
-  if (value === null || value === undefined || value instanceof Object) {
+  if (value === null || value === undefined || IsObject(value)) {
     return undefined;
   }
   return String(value);
