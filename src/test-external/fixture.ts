@@ -170,9 +170,8 @@ async function SeedEvents(connection: Connection) {
 async function CreateAccounts(connection: Connection) {
   const users = r.db("rethinkdb").table("users");
   for (const user of [READER_USER, WRITER_USER]) {
-    await users.get(user).delete().run(connection);
     await users
-      .insert({ id: user, password: ACCOUNT_PASSWORD })
+      .insert({ id: user, password: ACCOUNT_PASSWORD }, { conflict: "update" })
       .run(connection);
     await r.db(CLIENT_DATABASE).grant(user, { read: true }).run(connection);
   }
