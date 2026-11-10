@@ -1,3 +1,5 @@
+import { IsObject } from "../database/utils";
+
 /** A value a sampled row holds, as the driver answers it. */
 export type RowValue =
   | string
@@ -17,5 +19,5 @@ export function TextOf(value: RowValue): string | undefined {
   if (value instanceof Date) {
     return value.toISOString();
   }
-  return value instanceof Object ? JSON.stringify(value) : String(value);
+  return IsObject(value) ? JSON.stringify(value) : String(value);
 }

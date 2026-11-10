@@ -98,7 +98,6 @@ export function WaitForSchemaReady(schemaId: string): Promise<void> {
 }
 
 export function GetSchema(schemaId: string) {
-  assert(schemaId in existingSchemas);
   assert(Object.prototype.hasOwnProperty.call(existingSchemas, schemaId));
   return existingSchemas[schemaId].definition;
 }
