@@ -11,6 +11,8 @@ import { AdminConnection, CustomerId, OrderId } from "./fixture";
 
 const DAY_MS = 86_400_000;
 const SHORT_TIMEOUT_MS = 50;
+const LONG_TIMEOUT_MS = 30_000;
+const CURSOR_READ = 30_000;
 const SETTLE_MS = 200;
 
 let erp: Schema<ErpTables>;
@@ -243,6 +245,52 @@ describe("the time bound of an external RethinkDB read", () => {
       expect(jobs).to.equal(1);
     } finally {
       await connection.close();
+    }
+  });
+
+  it("answers the next read after one ran past statementTimeoutMs", async () => {
+    const options = GetOptions();
+    const configured = options.statementTimeoutMs;
+    options.statementTimeoutMs = SHORT_TIMEOUT_MS;
+    try {
+      await Refusal(() =>
+        Table("events")
+          .map((row) => ({ k: row.key("n").mod(7) }))
+          .group("k", (rows, group) => ({ k: group, n: rows.count() })),
+      );
+      options.statementTimeoutMs = LONG_TIMEOUT_MS;
+      expect(
+        await Table("customers").orderBy("_id").slice(0, 3),
+      ).to.have.length(3);
+    } finally {
+      options.statementTimeoutMs = configured;
+    }
+  });
+
+  it("keeps reading a cursor while another read runs past statementTimeoutMs", async () => {
+    const options = GetOptions();
+    const configured = options.statementTimeoutMs;
+    try {
+      options.statementTimeoutMs = LONG_TIMEOUT_MS;
+      await Table("customers").count();
+      const events = Table("events").cursor();
+      await events.next();
+      options.statementTimeoutMs = SHORT_TIMEOUT_MS;
+      expect(
+        await Refusal(() =>
+          Table("events")
+            .map((row) => ({ k: row.key("n").mod(7) }))
+            .group("k", (rows, group) => ({ k: group, n: rows.count() })),
+        ),
+      ).to.contain("did not finish within 50 ms");
+      let read = 1;
+      while (read < CURSOR_READ && !(await events.next()).done) {
+        read += 1;
+      }
+      await events.return();
+      expect(read).to.equal(CURSOR_READ);
+    } finally {
+      options.statementTimeoutMs = configured;
     }
   });
 

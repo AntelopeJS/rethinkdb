@@ -80,7 +80,8 @@ does.
 RethinkDB has no server-side time limit. With `statementTimeoutMs` set, the module runs each read
 on a connection of its own and closes that connection when the limit passes. Closing the
 connection stops the query on the server, and the read rejects with an error whose `name` is
-`"QueryTimeoutError"`. The package does not export the class, so check `name` instead of
+`"QueryTimeoutError"`. A read that finishes in time leaves its connection open for the next
+bounded read. The package does not export the class, so check `name` instead of
 `instanceof`.
 
 ## Writing

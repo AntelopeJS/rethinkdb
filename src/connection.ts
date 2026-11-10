@@ -69,6 +69,8 @@ export async function ConnectPool(options: RPoolConnectionOptions) {
 }
 
 export function Disconnect() {
+  DropDirect();
+  directOptions = undefined;
   if (connection) {
     Logger.Debug("Disconnecting from RethinkDB", connection.type);
     switch (connection.type) {
@@ -136,8 +138,52 @@ export class QueryTimeoutError extends Error {
 
 let directOptions: RConnectionOptions | undefined;
 
+/** The connections of bounded reads that finished within their limit, kept open for the next one. */
+const idleDirect: RethinkDBConnection[] = [];
+
+/** The bounded-read connections opened with the current options; only these go back to idle. */
+let currentDirect = new WeakSet<RethinkDBConnection>();
+
+async function BorrowDirect(): Promise<RethinkDBConnection> {
+  assert(directOptions, "No connection established");
+  let idle = idleDirect.pop();
+  while (idle && !idle.open) {
+    idle = idleDirect.pop();
+  }
+  if (idle) {
+    return idle;
+  }
+  const current = currentDirect;
+  const opened = await OpenConnection(directOptions);
+  current.add(opened);
+  return opened;
+}
+
+/** Closes the idle bounded-read connections, and those still borrowed once their read ends. */
+function DropDirect() {
+  for (const idle of idleDirect.splice(0)) {
+    void idle.close().catch(() => undefined);
+  }
+  currentDirect = new WeakSet();
+}
+
+/**
+ * Keeps `direct` for the next bounded read, unless a read past its limit closed it or the
+ * options changed or the instance disconnected while it was borrowed.
+ */
+function GiveBack(direct: RethinkDBConnection) {
+  if (!currentDirect.has(direct)) {
+    void direct.close().catch(() => undefined);
+    return;
+  }
+  if (direct.open) {
+    idleDirect.push(direct);
+  }
+}
+
 /** The options a bounded read opens its own connection with. */
 export function SetDirectOptions(options: RConnectionOptions) {
+  DropDirect();
   directOptions = options;
 }
 
@@ -161,8 +207,7 @@ export async function OpenBoundedCursor(
   term: TermJson,
   timeoutMs: number,
 ): Promise<BoundedCursor> {
-  assert(directOptions, "No connection established");
-  const direct = await OpenConnection(directOptions);
+  const direct = await BorrowDirect();
   let expired = false;
   let timer: NodeJS.Timeout | undefined;
   let expire: (error: Error) => void = () => undefined;
@@ -180,7 +225,7 @@ export async function OpenBoundedCursor(
   };
   const release = () => {
     disarm();
-    void direct.close().catch(() => undefined);
+    GiveBack(direct);
   };
   arm();
   try {
@@ -209,13 +254,12 @@ export async function executeBounded(
   term: TermJson,
   timeoutMs: number,
 ): Promise<any> {
-  assert(directOptions, "No connection established");
-  const direct = await OpenConnection(directOptions);
+  const direct = await BorrowDirect();
   let timer: NodeJS.Timeout | undefined;
   const expired = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
       reject(new QueryTimeoutError(timeoutMs));
-      void direct.close();
+      void direct.close().catch(() => undefined);
     }, timeoutMs);
   });
   try {
@@ -223,6 +267,6 @@ export async function executeBounded(
     return await Promise.race([running, expired]);
   } finally {
     clearTimeout(timer);
-    void direct.close().catch(() => undefined);
+    GiveBack(direct);
   }
 }
