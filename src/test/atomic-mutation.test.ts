@@ -14,7 +14,6 @@ import * as connection from "../connection";
 import { validateWriteResult } from "../write-result";
 import { RunQuery } from "../implementations/database/query";
 import type { QueryStage } from "../implementations/database/utils";
-import { WithForeign } from "./foreign";
 
 type NestedFields = {
   removed?: boolean;
@@ -332,11 +331,13 @@ async function rejectStages() {
     throw new Error("Must not send");
   });
   await assert.rejects(
-    RunQuery([...prefix, WithForeign({ ...terminal }, "options", {})]),
+    // @ts-expect-error options on an atomicMutation stage, which RunQuery refuses as one without options
+    RunQuery([...prefix, { ...terminal, options: {} }]),
     /Atomic mutation requires one key and request without options/,
   );
   await assert.rejects(
-    RunQuery([...prefix, WithForeign({ ...terminal }, "args", [])]),
+    // @ts-expect-error an atomicMutation stage with no arguments, which RunQuery refuses for lacking its key and request
+    RunQuery([...prefix, { ...terminal, args: [] }]),
     /Atomic mutation requires one key and request without options/,
   );
   await assert.rejects(

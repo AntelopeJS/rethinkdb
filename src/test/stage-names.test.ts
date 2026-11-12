@@ -5,7 +5,6 @@ import { CROSS_INSTANCE, Schema } from "@antelopejs/interface-database/schema";
 
 import { SelectionQuery } from "../implementations/database/selection";
 import { RunQuery } from "../implementations/database/query";
-import { WithForeign } from "./foreign";
 
 const SCHEMA_ID = "stage-names";
 const INHERITED_NAMES = [
@@ -28,11 +27,6 @@ const PREFIX = [
   QueryStage("table", { id: "items" }),
 ];
 
-/** A stage without arguments named `name`, which no stage of the union carries. */
-function ForeignStage(name: string): QueryStage {
-  return WithForeign<QueryStage>({ stage: "not", args: [] }, "stage", name);
-}
-
 let schema: Schema<{ items: Item }>;
 
 describe("stage names inherited from Object.prototype", () => {
@@ -47,7 +41,8 @@ describe("stage names inherited from Object.prototype", () => {
       assert.throws(
         () =>
           SelectionQuery.buildTermJson(
-            [...PREFIX, ForeignStage(name)],
+            // @ts-expect-error a stage name outside the union, which the stream dispatch refuses as unimplemented
+            [...PREFIX, { stage: name, args: [] }],
             SelectionQuery.newContext(),
           ),
         { message: `Unimplemented stream stage: ${name}` },
@@ -60,7 +55,11 @@ describe("stage names inherited from Object.prototype", () => {
       const stages = schema
         .instance(CROSS_INSTANCE)
         .table("items")
-        .map((row) => new ValueProxy(ForeignStage(name), row.key("a")))
+        .map(
+          (row) =>
+            // @ts-expect-error a stage name outside the union, which the expression dispatch refuses as unimplemented
+            new ValueProxy({ stage: name, args: [] }, row.key("a")),
+        )
         .build();
       assert.throws(
         () => SelectionQuery.buildTermJson(stages, SelectionQuery.newContext()),
@@ -72,7 +71,11 @@ describe("stage names inherited from Object.prototype", () => {
   it("refuses them as schema stages, like an unknown stage", async () => {
     for (const name of ["nope", ...INHERITED_NAMES]) {
       await assert.rejects(
-        RunQuery([QueryStage("schema", { id: SCHEMA_ID }), ForeignStage(name)]),
+        RunQuery([
+          QueryStage("schema", { id: SCHEMA_ID }),
+          // @ts-expect-error a stage name outside the union, which the schema dispatch refuses as unknown
+          { stage: name, args: [] },
+        ]),
         {
           message: `Unknown schema stage '${name}'`,
         },
