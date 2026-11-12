@@ -9,13 +9,18 @@ import { Logger } from "../../utils/logger";
 import { allocateArgNumber, ReadPath, TENANT_ID_FIELD } from "./utils";
 
 const INSTANCE_INDEX_SUFFIX = "__i";
+/** Suffix of the index schema initialization builds beside a stale one before swapping it in. */
+export const REBUILD_INDEX_SUFFIX = "__rebuild";
+const RESERVED_INDEX_SUFFIXES = [INSTANCE_INDEX_SUFFIX, REBUILD_INDEX_SUFFIX];
 const ARRAY_TYPE_NAME = "ARRAY";
 
 type TermBuilder = (value: TermJson) => TermJson;
 
+/** A physical index a table needs: its name, the function it indexes by, and whether that function returns one key per element. */
 export interface IndexCreation {
   name: string;
-  term: TermJson;
+  fn: TermJson;
+  multi: boolean;
 }
 
 interface IndexedLookup {
@@ -60,10 +65,6 @@ export function isCompound(definition: IndexDefinition): boolean {
   return (definition.fields?.length ?? 0) > 1;
 }
 
-function creationOptions(definition: IndexDefinition) {
-  return definition.multi ? { multi: true } : {};
-}
-
 export function indexOptions(index?: string) {
   return index ? { index } : {};
 }
@@ -102,15 +103,23 @@ function buildIndexEntries(value: TermJson): TermJson {
   return [TermType.BRANCH, [isArray, value, [TermType.MAKE_ARRAY, [value]]]];
 }
 
+/**
+ * The key a scoped index holds: the instance, then the indexed value. An index
+ * that is not `multi` and declares `fields` prepends the instance to the list
+ * of field values, the function v1.8 stored, so upgrading does not rebuild it.
+ */
 function buildInstanceKey(
   tenantId: TermJson,
   definition: IndexDefinition,
   value: TermJson,
 ): TermJson {
-  if (isCompound(definition) && !definition.multi) {
-    return [TermType.PREPEND, [value, tenantId]];
+  if (definition.multi || (definition.fields?.length ?? 0) === 0) {
+    return [TermType.MAKE_ARRAY, [tenantId, value]];
   }
-  return [TermType.MAKE_ARRAY, [tenantId, value]];
+  const fieldValues: TermJson = isCompound(definition)
+    ? value
+    : [TermType.MAKE_ARRAY, [value]];
+  return [TermType.PREPEND, [fieldValues, tenantId]];
 }
 
 function buildInstanceIndexFunction(
@@ -130,57 +139,38 @@ function buildInstanceIndexFunction(
   });
 }
 
-function buildInstanceIndexCreation(
-  table: TermJson,
-  indexName: string,
-  definition: IndexDefinition,
-): IndexCreation {
-  const name = instanceIndexName(indexName);
-  const indexFunction = buildInstanceIndexFunction(indexName, definition);
-  return {
-    name,
-    term: [
-      TermType.INDEX_CREATE,
-      [table, name, indexFunction],
-      creationOptions(definition),
-    ],
-  };
+/** The function RethinkDB stores for an index created from a name alone: the top-level field of that name. */
+function buildOwnFieldFunction(field: string): TermJson {
+  return buildFunction((row) => [TermType.GET_FIELD, [row, field]]);
 }
 
-function buildGlobalIndexCreation(
-  table: TermJson,
+function buildGlobalIndexFunction(
   indexName: string,
   definition: IndexDefinition,
-): IndexCreation {
+): TermJson {
   const fields = indexedFields(indexName, definition);
   const readsOwnName = fields.length === 1 && fields[0] === indexName;
-  const args: TermJson[] =
-    readsOwnName && !indexName.includes(".")
-      ? [table, indexName]
-      : [
-          table,
-          indexName,
-          buildFunction((row) => buildIndexValue(row, indexName, definition)),
-        ];
-  return {
-    name: indexName,
-    term: [TermType.INDEX_CREATE, args, creationOptions(definition)],
-  };
+  if (readsOwnName && !indexName.includes(".")) {
+    return buildOwnFieldFunction(indexName);
+  }
+  return buildFunction((row) => buildIndexValue(row, indexName, definition));
 }
 
 /**
  * Rejects declared index names that would collide with the generated
- * `<name>__i` indexes.
+ * `<name>__i` indexes or with the `<name>__rebuild` index a rebuild swaps in.
  */
 export function assertValidIndexNames(schema: SchemaDefinition) {
   for (const [tableName, table] of Object.entries(schema)) {
-    const reserved = Object.keys(table.indexes).find((indexName) =>
-      indexName.endsWith(INSTANCE_INDEX_SUFFIX),
-    );
-    if (reserved !== undefined) {
-      throw new Error(
-        `Index '${reserved}' of table '${tableName}' ends with the reserved suffix '${INSTANCE_INDEX_SUFFIX}'; rename it`,
+    for (const suffix of RESERVED_INDEX_SUFFIXES) {
+      const reserved = Object.keys(table.indexes).find((indexName) =>
+        indexName.endsWith(suffix),
       );
+      if (reserved !== undefined) {
+        throw new Error(
+          `Index '${reserved}' of table '${tableName}' ends with the reserved suffix '${suffix}'; rename it`,
+        );
+      }
     }
   }
 }
@@ -212,21 +202,31 @@ export function assertNoUniqueIndexes(
  * instance field index itself.
  */
 export function buildIndexCreations(
-  table: TermJson,
   indexes: Record<string, IndexDefinition>,
 ): IndexCreation[] {
   const declared = Object.entries(indexes).flatMap(
-    ([indexName, definition]) => {
-      const instance = buildInstanceIndexCreation(table, indexName, definition);
+    ([indexName, definition]): IndexCreation[] => {
+      const multi = definition.multi === true;
+      const instance: IndexCreation = {
+        name: instanceIndexName(indexName),
+        fn: buildInstanceIndexFunction(indexName, definition),
+        multi,
+      };
       if (!definition.crossInstance) {
         return [instance];
       }
-      return [instance, buildGlobalIndexCreation(table, indexName, definition)];
+      const global: IndexCreation = {
+        name: indexName,
+        fn: buildGlobalIndexFunction(indexName, definition),
+        multi,
+      };
+      return [instance, global];
     },
   );
   const tenantIndex: IndexCreation = {
     name: TENANT_ID_FIELD,
-    term: [TermType.INDEX_CREATE, [table, TENANT_ID_FIELD]],
+    fn: buildOwnFieldFunction(TENANT_ID_FIELD),
+    multi: false,
   };
   return [...declared, tenantIndex];
 }

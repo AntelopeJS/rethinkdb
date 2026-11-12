@@ -13,7 +13,12 @@ import type {
 
 import { Logger } from "../../utils/logger";
 import { executeTermJson } from "../../connection";
-import { buildIndexCreations } from "./indexes";
+import {
+  buildIndexCreations,
+  type IndexCreation,
+  REBUILD_INDEX_SUFFIX,
+} from "./indexes";
+import { type IndexPlan, planIndexes } from "./index-state";
 import {
   INSTANCE_REGISTRY_TABLE,
   IsTextList,
@@ -70,18 +75,65 @@ async function ensureTables(dbName: string, tableNames: string[]) {
   await executeTermJson([TermType.WAIT, [db]]);
 }
 
+function createIndex(table: TermJson, name: string, creation: IndexCreation) {
+  const options = creation.multi ? { multi: true } : {};
+  return createIfMissing([
+    TermType.INDEX_CREATE,
+    [table, name, creation.fn],
+    options,
+  ]);
+}
+
+/**
+ * Builds the declared function under `<name>__rebuild`, then renames it over
+ * the stale index, which keeps answering reads until the swap. A leftover
+ * `<name>__rebuild` built by another function is dropped first.
+ */
+async function rebuildIndex(table: TermJson, plan: IndexPlan) {
+  const { creation, rebuildState } = plan;
+  const rebuild = `${creation.name}${REBUILD_INDEX_SUFFIX}`;
+  Logger.Warn(
+    `Index '${creation.name}' was built from another definition; rebuilding it`,
+  );
+  if (rebuildState === "stale" || rebuildState === "unreadable") {
+    await executeTermJson([TermType.INDEX_DROP, [table, rebuild]]);
+  }
+  await createIndex(table, rebuild, creation);
+  await executeTermJson([TermType.INDEX_WAIT, [table, rebuild]]);
+  await executeTermJson([
+    TermType.INDEX_RENAME,
+    [table, rebuild, creation.name],
+    { overwrite: true },
+  ]);
+}
+
+async function applyIndexPlan(table: TermJson, plan: IndexPlan) {
+  const { name } = plan.creation;
+  switch (plan.state) {
+    case "missing":
+      Logger.Debug("Creating index", name);
+      await createIndex(table, name, plan.creation);
+      return;
+    case "stale":
+      await rebuildIndex(table, plan);
+      return;
+    case "unreadable":
+      Logger.Warn(
+        `Index '${name}' is stored in a form that cannot be compared with its definition; keeping it`,
+      );
+      return;
+    case "current":
+      return;
+  }
+}
+
 async function ensureIndexes(
   table: TermJson,
   indexes: Record<string, IndexDefinition>,
 ) {
-  const existing = await listNames([TermType.INDEX_LIST, [table]]);
-  const creations = buildIndexCreations(table, indexes);
-  const missing = creations.filter(
-    (creation) => !existing.includes(creation.name),
-  );
-  for (const creation of missing) {
-    Logger.Debug("Creating index", creation.name);
-    await createIfMissing(creation.term);
+  const creations = buildIndexCreations(indexes);
+  for (const plan of await planIndexes(table, creations)) {
+    await applyIndexPlan(table, plan);
   }
   const managed = creations.map((creation) => creation.name);
   await executeTermJson([TermType.INDEX_WAIT, [table, ...managed]]);
@@ -89,8 +141,9 @@ async function ensureIndexes(
 
 /**
  * Creates the missing schema database, tables and indexes, ignoring "already
- * exists" errors from other processes, then waits until the indexes it manages
- * are ready.
+ * exists" errors from other processes, rebuilds each index whose stored
+ * function or `multi` flag differs from its definition, then waits until the
+ * indexes it manages are ready.
  */
 export async function InitializeSchemaDatabase(
   dbName: string,
