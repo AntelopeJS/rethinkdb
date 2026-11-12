@@ -20,24 +20,29 @@ interface Article {
   meta: { sku: string; shelf: string };
   tags: string[];
   color: string;
+  label: { "it's": string };
 }
 
 const SCHEMA_ID = "test-stale-index-rebuild";
 const TABLE = "articles";
 const INSTANCES = ["north", "south"];
 const LONG_RUNNING_QUERIES = 1_000_000;
+const CONCURRENT_BOOTS = 4;
 const DEFINITION: SchemaDefinition = {
   [TABLE]: {
     fields: {
       meta: { sku: "string", shelf: "string" },
       tags: ["string"],
       color: "string",
+      label: { "it's": "string" },
     },
     indexes: {
       "meta.sku": { crossInstance: true },
       shelf: { fields: ["meta.shelf"], crossInstance: true },
       tag: { fields: ["tags"], multi: true },
       color: { fields: ["color"] },
+      "label.it's": { crossInstance: true },
+      quoted: { fields: ['we"ird'] },
     },
   },
 };
@@ -71,6 +76,7 @@ function previousMultiFunction(row: RDatum) {
 
 async function seedPreviousFunctions() {
   await replaceIndex("meta.sku", table.indexCreate("meta.sku"));
+  await replaceIndex("label.it's", table.indexCreate("label.it's"));
   await replaceIndex(
     "shelf",
     table.indexCreate("shelf", (row: RDatum) => r.expr([row("meta.shelf")])),
@@ -92,6 +98,9 @@ async function readDeclaredIndexes() {
     sku: ids(await articles(CROSS_INSTANCE).getAll("SKU-1", "meta.sku").run()),
     shelf: ids(await articles(CROSS_INSTANCE).getAll("low", "shelf").run()),
     tag: ids(await articles("north").getAll("red", "tag").run()),
+    label: ids(
+      await articles(CROSS_INSTANCE).getAll("first", "label.it's").run(),
+    ),
   };
 }
 
@@ -118,12 +127,14 @@ describe("Stale index rebuild", () => {
             meta: { sku: `SKU-${position}`, shelf: "top" },
             tags: ["red", "blue"],
             color: "green",
+            label: { "it's": "first" },
           },
           {
             _id: `${instanceId}-2`,
             meta: { sku: `SKU-${position + 2}`, shelf: "low" },
             tags: ["blue"],
             color: "grey",
+            label: { "it's": "second" },
           },
         ])
         .run();
@@ -137,12 +148,16 @@ describe("Stale index rebuild", () => {
   });
 
   it(
-    "rebuilds indexes stored with a previous function at boot, so reads answer as on a fresh database, not with the stale keys",
+    "rebuilds indexes stored with a previous function at boot, a name holding an apostrophe included, so reads answer as on a fresh database, not with the stale keys",
     RebuildsStaleIndexes,
   );
   it(
-    "keeps indexes whose stored function matches their definition, a v1.8 index of one field included, not rebuilding them at every boot of a long-running process",
+    "keeps indexes whose stored function matches their definition, a v1.8 index of one field and a field name holding a quote included, not rebuilding them at every boot of a long-running process",
     KeepsCurrentIndexes,
+  );
+  it(
+    "rebuilds stale indexes from concurrent boots, not failing the boots that lose the swap",
+    RebuildsFromConcurrentBoots,
   );
   it(
     "rejects a declared index ending with __rebuild, not letting a rebuild drop or overwrite it",
@@ -156,6 +171,7 @@ async function RebuildsStaleIndexes() {
     sku: [],
     shelf: [],
     tag: [],
+    label: [],
   });
 
   await InitializeSchemaDatabase(SCHEMA_ID, DEFINITION);
@@ -164,6 +180,7 @@ async function RebuildsStaleIndexes() {
     sku: ["south-1"],
     shelf: ["north-2", "south-2"],
     tag: ["north-1"],
+    label: ["north-1", "south-1"],
   });
   assert.ok(!(await storedFunctions()).has("tag__i__rebuild"));
 }
@@ -188,6 +205,23 @@ async function KeepsCurrentIndexes() {
     ids(await articles("north").getAll("green", "color").run()),
     ["north-1"],
   );
+}
+
+async function RebuildsFromConcurrentBoots() {
+  await seedPreviousFunctions();
+
+  await Promise.all(
+    Array.from({ length: CONCURRENT_BOOTS }, () =>
+      InitializeSchemaDatabase(SCHEMA_ID, DEFINITION),
+    ),
+  );
+
+  assert.deepEqual(await readDeclaredIndexes(), {
+    sku: ["south-1"],
+    shelf: ["north-2", "south-2"],
+    tag: ["north-1"],
+    label: ["north-1", "south-1"],
+  });
 }
 
 function RejectsRebuildSuffix() {

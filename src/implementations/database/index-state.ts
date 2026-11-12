@@ -24,9 +24,10 @@ interface FunctionInfo {
   source_code: string;
 }
 
-const TEXT_VARIABLE_OR_SPACE = /"(?:[^"\\]|\\.)*"|\b_?var\d+\b|\s+/g;
+const TEXT_VARIABLE_OR_SPACE =
+  /"(?:[^"\\]|\\.|"(?![)\],}:]))*"|\b_?var\d+\b|\s+/g;
 const STORED_FUNCTION =
-  /^indexCreate\('[^']*',\s*function\s*\(([^)]*)\)\s*\{\s*return\s+([\s\S]*);\s*\}(?:,\s*\{[^}]*\})?\)$/;
+  /^indexCreate\('[\s\S]*?',\s*function\s*\(([^)]*)\)\s*\{\s*return\s+([\s\S]*);\s*\}(?:,\s*\{[^}]*\})?\)$/;
 const DESCRIBED_FUNCTION =
   /^function\s*\(captures = \[[^\]]*\]\)\s*\(args = \[([^\]]*)\]\)\s*([\s\S]*)$/;
 

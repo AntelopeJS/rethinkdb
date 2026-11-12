@@ -28,6 +28,7 @@ import {
 const ALREADY_EXISTS_PATTERN = /already exists/;
 const INITIALIZATION_ATTEMPTS = 5;
 const INITIAL_RETRY_DELAY_MS = 200;
+const REBUILD_ATTEMPTS = 5;
 
 function isAlreadyExists(error: unknown): error is RethinkDBError {
   return (
@@ -84,17 +85,9 @@ function createIndex(table: TermJson, name: string, creation: IndexCreation) {
   ]);
 }
 
-/**
- * Builds the declared function under `<name>__rebuild`, then renames it over
- * the stale index, which keeps answering reads until the swap. A leftover
- * `<name>__rebuild` built by another function is dropped first.
- */
-async function rebuildIndex(table: TermJson, plan: IndexPlan) {
+async function swapInRebuild(table: TermJson, plan: IndexPlan) {
   const { creation, rebuildState } = plan;
   const rebuild = `${creation.name}${REBUILD_INDEX_SUFFIX}`;
-  Logger.Warn(
-    `Index '${creation.name}' was built from another definition; rebuilding it`,
-  );
   if (rebuildState === "stale" || rebuildState === "unreadable") {
     await executeTermJson([TermType.INDEX_DROP, [table, rebuild]]);
   }
@@ -105,6 +98,35 @@ async function rebuildIndex(table: TermJson, plan: IndexPlan) {
     [table, rebuild, creation.name],
     { overwrite: true },
   ]);
+}
+
+/**
+ * Builds the declared function under `<name>__rebuild`, then renames it over
+ * the stale index, which keeps answering reads until the swap. A leftover
+ * `<name>__rebuild` built by another function is dropped first. Other
+ * processes booting at once race on the same names, so a failed attempt
+ * reads the index again: it stops once the index is current, and retries
+ * from the state it reads otherwise.
+ */
+async function rebuildIndex(table: TermJson, plan: IndexPlan) {
+  Logger.Warn(
+    `Index '${plan.creation.name}' was built from another definition; rebuilding it`,
+  );
+  let attempt = plan;
+  for (let remaining = REBUILD_ATTEMPTS - 1; ; remaining--) {
+    try {
+      await swapInRebuild(table, attempt);
+      return;
+    } catch (error) {
+      [attempt] = await planIndexes(table, [plan.creation]);
+      if (attempt.state === "current") {
+        return;
+      }
+      if (remaining === 0) {
+        throw error;
+      }
+    }
+  }
 }
 
 async function applyIndexPlan(table: TermJson, plan: IndexPlan) {
