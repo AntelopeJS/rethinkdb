@@ -10,7 +10,7 @@ export type ForeignValue =
  */
 export function WithForeign<T extends object>(
   base: T,
-  key: string,
+  key: keyof T & string,
   value: ForeignValue,
 ): T {
   Object.defineProperty(base, key, {
