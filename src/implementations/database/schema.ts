@@ -152,10 +152,22 @@ export function IsValidInstance(
   return existingInstances.get(schemaId)?.has(instanceId ?? "") ?? false;
 }
 
+/** Throws unless `instanceId` is a string or undefined, whatever a JavaScript caller passed. */
+function assertInstanceIdText<Value>(
+  instanceId: Value,
+): asserts instanceId is Value & (string | undefined) {
+  if (instanceId !== undefined && typeof instanceId !== "string") {
+    throw new TypeError(
+      `Instance id must be a string, got ${instanceId === null ? "null" : typeof instanceId}`,
+    );
+  }
+}
+
 export async function CreateInstance(
   schemaId: string,
   instanceId: string | undefined,
 ): Promise<string> {
+  assertInstanceIdText(instanceId);
   await WaitForSchemaReady(schemaId);
   const id = instanceId ?? "";
   const registryTable: TermJson = [
