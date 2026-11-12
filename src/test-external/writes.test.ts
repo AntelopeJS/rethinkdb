@@ -5,6 +5,7 @@ import type { Schema } from "@antelopejs/interface-database/schema";
 
 import { type ErpRow, type ErpTables, Native, RegisterErp } from "./erp";
 import { CustomerId } from "./fixture";
+import { IsText } from "../implementations/database/utils";
 
 const NEW_PREFIX = "New customer";
 
@@ -185,10 +186,9 @@ describe("keys and conflicts of an external RethinkDB table", () => {
   it("removes the fields a replace leaves out from every row it selected by another field", async () => {
     const orders = erp.instance().table("orders");
     const customer = CustomerId(4);
-    const ids = (await orders.getAll(customer, "customer_id").pluck("_id")).map(
-      // SAFETY: orders are uuid-keyed, so each _id a read answers is its text.
-      (row) => row._id as string,
-    );
+    const ids = (await orders.getAll(customer, "customer_id").pluck("_id"))
+      .map((row) => row._id)
+      .filter(IsText);
     const noted = await Native<number>((table) =>
       table("orders").getAll(r.args(ids)).hasFields("note").count(),
     );

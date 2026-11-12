@@ -4,11 +4,9 @@ import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import { CROSS_INSTANCE } from "@antelopejs/interface-database/schema";
 import type { WriteDocument } from "@antelopejs/interface-database/common";
 
-// oxlint-disable-next-line import/no-cycle -- sub-query building applies stream stages; see expression.ts
 import { applyStreamStages } from "./stream";
 import { executeBounded, executeTermJson } from "../../connection";
 import { IsWriteResult } from "../../write-result";
-// oxlint-disable-next-line import/no-cycle -- the stage handlers build this query's terms
 import { SelectionStageHandlerOf } from "./selection-stages";
 import { ExternalDatabaseName, GetOptions, IsExternal } from "../../config";
 import { ExternalReads } from "./external-selection";
@@ -124,6 +122,13 @@ export class SelectionQuery {
       this.tenant.kind === "scoped"
         ? buildInstanceScope(baseTerm, this.tenant.tenantId)
         : baseTerm;
+  }
+
+  /** A context that binds no argument and decodes each nested query as a `SelectionQuery`. */
+  public static newContext(): DecodingContext {
+    return new DecodingContext((stages, context) =>
+      SelectionQuery.decode(stages, context),
+    );
   }
 
   public static buildTermJson(

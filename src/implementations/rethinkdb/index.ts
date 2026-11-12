@@ -1,16 +1,24 @@
+import assert from "node:assert";
 import type { RQuery, RunOptions } from "rethinkdb-ts";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 
 import { SendQuery } from "../../connection";
+import { IsTermJson } from "../database/utils";
 
-type RethinkQueryWithTerm = RQuery & { term: TermJson };
+/** The compiled term every rethinkdb-ts query carries, whichever copy of rethinkdb-ts built it. */
+function TermOf(query: RQuery): TermJson {
+  assert(
+    "term" in query && IsTermJson(query.term),
+    "Expected a rethinkdb-ts query carrying its compiled term",
+  );
+  return query.term;
+}
 
 export async function RunQuery(
   query: RQuery,
   options?: RunOptions,
 ): ReturnType<RQuery["run"]> {
-  // SAFETY: every rethinkdb-ts query carries its compiled `term`, which RQuery leaves undeclared; isQuery cannot check it, since a caller may build the query with its own rethinkdb-ts copy and query symbol.
-  const cursor = await SendQuery((query as RethinkQueryWithTerm).term, options);
+  const cursor = await SendQuery(TermOf(query), options);
   if (!cursor) {
     return;
   }

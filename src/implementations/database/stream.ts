@@ -1,8 +1,6 @@
 import { TermType } from "rethinkdb-ts/lib/proto/enums";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 
-// oxlint-disable-next-line import/no-cycle -- join and union right-hand sides are sub-queries; see expression.ts
-import { SelectionQuery } from "./selection";
 import { FindIndex, GetIndex, HasCrossInstanceIndex } from "./schema";
 import {
   buildIndexScanPredicate,
@@ -10,7 +8,6 @@ import {
   type DeclaredIndex,
   warnUnindexedCrossInstance,
 } from "./indexes";
-// oxlint-disable-next-line import/no-cycle -- stream stages decode values; see expression.ts
 import { DecodeFunction, DecodeOperand, DecodeValue } from "./expression";
 import {
   allocateArgNumber,
@@ -19,6 +16,7 @@ import {
   LookupKeys,
   type QueryStage,
   StageNamed,
+  type SubQuery,
 } from "./utils";
 
 /** The table a stream's stages read, by schema and table name. */
@@ -184,7 +182,7 @@ function handleUnion(
   context: DecodingContext,
 ): TermJson {
   const rightStages = buildRightStages(StageNamed(stage, "union"));
-  const rightTerm = SelectionQuery.buildTermJson(rightStages, context);
+  const rightTerm = context.subQuery(rightStages).buildTerm();
   return [TermType.UNION, [prev, rightTerm]];
 }
 
@@ -196,7 +194,7 @@ function handleJoin(
   const join = StageNamed(stage, "join");
   const innerOnly = join.options?.innerOnly ?? false;
   const rightStages = buildRightStages(join);
-  const rightTerm = SelectionQuery.buildTermJson(rightStages, context);
+  const rightTerm = context.subQuery(rightStages).buildTerm();
   const [, predicate, mapper] = join.args;
 
   const joinType = innerOnly ? TermType.INNER_JOIN : TermType.OUTER_JOIN;
@@ -238,7 +236,7 @@ function handleLookup(
 ): TermJson {
   const lookup = StageNamed(stage, "lookup");
   const rightStages = buildRightStages(lookup);
-  const rightQuery = SelectionQuery.decode(rightStages, context);
+  const rightQuery = context.subQuery(rightStages);
   const rightTerm = rightQuery.buildTerm();
   const { localKey, otherKey } = lookup.options;
 
@@ -287,7 +285,7 @@ function handleLookup(
 }
 
 function buildLookupSelection(
-  rightQuery: SelectionQuery,
+  rightQuery: SubQuery,
   rightTerm: TermJson,
   otherKey: string,
   localField: TermJson,

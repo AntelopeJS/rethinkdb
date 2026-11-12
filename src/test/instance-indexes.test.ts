@@ -13,7 +13,6 @@ import { executeTermJson } from "../connection";
 import { Schemas } from "../implementations/database/schema";
 import { SelectionQuery } from "../implementations/database/selection";
 import {
-  DecodingContext,
   IsList,
   IsObject,
   IsText,
@@ -122,7 +121,10 @@ function unique(values: string[]): string[] {
 }
 
 function buildTerm(query: Selectable): TermJson {
-  return SelectionQuery.buildTermJson(query.build(), new DecodingContext());
+  return SelectionQuery.buildTermJson(
+    query.build(),
+    SelectionQuery.newContext(),
+  );
 }
 
 async function dropDatabase(name: string) {

@@ -107,6 +107,34 @@ export function allocateArgNumber() {
   return nextArgNumber++;
 }
 
+/** A query nested in another: the right side of a union, join or lookup, or a query in a value. */
+export interface SubQuery {
+  readonly schemaId: string;
+  readonly tableName: string;
+  buildTerm(): TermJson;
+  isSimpleTable(): boolean;
+  externalLookup(otherKey: string, local: TermJson): TermJson | undefined;
+}
+
+/** Decodes the stages of a query nested in what `context` decodes. */
+export type SubQueryDecoder = (
+  stages: QueryStage[],
+  context: DecodingContext,
+) => SubQuery;
+
 export class DecodingContext {
   public args: Record<number, ArgumentProvider> = {};
+
+  /** @param decodeSubQuery decodes each query nested in what this context decodes */
+  public constructor(private readonly decodeSubQuery: SubQueryDecoder) {}
+
+  /** The query `stages` record, decoded in this context. */
+  public subQuery(stages: QueryStage[]): SubQuery {
+    return this.decodeSubQuery(stages, this);
+  }
+
+  /** A context that binds no argument and decodes nested queries as this one does. */
+  public unbound(): DecodingContext {
+    return new DecodingContext(this.decodeSubQuery);
+  }
 }

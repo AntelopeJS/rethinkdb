@@ -107,8 +107,7 @@ function Written(
   }
   const fits = value.constructor === CONSTRUCTORS.get(descriptor.kind);
   const finite = descriptor.kind !== "number" || Number.isFinite(value);
-  // SAFETY: the value's constructor is the declared kind's String, Number or Boolean.
-  return fits && finite ? (value as TermJson) : undefined;
+  return fits && finite && IsTermJson(value) ? value : undefined;
 }
 
 function Invalid(

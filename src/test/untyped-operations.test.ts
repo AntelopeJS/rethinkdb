@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { ValueProxy } from "@antelopejs/interface-database";
+import type { QueryStage } from "@antelopejs/interface-database/common";
 import { Schema } from "@antelopejs/interface-database/schema";
+
+import { WithForeign } from "./foreign";
 
 const SCHEMA_ID = "untyped-operations";
 const INSTANCE = "one";
@@ -33,13 +36,14 @@ describe("a stage a caller writes by hand, past the contract", () => {
     assert.deepEqual(
       await Rows().map((row) => ({
         two: new ValueProxy<number>(
-          // @ts-expect-error two operands where add takes one, which the driver answers by adding both
-          { stage: "add", args: [1, 2] },
+          WithForeign<QueryStage>({ stage: "add", args: [1] }, "args", [1, 2]),
           row.key("age"),
         ),
         text: new ValueProxy<number>(
-          // @ts-expect-error two text operands where add takes one number, which the driver answers by concatenating both
-          { stage: "add", args: ["x", "y"] },
+          WithForeign<QueryStage>({ stage: "add", args: [1] }, "args", [
+            "x",
+            "y",
+          ]),
           row.key("name").cast<number>(),
         ),
       })),
@@ -52,8 +56,7 @@ describe("a stage a caller writes by hand, past the contract", () => {
       await Rows().map(
         (row) =>
           new ValueProxy<number>(
-            // @ts-expect-error no operand where add takes one, which the driver answers with its receiver
-            { stage: "add", args: [] },
+            WithForeign<QueryStage>({ stage: "add", args: [1] }, "args", []),
             row.key("age"),
           ),
       ),
@@ -67,8 +70,11 @@ describe("a stage a caller writes by hand, past the contract", () => {
         .map(
           (row) =>
             new ValueProxy<number>(
-              // @ts-expect-error one bound where date_during takes two, which the server refuses by its argument count
-              { stage: "date_during", args: [0] },
+              WithForeign<QueryStage>(
+                { stage: "date_during", args: [0, 10_000] },
+                "args",
+                [0],
+              ),
               row.key("age"),
             ),
         )
@@ -83,8 +89,11 @@ describe("a stage a caller writes by hand, past the contract", () => {
         .map(
           (row) =>
             new ValueProxy<number>(
-              // @ts-expect-error three bounds where date_during takes two, which the server refuses by its argument count
-              { stage: "date_during", args: [0, 10_000, 5] },
+              WithForeign<QueryStage>(
+                { stage: "date_during", args: [0, 10_000] },
+                "args",
+                [0, 10_000, 5],
+              ),
               row.key("age"),
             ),
         )
