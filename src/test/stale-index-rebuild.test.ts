@@ -43,6 +43,7 @@ const DEFINITION: SchemaDefinition = {
       color: { fields: ["color"] },
       "label.it's": { crossInstance: true },
       quoted: { fields: ['we"ird'] },
+      slashed: { fields: ["back\\"] },
     },
   },
 };
@@ -152,7 +153,7 @@ describe("Stale index rebuild", () => {
     RebuildsStaleIndexes,
   );
   it(
-    "keeps indexes whose stored function matches their definition, a v1.8 index of one field and a field name holding a quote included, not rebuilding them at every boot of a long-running process",
+    "keeps indexes whose stored function matches their definition, a v1.8 index of one field and field names holding a quote or ending with a backslash included, not rebuilding them at every boot of a long-running process",
     KeepsCurrentIndexes,
   );
   it(
