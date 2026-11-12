@@ -6,7 +6,7 @@ import type {
 } from "@antelopejs/interface-database/schema";
 
 import { Logger } from "../../utils/logger";
-import { allocateArgNumber, TENANT_ID_FIELD } from "./utils";
+import { allocateArgNumber, ReadPath, TENANT_ID_FIELD } from "./utils";
 
 const INSTANCE_INDEX_SUFFIX = "__i";
 const ARRAY_TYPE_NAME = "ARRAY";
@@ -55,12 +55,9 @@ function buildFunction(body: TermBuilder): TermJson {
   ];
 }
 
-function readField(row: TermJson, field: string): TermJson {
-  return [TermType.BRACKET, [row, field]];
-}
-
-function isCompound(definition: IndexDefinition): boolean {
-  return (definition.fields?.length ?? 0) > 0;
+/** Whether an index reads a tuple of fields, so its keys are lists; an index of one field reads that field's value. */
+export function isCompound(definition: IndexDefinition): boolean {
+  return (definition.fields?.length ?? 0) > 1;
 }
 
 function creationOptions(definition: IndexDefinition) {
@@ -84,11 +81,17 @@ function buildIndexValue(
   indexName: string,
   definition: IndexDefinition,
 ): TermJson {
-  const fields = definition.fields ?? [];
-  if (fields.length === 0) {
-    return readField(row, indexName);
-  }
-  return [TermType.MAKE_ARRAY, fields.map((field) => readField(row, field))];
+  const values = indexedFields(indexName, definition).map((field) =>
+    ReadPath(row, field),
+  );
+  return isCompound(definition) ? [TermType.MAKE_ARRAY, values] : values[0];
+}
+
+/** The `hasFields` argument that requires `path`, nested one object per dot. */
+function requiredPath(path: string): TermJson {
+  return path
+    .split(".")
+    .reduceRight<TermJson>((inner, key) => ({ [key]: inner }), true);
 }
 
 function buildIndexEntries(value: TermJson): TermJson {
@@ -115,7 +118,7 @@ function buildInstanceIndexFunction(
   definition: IndexDefinition,
 ): TermJson {
   return buildFunction((row) => {
-    const tenantId = readField(row, TENANT_ID_FIELD);
+    const tenantId = ReadPath(row, TENANT_ID_FIELD);
     const value = buildIndexValue(row, indexName, definition);
     if (!definition.multi) {
       return buildInstanceKey(tenantId, definition, value);
@@ -149,13 +152,16 @@ function buildGlobalIndexCreation(
   indexName: string,
   definition: IndexDefinition,
 ): IndexCreation {
-  const args: TermJson[] = isCompound(definition)
-    ? [
-        table,
-        indexName,
-        buildFunction((row) => buildIndexValue(row, indexName, definition)),
-      ]
-    : [table, indexName];
+  const fields = indexedFields(indexName, definition);
+  const readsOwnName = fields.length === 1 && fields[0] === indexName;
+  const args: TermJson[] =
+    readsOwnName && !indexName.includes(".")
+      ? [table, indexName]
+      : [
+          table,
+          indexName,
+          buildFunction((row) => buildIndexValue(row, indexName, definition)),
+        ];
   return {
     name: indexName,
     term: [TermType.INDEX_CREATE, args, creationOptions(definition)],
@@ -290,7 +296,7 @@ export function buildIndexScanValues(
   const { indexName, definition } = index;
   const indexed: TermJson = [
     TermType.HAS_FIELDS,
-    [source, ...indexedFields(indexName, definition)],
+    [source, ...indexedFields(indexName, definition).map(requiredPath)],
   ];
   const readValue = (row: TermJson) =>
     buildIndexValue(row, indexName, definition);

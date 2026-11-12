@@ -80,6 +80,13 @@ export function IsTextList(value: unknown): value is string[] {
   return Array.isArray(value) && value.every(IsText);
 }
 
+/** A term reading `path` in `row`. Each dot steps into a nested object, so `"a.b"` reads `b` inside `a`. */
+export function ReadPath(row: TermJson, path: string): TermJson {
+  return path
+    .split(".")
+    .reduce<TermJson>((term, key) => [TermType.BRACKET, [term, key]], row);
+}
+
 /** The keys a lookup's local field holds: each element of a list, or the field itself. */
 export function LookupKeys(local: TermJson): TermJson {
   return [

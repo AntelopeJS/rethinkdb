@@ -8,6 +8,7 @@ import {
   buildIndexScanPredicate,
   buildIndexScanValues,
   type DeclaredIndex,
+  isCompound,
   warnUnindexedCrossInstance,
 } from "./indexes";
 // oxlint-disable-next-line import/no-cycle -- stream stages decode values; see expression.ts
@@ -18,6 +19,7 @@ import {
   GetAllKeys,
   LookupKeys,
   type QueryStage,
+  ReadPath,
   StageNamed,
 } from "./utils";
 
@@ -295,9 +297,10 @@ function buildLookupSelection(
   const { schemaId, tableName } = rightQuery;
   const isSimpleTable = rightQuery.isSimpleTable();
   const definition = FindIndex(schemaId, tableName, otherKey);
-  const keys: TermJson = definition?.fields?.length
-    ? [TermType.MAKE_ARRAY, [localField]]
-    : LookupKeys(localField);
+  const keys: TermJson =
+    definition && isCompound(definition)
+      ? [TermType.MAKE_ARRAY, [localField]]
+      : LookupKeys(localField);
   if (isSimpleTable && HasCrossInstanceIndex(schemaId, tableName, otherKey)) {
     return GetAllKeys(rightTerm, keys, { index: otherKey });
   }
@@ -311,15 +314,8 @@ function buildLookupSelection(
           { schemaId, tableName, indexName: otherKey, definition },
           matchesLocal,
         )
-      : buildFieldFunction(otherKey, matchesLocal);
+      : rowFunction((row) => matchesLocal(ReadPath(row, otherKey)));
   return [TermType.FILTER, [rightTerm, predicate]];
-}
-
-function buildFieldFunction(
-  field: string,
-  transform: (value: TermJson) => TermJson = (value) => value,
-): TermJson {
-  return rowFunction((row) => transform([TermType.BRACKET, [row, field]]));
 }
 
 function handleGroup(
@@ -399,7 +395,10 @@ function buildNonIndexedOrderBy(
   const index = GetIndex(schemaId, tableName, indexName);
   const direction = isDescending ? TermType.DESC : TermType.ASC;
   const indexFields = index.fields ?? [indexName];
-  const fields = indexFields.map((f) => [direction, [f]]);
+  const fields = indexFields.map((field) => [
+    direction,
+    [rowFunction((row) => ReadPath(row, field))],
+  ]);
 
   if (fields.length === 1) {
     return [TermType.ORDER_BY, [prev, fields[0]]];
@@ -471,7 +470,12 @@ function handleNth(
 function buildMappedDistinct(prev: TermJson, field: string): TermJson {
   return [
     TermType.DISTINCT,
-    [[TermType.MAP, [prev, buildFieldFunction(field)]]],
+    [
+      [
+        TermType.MAP,
+        [prev, rowFunction((row) => [TermType.BRACKET, [row, field]])],
+      ],
+    ],
   ];
 }
 
