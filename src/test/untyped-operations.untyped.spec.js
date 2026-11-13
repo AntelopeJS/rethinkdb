@@ -5,13 +5,7 @@ import { Schema } from "@antelopejs/interface-database/schema";
 const SCHEMA_ID = "untyped-operations";
 const INSTANCE = "one";
 
-interface Row {
-  _id: string;
-  name: string;
-  age: number;
-}
-
-const schema = new Schema<{ rows: Row }>(SCHEMA_ID, {
+const schema = new Schema(SCHEMA_ID, {
   rows: { fields: { name: "string", age: "number" }, indexes: {} },
 });
 
@@ -32,15 +26,10 @@ describe("a stage a caller writes by hand, past the contract", () => {
   it("add sends every operand of a hand-written JSON stage", async () => {
     assert.deepEqual(
       await Rows().map((row) => ({
-        two: new ValueProxy<number>(
-          // @ts-expect-error two operands where add takes one, which the driver answers by adding both
-          { stage: "add", args: [1, 2] },
-          row.key("age"),
-        ),
-        text: new ValueProxy<number>(
-          // @ts-expect-error two text operands where add takes one number, which the driver answers by concatenating both
+        two: new ValueProxy({ stage: "add", args: [1, 2] }, row.key("age")),
+        text: new ValueProxy(
           { stage: "add", args: ["x", "y"] },
-          row.key("name").cast<number>(),
+          row.key("name").cast(),
         ),
       })),
       [{ two: 39, text: "adaxy" }],
@@ -50,12 +39,7 @@ describe("a stage a caller writes by hand, past the contract", () => {
   it("add answers its receiver for a hand-written JSON stage with no operand", async () => {
     assert.deepEqual(
       await Rows().map(
-        (row) =>
-          new ValueProxy<number>(
-            // @ts-expect-error no operand where add takes one, which the driver answers with its receiver
-            { stage: "add", args: [] },
-            row.key("age"),
-          ),
+        (row) => new ValueProxy({ stage: "add", args: [] }, row.key("age")),
       ),
       [36],
     );
@@ -66,11 +50,7 @@ describe("a stage a caller writes by hand, past the contract", () => {
       Rows()
         .map(
           (row) =>
-            new ValueProxy<number>(
-              // @ts-expect-error one bound where date_during takes two, which the server refuses by its argument count
-              { stage: "date_during", args: [0] },
-              row.key("age"),
-            ),
+            new ValueProxy({ stage: "date_during", args: [0] }, row.key("age")),
         )
         .run(),
       /Expected 3 arguments/,
@@ -82,8 +62,7 @@ describe("a stage a caller writes by hand, past the contract", () => {
       Rows()
         .map(
           (row) =>
-            new ValueProxy<number>(
-              // @ts-expect-error three bounds where date_during takes two, which the server refuses by its argument count
+            new ValueProxy(
               { stage: "date_during", args: [0, 10_000, 5] },
               row.key("age"),
             ),

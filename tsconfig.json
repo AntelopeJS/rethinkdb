@@ -3,7 +3,7 @@
     "target": "esnext",
     "module": "commonjs",
     "lib": ["ES2020"],
-    "allowJs": false,
+    "allowJs": true,
     "outDir": "dist",
     "rootDir": "src",
     "strict": true,
@@ -20,5 +20,5 @@
     "useDefineForClassFields": true,
     "types": ["chai", "mocha", "node"]
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "src/**/*.js"]
 }
