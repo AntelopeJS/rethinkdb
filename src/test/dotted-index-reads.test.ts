@@ -13,6 +13,7 @@ interface Article {
 const SCHEMA_ID = "test-dotted-index-reads";
 const TABLE = "articles";
 const INSTANCES = ["north", "south"];
+const SCHEMA_BUILD_TIMEOUT_MS = 20_000;
 
 const schema = new Schema<{ [TABLE]: Article }>(SCHEMA_ID, {
   [TABLE]: {
@@ -40,7 +41,8 @@ function ids(documents: Article[]): string[] {
 }
 
 describe("Dotted index reads", () => {
-  before(async () => {
+  before(async function () {
+    this.timeout(SCHEMA_BUILD_TIMEOUT_MS);
     for (const [position, instanceId] of INSTANCES.entries()) {
       await schema.createInstance(instanceId).run();
       await articles(instanceId).delete().run();
