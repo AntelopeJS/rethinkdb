@@ -1,10 +1,25 @@
 # Changelog
 
-## Unreleased
+## v1.10.0
+
+[compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.9.0...v1.10.0)
 
 ### ⚠️ Upgrade notes
 
 - Implements `@antelopejs/interface-database` `>=0.4.0 <0.5.0`, and no longer `0.3.x`. A project that loads this module must use interface-database 0.4.0, whose queries are not thenable: run each one with `.run()`, as in `await table.get(id).run()`. Awaiting a query without `.run()` answers the query object itself, not its result ([#110](https://github.com/AntelopeJS/rethinkdb/pull/110)).
+
+### 🚀 Enhancements
+
+- Support @antelopejs/interface-database 0.4.0 ([#110](https://github.com/AntelopeJS/rethinkdb/pull/110))
+
+### ✅ Tests
+
+- **indexes:** Give the stale index rebuild tests a 20s budget ([#108](https://github.com/AntelopeJS/rethinkdb/pull/108))
+- Send the off-contract stages from plain-JS untyped specs ([#109](https://github.com/AntelopeJS/rethinkdb/pull/109))
+
+### ❤️ Contributors
+
+- Antony Rizzitelli ([@Upd4ting](http://github.com/Upd4ting))
 
 ## v1.9.0
 
