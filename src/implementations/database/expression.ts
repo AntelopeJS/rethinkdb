@@ -4,8 +4,6 @@ import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 import { Query, ValueProxy } from "@antelopejs/interface-database";
 import type { Value } from "@antelopejs/interface-database/common";
 
-// oxlint-disable-next-line import/no-cycle -- the ReQL compiler is one recursive unit: value decoding recurses into sub-query building
-import { SelectionQuery } from "./selection";
 import {
   allocateArgNumber,
   type DecodingContext,
@@ -365,7 +363,7 @@ function decodeSubquery(
     assert(provider, "Unknown arg used");
     return provider(stages);
   }
-  return SelectionQuery.buildTermJson(stages, context);
+  return context.subQuery(stages).buildTerm();
 }
 
 export function DecodeFunction(

@@ -1,13 +1,11 @@
 import { TermType } from "rethinkdb-ts/lib/proto/enums";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 
-// oxlint-disable-next-line import/no-cycle -- stage handlers decode values; see expression.ts
 import { DecodeFunction, DecodeValue } from "./expression";
 import { type IndexedRead, indexOptions } from "./indexes";
 import type { SelectionQuery } from "./selection";
 import {
   allocateArgNumber,
-  DecodingContext,
   IsUpdateFunction,
   type QueryStage,
   StageNamed,
@@ -103,7 +101,7 @@ const SELECTION_STAGES = new Map<string, SelectionStageHandler>([
         options,
       } = StageNamed(stage, "insert");
       query.resultType = "insert";
-      query.setNewValue(DecodeValue(documents, new DecodingContext()));
+      query.setNewValue(DecodeValue(documents, query.getContext().unbound()));
       query.setConflictMode(options?.conflict);
       query.setInsertRawArgs(documents);
     },
@@ -123,13 +121,15 @@ const SELECTION_STAGES = new Map<string, SelectionStageHandler>([
       if (IsUpdateFunction(document)) {
         const argId = allocateArgNumber();
         const docVar: TermJson = [TermType.VAR, [argId]];
-        const body = DecodeFunction(document, new DecodingContext(), [docVar]);
+        const body = DecodeFunction(document, query.getContext().unbound(), [
+          docVar,
+        ]);
         query.setNewValue([
           TermType.FUNC,
           [[TermType.MAKE_ARRAY, [argId]], body],
         ]);
       } else {
-        query.setNewValue(DecodeValue(document, new DecodingContext()));
+        query.setNewValue(DecodeValue(document, query.getContext().unbound()));
       }
     },
   ],
@@ -139,7 +139,7 @@ const SELECTION_STAGES = new Map<string, SelectionStageHandler>([
       const [document] = StageNamed(stage, "replace").args;
       query.resultType = "replace";
       query.setInsertRawArgs(document);
-      query.setNewValue(DecodeValue(document, new DecodingContext()));
+      query.setNewValue(DecodeValue(document, query.getContext().unbound()));
     },
   ],
   [

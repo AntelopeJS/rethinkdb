@@ -18,12 +18,7 @@ import {
   ExternalInstanceRefusal,
 } from "./external-selection";
 import { runAtomicMutation } from "./atomic";
-import {
-  DecodingContext,
-  IsObject,
-  type QueryStage,
-  StageNamed,
-} from "./utils";
+import { IsObject, type QueryStage, StageNamed } from "./utils";
 import {
   CreateInstance,
   DestroyInstance,
@@ -68,7 +63,7 @@ const SCHEMA_STAGE_HANDLERS = new Map<string, SchemaStageHandler>([
         }
         return runAtomicStages(stages);
       }
-      const context = new DecodingContext();
+      const context = SelectionQuery.newContext();
       return SelectionQuery.decode(stages, context).run();
     },
   ],
@@ -118,7 +113,7 @@ function runAtomicStages(stages: QueryStage[]) {
   );
   const prefix = stages.slice(0, -1);
   ValidateAtomicMutationTable(prefix);
-  const query = SelectionQuery.decode(prefix, new DecodingContext());
+  const query = SelectionQuery.decode(prefix, SelectionQuery.newContext());
   assert(query.instanceId !== CROSS_INSTANCE, "Atomic mutation must be scoped");
   return runAtomicMutation(
     query.getTableTerm(),
@@ -171,7 +166,7 @@ export async function ReadCursor(
     const schemaId = stages[0].options?.id;
     assert(schemaId, "Unknown schema");
     await WaitForSchemaReady(schemaId);
-    const context = new DecodingContext();
+    const context = SelectionQuery.newContext();
     const query = SelectionQuery.decode(stages, context);
     const term = query.buildTerm();
     Logger.Debug("Opening cursor #", reqId);

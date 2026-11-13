@@ -5,7 +5,6 @@ import { CROSS_INSTANCE, Schema } from "@antelopejs/interface-database/schema";
 
 import { SelectionQuery } from "../implementations/database/selection";
 import { RunQuery } from "../implementations/database/query";
-import { DecodingContext } from "../implementations/database/utils";
 
 const SCHEMA_ID = "stage-names";
 const INHERITED_NAMES = [
@@ -44,7 +43,7 @@ describe("stage names inherited from Object.prototype", () => {
           SelectionQuery.buildTermJson(
             // @ts-expect-error a stage name outside the union, which the stream dispatch refuses as unimplemented
             [...PREFIX, { stage: name, args: [] }],
-            new DecodingContext(),
+            SelectionQuery.newContext(),
           ),
         { message: `Unimplemented stream stage: ${name}` },
       );
@@ -63,7 +62,7 @@ describe("stage names inherited from Object.prototype", () => {
         )
         .build();
       assert.throws(
-        () => SelectionQuery.buildTermJson(stages, new DecodingContext()),
+        () => SelectionQuery.buildTermJson(stages, SelectionQuery.newContext()),
         { message: `Unimplemented expression stage: ${name}` },
       );
     }
