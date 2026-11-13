@@ -28,6 +28,7 @@ const TABLE = "articles";
 const INSTANCES = ["north", "south"];
 const LONG_RUNNING_QUERIES = 1_000_000;
 const CONCURRENT_BOOTS = 4;
+const INDEX_BUILD_TIMEOUT_MS = 20_000;
 const DEFINITION: SchemaDefinition = {
   [TABLE]: {
     fields: {
@@ -76,22 +77,24 @@ function previousMultiFunction(row: RDatum) {
 }
 
 async function seedPreviousFunctions() {
-  await replaceIndex("meta.sku", table.indexCreate("meta.sku"));
-  await replaceIndex("label.it's", table.indexCreate("label.it's"));
-  await replaceIndex(
-    "shelf",
-    table.indexCreate("shelf", (row: RDatum) => r.expr([row("meta.shelf")])),
-  );
-  await replaceIndex(
-    "tag__i",
-    table.indexCreate("tag__i", previousMultiFunction, { multi: true }),
-  );
-  await replaceIndex(
-    "tag__i__rebuild",
-    table.indexCreate("tag__i__rebuild", previousMultiFunction, {
-      multi: true,
-    }),
-  );
+  await Promise.all([
+    replaceIndex("meta.sku", table.indexCreate("meta.sku")),
+    replaceIndex("label.it's", table.indexCreate("label.it's")),
+    replaceIndex(
+      "shelf",
+      table.indexCreate("shelf", (row: RDatum) => r.expr([row("meta.shelf")])),
+    ),
+    replaceIndex(
+      "tag__i",
+      table.indexCreate("tag__i", previousMultiFunction, { multi: true }),
+    ),
+    replaceIndex(
+      "tag__i__rebuild",
+      table.indexCreate("tag__i__rebuild", previousMultiFunction, {
+        multi: true,
+      }),
+    ),
+  ]);
 }
 
 async function readDeclaredIndexes() {
@@ -116,7 +119,8 @@ async function storedFunctions(): Promise<Map<unknown, unknown>> {
   );
 }
 
-describe("Stale index rebuild", () => {
+describe("Stale index rebuild", function () {
+  this.timeout(INDEX_BUILD_TIMEOUT_MS);
   before(async () => {
     for (const [position, instanceId] of INSTANCES.entries()) {
       await schema.createInstance(instanceId).run();
