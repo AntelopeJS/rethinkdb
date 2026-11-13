@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### ⚠️ Upgrade notes
+
+- **Breaking, released as 2.0.0:** an index with one `fields` entry now reads that field's value, not a one-element tuple. `getAll`, `between` and `lookup` on it take the value itself as the key, so a caller that passed `["red"]` must now pass `"red"`. A `multi` index of one field indexes each element of the list ([#103](https://github.com/AntelopeJS/rethinkdb/pull/103)).
+- Implements `@antelopejs/interface-database` `>=0.3.3 <0.4.0`. A dotted index field, index name, `orderBy` name or lookup key reads a nested path: `"title.fr"` reads `fr` inside `title`, not a top-level key named `title.fr`. This holds in owned mode; external mode keeps its own index matching ([#103](https://github.com/AntelopeJS/rethinkdb/pull/103)).
+- The first boot after the upgrade rebuilds three kinds of index whose stored function changed: an index whose name or `fields` entry is dotted, a `crossInstance` index with one `fields` entry, and a `multi` index with one `fields` entry. Each one is built under `<name>__rebuild` and swapped in when ready, so it keeps answering reads during the build. Boot waits for these builds; on a large table that takes as long as creating the index. Every other index is kept, and no `indexDrop` is needed ([#105](https://github.com/AntelopeJS/rethinkdb/pull/105)).
+- From now on, boot rebuilds any declared index whose stored function or `multi` flag differs from its definition, and logs `Index '<name>' was built from another definition; rebuilding it` ([#105](https://github.com/AntelopeJS/rethinkdb/pull/105)).
+- During a rolling deploy, 1.x replicas still running read the rebuilt indexes with their old keys, so their reads on these three kinds return no rows until they are replaced ([#105](https://github.com/AntelopeJS/rethinkdb/pull/105)).
+- Index names ending in `__rebuild` are now reserved, like `__i`, and schema initialization rejects them. Rename such an index before upgrading ([#105](https://github.com/AntelopeJS/rethinkdb/pull/105)).
+
 ## v1.8.0
 
 [compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.7.2...v1.8.0)
