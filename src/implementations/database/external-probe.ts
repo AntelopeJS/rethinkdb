@@ -29,14 +29,14 @@ export interface TableFacts {
   sample: SampledType[];
 }
 
-interface IndexStatus {
+export interface IndexStatus {
   index: string;
   multi: boolean;
   query: string;
 }
 
 /** Whether `value` is an index's status as `Indexes` maps it: its name, multi flag and definition. */
-function IsIndexStatus(value: unknown): value is IndexStatus {
+export function IsIndexStatus(value: unknown): value is IndexStatus {
   return (
     IsObject(value) &&
     "index" in value &&
