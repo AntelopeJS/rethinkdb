@@ -13,6 +13,7 @@ const DAY_MS = 86_400_000;
 const SHORT_TIMEOUT_MS = 50;
 const LONG_TIMEOUT_MS = 30_000;
 const CURSOR_READ = 30_000;
+const CURSOR_READ_TIMEOUT_MS = 10_000;
 const SETTLE_MS = 200;
 
 let erp: Schema<ErpTables>;
@@ -277,7 +278,8 @@ describe("the time bound of an external RethinkDB read", () => {
     }
   });
 
-  it("keeps reading a cursor while another read runs past statementTimeoutMs", async () => {
+  it("keeps reading a cursor while another read runs past statementTimeoutMs", async function () {
+    this.timeout(CURSOR_READ_TIMEOUT_MS);
     const options = GetOptions();
     const configured = options.statementTimeoutMs;
     try {

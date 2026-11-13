@@ -19,6 +19,22 @@ jobs:
         docs
       renovate-sync: false
       test-job: true
+      windows: true
+      setup-commands: |
+        if [ "$RUNNER_OS" = Windows ]; then
+          cd "$RUNNER_TEMP"
+          curl -sSfLO https://download.rethinkdb.com/repository/raw/windows/rethinkdb-2.4.4.zip
+          echo "dbc33855ac5d2a983f2e8f617cddfa3a8b7305c62dff84ff6127d0e2885835ee  rethinkdb-2.4.4.zip" | sha256sum -c --quiet
+          unzip -q rethinkdb-2.4.4.zip
+          nohup rethinkdb-2.4.4/rethinkdb.exe --directory rethinkdb-data --bind 127.0.0.1 --no-http-admin > rethinkdb.log 2>&1 &
+          for _ in $(seq 300); do
+            if (: > /dev/tcp/127.0.0.1/28015) 2> /dev/null; then exit 0; fi
+            sleep 0.2
+          done
+          cat rethinkdb.log
+          echo "::error::RethinkDB did not listen on 127.0.0.1:28015 within 60 seconds."
+          exit 1
+        fi
     permissions:
       contents: read
   renovate-sync:
