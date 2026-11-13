@@ -25,22 +25,26 @@ describe("a stage a caller writes by hand, past the contract", () => {
 
   it("add sends every operand of a hand-written JSON stage", async () => {
     assert.deepEqual(
-      await Rows().map((row) => ({
-        two: new ValueProxy({ stage: "add", args: [1, 2] }, row.key("age")),
-        text: new ValueProxy(
-          { stage: "add", args: ["x", "y"] },
-          row.key("name").cast(),
-        ),
-      })),
+      await Rows()
+        .map((row) => ({
+          two: new ValueProxy({ stage: "add", args: [1, 2] }, row.key("age")),
+          text: new ValueProxy(
+            { stage: "add", args: ["x", "y"] },
+            row.key("name").cast(),
+          ),
+        }))
+        .run(),
       [{ two: 39, text: "adaxy" }],
     );
   });
 
   it("add answers its receiver for a hand-written JSON stage with no operand", async () => {
     assert.deepEqual(
-      await Rows().map(
-        (row) => new ValueProxy({ stage: "add", args: [] }, row.key("age")),
-      ),
+      await Rows()
+        .map(
+          (row) => new ValueProxy({ stage: "add", args: [] }, row.key("age")),
+        )
+        .run(),
       [36],
     );
   });

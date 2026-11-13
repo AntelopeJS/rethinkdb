@@ -14,13 +14,16 @@ function Customers() {
 
 async function LookedUp(tags: string[], otherKey: string) {
   await Native((table) => table("customers").insert({ id: ID, tags }));
-  const found = await Customers().get(ID).lookup(Customers(), "tags", otherKey);
+  const found = await Customers()
+    .get(ID)
+    .lookup(Customers(), "tags", otherKey)
+    .run();
   return found?.tags;
 }
 
 async function PlainReads() {
   return Promise.all(
-    [CustomerId(1), CustomerId(2)].map((id) => Customers().get(id)),
+    [CustomerId(1), CustomerId(2)].map((id) => Customers().get(id).run()),
   );
 }
 

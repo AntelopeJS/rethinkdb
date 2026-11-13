@@ -38,16 +38,16 @@ describe("key with a fallback", () => {
   });
 
   it("gives each row of a stream the fallback for a null or missing field", async () => {
-    const notes = await Products().key("note", "none");
+    const notes = await Products().key("note", "none").run();
     assert.deepEqual([...notes].sort(), ["kept", "none", "none"]);
   });
 
   it("gives each row of a stream the fallback for a field no row has", async () => {
-    const colors = await Products().key("color", "plain");
+    const colors = await Products().key("color", "plain").run();
     assert.deepEqual([...colors].sort(), ["plain", "plain", "plain"]);
   });
 
   it("gives a document the fallback for a null field", async () => {
-    assert.equal(await Products().get("p2").key("note", "none"), "none");
+    assert.equal(await Products().get("p2").key("note", "none").run(), "none");
   });
 });

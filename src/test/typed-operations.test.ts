@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { ValueProxy } from "@antelopejs/interface-database";
+import type { ExtractType } from "@antelopejs/interface-database/common";
 import { Schema } from "@antelopejs/interface-database/schema";
 
 const SCHEMA_ID = "typed-operations";
@@ -40,6 +41,13 @@ function Rows() {
   return schema.instance(INSTANCE).table("rows");
 }
 
+/** What `mapper` maps every row to. */
+function Mapped<U>(
+  mapper: (row: ValueProxy<Row>) => U,
+): Promise<ExtractType<U>[]> {
+  return Rows().map(mapper).run();
+}
+
 describe("the operations interface-database 0.3.0 types", () => {
   before(async () => {
     await schema.createInstance(INSTANCE).run();
@@ -64,36 +72,34 @@ describe("the operations interface-database 0.3.0 types", () => {
   });
 
   it("add concatenates a string with a constant or a field", async () => {
-    assert.deepEqual(await Rows().map((row) => row.key("name").add("!")), [
-      "ada!",
-    ]);
+    assert.deepEqual(await Mapped((row) => row.key("name").add("!")), ["ada!"]);
     assert.deepEqual(
-      await Rows().map((row) => row.key("name").add(row.key("suffix"))),
+      await Mapped((row) => row.key("name").add(row.key("suffix"))),
       ["ada!"],
     );
   });
 
   it("add concatenates a list with a constant or a field", async () => {
-    assert.deepEqual(await Rows().map((row) => row.key("tags").add(["x"])), [
+    assert.deepEqual(await Mapped((row) => row.key("tags").add(["x"])), [
       ["a", "x"],
     ]);
     assert.deepEqual(
-      await Rows().map((row) => row.key("tags").add(row.key("more"))),
+      await Mapped((row) => row.key("tags").add(row.key("more"))),
       [["a", "b"]],
     );
   });
 
   it("add still adds two numbers, constant or field", async () => {
-    assert.deepEqual(await Rows().map((row) => row.key("age").add(1)), [37]);
+    assert.deepEqual(await Mapped((row) => row.key("age").add(1)), [37]);
     assert.deepEqual(
-      await Rows().map((row) => row.key("age").add(row.key("age"))),
+      await Mapped((row) => row.key("age").add(row.key("age"))),
       [72],
     );
   });
 
   it("add answers null for a null operand on every receiver", async () => {
     assert.deepEqual(
-      await Rows().map((row) => ({
+      await Mapped((row) => ({
         number: row.key("age").add(null),
         date: row.key("bornAt").add(null),
         text: row.key("name").add(null),
@@ -105,7 +111,7 @@ describe("the operations interface-database 0.3.0 types", () => {
 
   it("during reads a number as milliseconds since the UNIX epoch", async () => {
     assert.deepEqual(
-      await Rows().map((row) => ({
+      await Mapped((row) => ({
         inside: row.key("bornAt").during(0, 10_000),
         low: row.key("bornAt").during(BORN_AT, 10_000),
         high: row.key("bornAt").during(0, BORN_AT),
@@ -118,7 +124,7 @@ describe("the operations interface-database 0.3.0 types", () => {
 
   it("during still compares dates", async () => {
     assert.deepEqual(
-      await Rows().map((row) =>
+      await Mapped((row) =>
         row.key("bornAt").during(new Date(0), new Date(10_000)),
       ),
       [true],
@@ -126,14 +132,15 @@ describe("the operations interface-database 0.3.0 types", () => {
   });
 
   it("key reads the field a constant expression names", async () => {
-    assert.deepEqual(await Rows().key(ValueProxy.constant<"name">("name")), [
-      "ada",
-    ]);
+    assert.deepEqual(
+      await Rows().key(ValueProxy.constant<"name">("name")).run(),
+      ["ada"],
+    );
   });
 
   it("min and max compare strings and dates", async () => {
     assert.deepEqual(
-      await Rows().map(() => ({
+      await Mapped(() => ({
         min: ValueProxy.constant(["b", "a"]).min(),
         max: ValueProxy.constant([new Date(5), new Date(9)]).max(),
       })),
@@ -143,7 +150,7 @@ describe("the operations interface-database 0.3.0 types", () => {
 
   it("filter keeps a number unless it is 0", async () => {
     assert.deepEqual(
-      await Rows().map(() =>
+      await Mapped(() =>
         ValueProxy.constant([0, 1, 2]).filter((value) => value),
       ),
       [[1, 2]],

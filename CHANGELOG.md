@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### ⚠️ Upgrade notes
+
+- Implements `@antelopejs/interface-database` `>=0.4.0 <0.5.0`, and no longer `0.3.x`. A project that loads this module must use interface-database 0.4.0, whose queries are not thenable: run each one with `.run()`, as in `await table.get(id).run()`. Awaiting a query without `.run()` answers the query object itself, not its result ([#PR](https://github.com/AntelopeJS/rethinkdb/pull/PR)).
+
 ## v1.9.0
 
 [compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.8.0...v1.9.0)
