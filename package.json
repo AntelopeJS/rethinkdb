@@ -49,7 +49,7 @@
   },
   "dependencies": {
     "@antelopejs/interface-core": ">=0.2.4 <1.0.0",
-    "@antelopejs/interface-database": "file:.tgz-deps/antelopejs-interface-database-119aca4.tgz",
+    "@antelopejs/interface-database": ">=0.3.3 <0.4.0",
     "@antelopejs/interface-database-catalog": ">=0.0.3 <0.1.0",
     "chai": "^4.5.0",
     "reflect-metadata": "^0.2.2",
@@ -77,11 +77,6 @@
     "@antelopejs/interface-rethinkdb": ">=0.1.0 <0.2.0"
   },
   "packageManager": "pnpm@10.33.0",
-  "pnpm": {
-    "overrides": {
-      "@antelopejs/interface-database": "file:.tgz-deps/antelopejs-interface-database-119aca4.tgz"
-    }
-  },
   "antelopeJs": {
     "implements": [
       "@antelopejs/interface-database",
