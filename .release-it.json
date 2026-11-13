@@ -10,7 +10,7 @@
   },
   "hooks": {
     "before:init": ["pnpm lint"],
-    "after:bump": "git add CHANGELOG.md"
+    "after:bump": "node scripts/fold-unreleased-notes.mjs && git add CHANGELOG.md"
   },
   "plugins": {
     "release-it-changelogen": {
