@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## v1.9.0
+
+[compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.8.0...v1.9.0)
 
 ### ⚠️ Upgrade notes
 
@@ -10,6 +12,25 @@
 - From now on, boot rebuilds any declared index whose stored function or `multi` flag differs from its definition, and logs `Index '<name>' was built from another definition; rebuilding it` ([#105](https://github.com/AntelopeJS/rethinkdb/pull/105)).
 - During a rolling deploy, 1.x replicas still running read the rebuilt indexes with their old keys, so their reads on these three kinds return no rows until they are replaced ([#105](https://github.com/AntelopeJS/rethinkdb/pull/105)).
 - Index names ending in `__rebuild` are now reserved, like `__i`, and schema initialization rejects them. Rename such an index before upgrading ([#105](https://github.com/AntelopeJS/rethinkdb/pull/105)).
+
+### 🩹 Fixes
+
+- **schema:** Reject a non-string instance id in createInstance ([#106](https://github.com/AntelopeJS/rethinkdb/pull/106))
+- **database:** Read dotted index fields, orderBy names and lookup keys as nested paths ([#103](https://github.com/AntelopeJS/rethinkdb/pull/103))
+- **database:** Rebuild an index whose stored function differs from its definition at boot ([#105](https://github.com/AntelopeJS/rethinkdb/pull/105))
+
+### 💅 Refactors
+
+- Burn the lint and SAFETY suppressions down to zero ([#104](https://github.com/AntelopeJS/rethinkdb/pull/104))
+
+### 📖 Documentation
+
+- **readme:** Adopt the AntelopeJS framework README style ([#102](https://github.com/AntelopeJS/rethinkdb/pull/102))
+- **changelog:** Ship the upgrade notes in 1.9.0 ([#107](https://github.com/AntelopeJS/rethinkdb/pull/107))
+
+### ❤️ Contributors
+
+- Antony Rizzitelli ([@Upd4ting](http://github.com/Upd4ting))
 
 ## v1.8.0
 
