@@ -85,7 +85,8 @@ its connection open for the next bounded read. The package does not export the c
 
 The limit frees the caller, not the server. RethinkDB 2.4 runs a query to its end after its
 connection closes, and after a `STOP` or a delete from `rethinkdb.jobs`, so a timed-out scan or
-`group` keeps reading the table and its `read_docs_total` keeps rising. An account that may read
+`group` keeps reading the table and its `read_docs_total` keeps rising, though `rethinkdb.jobs`
+no longer lists it. An account that may read
 `rethinkdb.stats` sees the work there. Keep the limit for callers that must not wait, and bound
 the work itself with an index or a smaller range.
 
