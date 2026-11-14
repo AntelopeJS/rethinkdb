@@ -11,6 +11,7 @@ import { AdminConnection, CustomerId, OrderId } from "./fixture";
 
 const DAY_MS = 86_400_000;
 const SHORT_TIMEOUT_MS = 50;
+const SLOW_READ_ROWS = 20_000;
 const LONG_TIMEOUT_MS = 30_000;
 const SETTLE_MS = 200;
 
@@ -221,6 +222,18 @@ describe("reads an external RethinkDB table's own indexes serve", () => {
   });
 });
 
+/**
+ * A read the server cannot answer within `SHORT_TIMEOUT_MS`: a lookup of each of the first
+ * `SLOW_READ_ROWS` events. The server stops it soon after its connection closes, so a stopped
+ * read leaves no work behind to slow the tests after it.
+ */
+function SlowRead() {
+  return Table("events")
+    .slice(0, SLOW_READ_ROWS)
+    .lookup(Table("customers"), "kind", "_id")
+    .count();
+}
+
 describe("the time bound of an external RethinkDB read", () => {
   before(async () => {
     erp = await RegisterErp();
@@ -231,13 +244,10 @@ describe("the time bound of an external RethinkDB read", () => {
     const configured = options.statementTimeoutMs;
     options.statementTimeoutMs = SHORT_TIMEOUT_MS;
     try {
-      const message = await Refusal(() =>
-        Table("events")
-          .map((row) => ({ k: row.key("n").mod(7) }))
-          .group("k", (rows, group) => ({ k: group, n: rows.count() }))
-          .run(),
+      const message = await Refusal(() => SlowRead().run());
+      expect(message).to.contain(
+        `did not finish within ${SHORT_TIMEOUT_MS} ms`,
       );
-      expect(message).to.contain("did not finish within 50 ms");
     } finally {
       options.statementTimeoutMs = configured;
     }
@@ -261,12 +271,7 @@ describe("the time bound of an external RethinkDB read", () => {
     const configured = options.statementTimeoutMs;
     options.statementTimeoutMs = SHORT_TIMEOUT_MS;
     try {
-      await Refusal(() =>
-        Table("events")
-          .map((row) => ({ k: row.key("n").mod(7) }))
-          .group("k", (rows, group) => ({ k: group, n: rows.count() }))
-          .run(),
-      );
+      await Refusal(() => SlowRead().run());
       options.statementTimeoutMs = LONG_TIMEOUT_MS;
       expect(
         await Table("customers").orderBy("_id").slice(0, 3).run(),
@@ -285,14 +290,9 @@ describe("the time bound of an external RethinkDB read", () => {
       const orders = Table("orders").cursor();
       await orders.next();
       options.statementTimeoutMs = SHORT_TIMEOUT_MS;
-      expect(
-        await Refusal(() =>
-          Table("events")
-            .map((row) => ({ k: row.key("n").mod(7) }))
-            .group("k", (rows, group) => ({ k: group, n: rows.count() }))
-            .run(),
-        ),
-      ).to.contain("did not finish within 50 ms");
+      expect(await Refusal(() => SlowRead().run())).to.contain(
+        `did not finish within ${SHORT_TIMEOUT_MS} ms`,
+      );
       let read = 1;
       while (!(await orders.next()).done) {
         read += 1;
@@ -309,15 +309,14 @@ describe("the time bound of an external RethinkDB read", () => {
     options.statementTimeoutMs = SHORT_TIMEOUT_MS;
     try {
       const message = await Refusal(async () => {
-        const rows = Table("events")
-          .map((row) => ({ k: row.key("n").mod(7) }))
-          .group("k", (rows, group) => ({ k: group, n: rows.count() }))
-          .cursor();
+        const rows = SlowRead().cursor();
         for await (const row of rows) {
           expect(row).to.not.equal(undefined);
         }
       });
-      expect(message).to.contain("did not finish within 50 ms");
+      expect(message).to.contain(
+        `did not finish within ${SHORT_TIMEOUT_MS} ms`,
+      );
     } finally {
       options.statementTimeoutMs = configured;
     }
