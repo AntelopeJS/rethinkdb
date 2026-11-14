@@ -14,6 +14,7 @@ const SHORT_TIMEOUT_MS = 50;
 const SLOW_READ_ROWS = 20_000;
 const LONG_TIMEOUT_MS = 30_000;
 const SETTLE_MS = 200;
+const ANSWER_MS = 1_000;
 
 let erp: Schema<ErpTables>;
 
@@ -223,6 +224,25 @@ describe("reads an external RethinkDB table's own indexes serve", () => {
 });
 
 /**
+ * The queries running on the server once a stopped read had `SETTLE_MS` to end, the one that
+ * counts them included.
+ */
+async function RunningQueries(): Promise<number> {
+  await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
+  const connection = await AdminConnection();
+  try {
+    return await r
+      .db("rethinkdb")
+      .table("jobs")
+      .filter({ type: "query" })
+      .count()
+      .run(connection);
+  } finally {
+    await connection.close();
+  }
+}
+
+/**
  * A read the server cannot answer within `SHORT_TIMEOUT_MS`: a lookup of each of the first
  * `SLOW_READ_ROWS` events. The server stops it soon after its connection closes, so a stopped
  * read leaves no work behind to slow the tests after it.
@@ -251,19 +271,7 @@ describe("the time bound of an external RethinkDB read", () => {
     } finally {
       options.statementTimeoutMs = configured;
     }
-    await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
-    const connection = await AdminConnection();
-    try {
-      const jobs = await r
-        .db("rethinkdb")
-        .table("jobs")
-        .filter({ type: "query" })
-        .count()
-        .run(connection);
-      expect(jobs).to.equal(1);
-    } finally {
-      await connection.close();
-    }
+    expect(await RunningQueries()).to.equal(1);
   });
 
   it("answers the next read after one ran past statementTimeoutMs", async () => {
@@ -303,22 +311,28 @@ describe("the time bound of an external RethinkDB read", () => {
     }
   });
 
-  it("stops a read through a cursor beyond statementTimeoutMs, and answers timeout", async () => {
+  it("stops a read through a cursor beyond statementTimeoutMs on the server, and answers timeout", async () => {
     const options = GetOptions();
     const configured = options.statementTimeoutMs;
     options.statementTimeoutMs = SHORT_TIMEOUT_MS;
     try {
-      const message = await Refusal(async () => {
-        const rows = SlowRead().cursor();
-        for await (const row of rows) {
-          expect(row).to.not.equal(undefined);
-        }
-      });
+      const message = await Promise.race([
+        Refusal(async () => {
+          const rows = SlowRead().cursor();
+          for await (const row of rows) {
+            expect(row).to.not.equal(undefined);
+          }
+        }),
+        new Promise<string>((resolve) =>
+          setTimeout(resolve, ANSWER_MS, `no answer within ${ANSWER_MS} ms`),
+        ),
+      ]);
       expect(message).to.contain(
         `did not finish within ${SHORT_TIMEOUT_MS} ms`,
       );
     } finally {
       options.statementTimeoutMs = configured;
     }
+    expect(await RunningQueries()).to.equal(1);
   });
 });
