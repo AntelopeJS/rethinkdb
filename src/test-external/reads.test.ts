@@ -224,8 +224,9 @@ describe("reads an external RethinkDB table's own indexes serve", () => {
 });
 
 /**
- * The queries running on the server once a stopped read had `SETTLE_MS` to end, the one that
- * counts them included.
+ * The queries `rethinkdb.jobs` lists once an abandoned read had `SETTLE_MS` to leave it, the one
+ * that counts them included. RethinkDB 2.4 drops a read from the list when its connection closes,
+ * while it still runs the read to its end.
  */
 async function RunningQueries(): Promise<number> {
   await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
@@ -244,8 +245,7 @@ async function RunningQueries(): Promise<number> {
 
 /**
  * A read the server cannot answer within `SHORT_TIMEOUT_MS`: a lookup of each of the first
- * `SLOW_READ_ROWS` events. The server stops it soon after its connection closes, so a stopped
- * read leaves no work behind to slow the tests after it.
+ * `SLOW_READ_ROWS` events. The server still runs it to its end after its connection closes.
  */
 function SlowRead() {
   return Table("events")
@@ -259,7 +259,7 @@ describe("the time bound of an external RethinkDB read", () => {
     erp = await RegisterErp();
   });
 
-  it("stops a read beyond statementTimeoutMs on the server, and answers timeout", async () => {
+  it("abandons a read beyond statementTimeoutMs, and answers timeout", async () => {
     const options = GetOptions();
     const configured = options.statementTimeoutMs;
     options.statementTimeoutMs = SHORT_TIMEOUT_MS;
@@ -311,7 +311,7 @@ describe("the time bound of an external RethinkDB read", () => {
     }
   });
 
-  it("stops a read through a cursor beyond statementTimeoutMs on the server, and answers timeout", async () => {
+  it("abandons a read through a cursor beyond statementTimeoutMs, and answers timeout", async () => {
     const options = GetOptions();
     const configured = options.statementTimeoutMs;
     options.statementTimeoutMs = SHORT_TIMEOUT_MS;

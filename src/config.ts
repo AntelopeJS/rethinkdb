@@ -38,8 +38,9 @@ export interface Options {
   pool?: RPoolConnectionOptions;
   /**
    * Time limit of each read of an external instance. RethinkDB has no server-side limit, so the
-   * read runs on a connection of its own, closed when the limit passes, which stops it on the
-   * server. Refused unless it is a positive safe integer.
+   * read runs on a connection of its own, closed when the limit passes. The close rejects the
+   * read and frees the caller; RethinkDB 2.4 still runs the query to its end on the server.
+   * Refused unless it is a positive safe integer.
    */
   statementTimeoutMs?: number;
   /** The catalog an external instance answers. See {@link CatalogOptions}. */

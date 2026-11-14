@@ -124,12 +124,14 @@ export async function executeTermJson(term: TermJson): Promise<any> {
   return Resolve(term, await SendQuery(term));
 }
 
-/** A read stopped because it ran past `statementTimeoutMs`. */
+/** A read abandoned because it ran past `statementTimeoutMs`; the server may still run it. */
 export class QueryTimeoutError extends Error {
   public readonly status = "timeout";
 
   public constructor(timeoutMs: number) {
-    super(`The query did not finish within ${timeoutMs} ms, and was stopped`);
+    super(
+      `The query did not finish within ${timeoutMs} ms, and its read was abandoned`,
+    );
     this.name = "QueryTimeoutError";
   }
 }
@@ -187,7 +189,8 @@ export function SetDirectOptions(options: RConnectionOptions) {
 
 /**
  * A cursor on a connection of its own. Each wait on the server is armed with the time limit; the
- * connection closes when one runs out, which stops the query on the server.
+ * connection closes when one runs out, which ends the cursor; RethinkDB 2.4 still runs the query
+ * to its end on the server.
  */
 export interface BoundedCursor {
   cursor: Cursor;
@@ -246,7 +249,8 @@ export function DirectConnection(): Promise<Connection> {
 
 /**
  * Runs a read on a connection of its own, closed once `timeoutMs` passes: RethinkDB has no
- * server-side time limit, and closing the connection stops the query on the server.
+ * server-side time limit. Closing the connection rejects the read; RethinkDB 2.4 still runs the
+ * query to its end on the server.
  */
 export async function executeBounded(
   term: TermJson,

@@ -98,7 +98,10 @@ export function SourceFor(
   };
 }
 
-/** One measure, on a connection of its own closed at the time limit, which stops it on the server. */
+/**
+ * One measure, on a connection of its own closed at the time limit. The close frees the catalog;
+ * RethinkDB 2.4 still finishes the measure on the server.
+ */
 export function Measured<T>(query: Runnable<T>): Promise<Measure<T>> {
   return Bounded(query, measureTimeoutMs);
 }
