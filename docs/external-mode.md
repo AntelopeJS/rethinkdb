@@ -78,11 +78,16 @@ Every later stage compares the declared values, so a filter scans the table, as 
 does.
 
 RethinkDB has no server-side time limit. With `statementTimeoutMs` set, the module runs each read
-on a connection of its own and closes that connection when the limit passes. Closing the
-connection stops the query on the server, and the read rejects with an error whose `name` is
-`"QueryTimeoutError"`. A read that finishes in time leaves its connection open for the next
-bounded read. The package does not export the class, so check `name` instead of
-`instanceof`.
+on a connection of its own and closes that connection when the limit passes. The read then
+rejects with an error whose `name` is `"QueryTimeoutError"`. A read that finishes in time leaves
+its connection open for the next bounded read. The package does not export the class, so check
+`name` instead of `instanceof`.
+
+The limit frees the caller, not the server. RethinkDB 2.4 runs a query to its end after its
+connection closes, and after a `STOP` or a delete from `rethinkdb.jobs`, so a timed-out scan or
+`group` keeps reading the table and its `read_docs_total` keeps rising. An account that may read
+`rethinkdb.stats` sees the work there. Keep the limit for callers that must not wait, and bound
+the work itself with an index or a smaller range.
 
 ## Writing
 
@@ -139,7 +144,8 @@ set. An owned instance refuses every catalog call.
   gets a permission error, a writer gets `skipped: 1`, and nothing changes. RethinkDB lets an
   account read neither its own permissions nor the table configuration.
 - **Measures run on their own connections.** The catalog closes each connection at 5 s, and the
-  measure then answers `{ status: "timeout" }`. The rest of the profile stands. Catalog calls run
+  measure then answers `{ status: "timeout" }`, while the server still finishes it. The rest of
+  the profile stands. Catalog calls run
   one at a time.
 - **Large tables are sampled.** Above one million estimated rows, a uuid-keyed table is read
   through the 1000 rows after each of 50 evenly spaced uuids, so a second profile reads the same

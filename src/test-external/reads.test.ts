@@ -239,7 +239,7 @@ describe("the time bound of an external RethinkDB read", () => {
     erp = await RegisterErp();
   });
 
-  it("stops a read beyond statementTimeoutMs on the server, and answers timeout", async () => {
+  it("abandons a read beyond statementTimeoutMs, and answers timeout", async () => {
     const options = GetOptions();
     const configured = options.statementTimeoutMs;
     options.statementTimeoutMs = SHORT_TIMEOUT_MS;
