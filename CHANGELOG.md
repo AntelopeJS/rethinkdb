@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.10.1
+
+[compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.10.0...v1.10.1)
+
+### 📦 Build
+
+- **deps:** Cap the @antelopejs ranges below the next minor for tooling-configs 0.6.0 ([#113](https://github.com/AntelopeJS/rethinkdb/pull/113))
+
+### ✅ Tests
+
+- **external:** Stop the flaky timeouts of the external time-bound tests ([#112](https://github.com/AntelopeJS/rethinkdb/pull/112))
+
+### 🤖 CI
+
+- Run the checks on Windows beside Linux ([#111](https://github.com/AntelopeJS/rethinkdb/pull/111))
+
+### ❤️ Contributors
+
+- Antony Rizzitelli ([@Upd4ting](http://github.com/Upd4ting))
+
 ## v1.10.0
 
 [compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.9.0...v1.10.0)
