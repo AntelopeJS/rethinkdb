@@ -117,7 +117,10 @@ async function AccessOfTables(
   return access;
 }
 
-/** The tables of the database, or why the account reads none. */
+/**
+ * The tables of the database, or why the account reads none. The server answers a database it
+ * lacks with an operation failure, and a name no database can have with a logic error.
+ */
 async function TableNamesOf(
   session: Session,
   connection: Connection,
@@ -135,8 +138,9 @@ async function TableNamesOf(
       return "cannot-list";
     }
     if (
-      error.type === RethinkDBErrorType.OP_FAILED &&
-      error.message.includes(MISSING)
+      error.type === RethinkDBErrorType.QUERY_LOGIC ||
+      (error.type === RethinkDBErrorType.OP_FAILED &&
+        error.message.includes(MISSING))
     ) {
       return "no-database";
     }

@@ -156,6 +156,20 @@ function DatabaseCases() {
     });
   });
 
+  it("answers a path no database can be named as signed in, with no access", async () => {
+    for (const database of ["a.b", "shop/extra"]) {
+      expect(
+        await Probe(UrlOf("admin", { database })),
+        database,
+      ).to.deep.include({
+        outcome: "signed-in",
+        canRead: false,
+        canWrite: false,
+        unreadable: "no-database",
+      });
+    }
+  });
+
   it("answers a URL that names no database as signed in, with no access", async () => {
     const address = `rethinkdb://admin:@${SERVER.host}:${SERVER.port}`;
     for (const url of [address, `${address}/`]) {
