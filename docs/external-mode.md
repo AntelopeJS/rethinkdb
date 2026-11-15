@@ -179,8 +179,10 @@ const answer = await probe({
   has `canRead` when the account reads any table or the database has none, and `canWrite` when it
   writes any table. No row changes.
 - **A missing database is an answer.** A URL with no path answers `signed-in` with
-  `unreadable: "no-database-named"`, and a database the server lacks, or a path no database can
-  be named, answers `unreadable: "no-database"`, both with no access. `user` is the URL's user, or `admin`.
+  `unreadable: "no-database-named"`, and a database the server lacks, or a name the server
+  refuses as a database name, answers `unreadable: "no-database"`, both with no access. A path
+  that is not valid percent-encoding answers `unreachable` before the probe connects. `user` is
+  the URL's user, or `admin`.
 - **A wrong password is refused.** The server's `ReqlAuthError` answers
   `{ outcome: "refused", refusal: "credentials" }`. Every other failure answers `unreachable`.
 - **It never waits on the server.** `timeoutMs` bounds the connect and each answer after it: the
