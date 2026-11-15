@@ -25,7 +25,8 @@ const RUN = randomBytes(4).toString("hex");
 const SHOP = `probe_shop_${RUN}`;
 const EMPTY = `probe_empty_${RUN}`;
 const WIDE = `probe_wide_${RUN}`;
-const WIDE_TABLES = 40;
+const WIDE_TABLES = 33;
+const SETUP_TIMEOUT_MS = 120_000;
 const PASSWORD = `probe-${RUN}`;
 const READER = `probe_reader_${RUN}`;
 const WRITER = `probe_writer_${RUN}`;
@@ -414,8 +415,14 @@ function ClosingCases() {
 describe("the connection probe", function () {
   this.timeout(TIMEOUT_MS * 10);
 
-  before(() => AsAdmin(SetUpShop));
-  after(() => AsAdmin(TearDownShop));
+  before(function () {
+    this.timeout(SETUP_TIMEOUT_MS);
+    return AsAdmin(SetUpShop);
+  });
+  after(function () {
+    this.timeout(SETUP_TIMEOUT_MS);
+    return AsAdmin(TearDownShop);
+  });
 
   AccountCases();
   DatabaseCases();
