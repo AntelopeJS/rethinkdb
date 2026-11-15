@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.10.2
+
+[compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.10.1...v1.10.2)
+
+### 🚀 Enhancements
+
+- **probe:** Export the connection probe the DMS connect flow calls ([#116](https://github.com/AntelopeJS/rethinkdb/pull/116))
+
+### 🩹 Fixes
+
+- **external:** Say a statementTimeoutMs timeout frees the caller, not the server ([#115](https://github.com/AntelopeJS/rethinkdb/pull/115))
+
+### ✅ Tests
+
+- **external:** Fail the cursor time-bound test by assertion when the read keeps running ([#114](https://github.com/AntelopeJS/rethinkdb/pull/114))
+
+### ❤️ Contributors
+
+- Antony Rizzitelli ([@Upd4ting](http://github.com/Upd4ting))
+
 ## v1.10.1
 
 [compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.10.0...v1.10.1)
