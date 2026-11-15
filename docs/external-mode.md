@@ -184,5 +184,7 @@ const answer = await probe({
 - **A wrong password is refused.** The server's `ReqlAuthError` answers
   `{ outcome: "refused", refusal: "credentials" }`. Every other failure answers `unreachable`.
 - **It never waits on the server.** `timeoutMs` bounds the connect and each answer after it: the
-  probe closes the connection when an answer is late. When `signal` aborts, it closes the
-  connection at once and answers `unreachable`. It never rejects.
+  probe closes the connection when an answer is late. When `signal` aborts before the probe has
+  settled, it closes the connection and resolves at once to
+  `{ outcome: "unreachable", message: "The probe was aborted." }`, whatever the server has answered
+  so far. A signal already aborted opens no connection. It never rejects.

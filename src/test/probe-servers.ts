@@ -37,6 +37,8 @@ export interface Relay {
   port: number;
   /** The client sockets still open once none is left, or after `settleMs`. */
   openAfter: (settleMs: number) => Promise<number>;
+  /** How many connections it has accepted. */
+  accepted: () => number;
   close: () => Promise<void>;
 }
 
@@ -77,8 +79,13 @@ async function Served(
   clients: Set<net.Socket>,
   others: Set<net.Socket>,
 ): Promise<Relay> {
+  let accepted = 0;
+  server.on("connection", () => {
+    accepted += 1;
+  });
   return {
     port: await Listen(server),
+    accepted: () => accepted,
     openAfter: async (settleMs) => {
       const until = Date.now() + settleMs;
       while (clients.size > 0 && Date.now() < until) {

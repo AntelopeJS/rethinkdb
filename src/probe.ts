@@ -30,16 +30,23 @@ function Unreadable(unreadable: ProbeUnreadable): Rights {
   return { canRead: false, canWrite: false, unreadable };
 }
 
-/** What the probe holds while it runs: the connection's closer, and the bound of each answer. */
+/**
+ * What the probe holds while it runs: `closer` closes the connection on a late answer and once the
+ * probe has settled, `closes` aborts with it or with the caller's signal and closes the socket.
+ */
 interface Session {
   closer: AbortController;
+  closes: AbortSignal;
   timeoutMs: number;
 }
 
 const MS_PER_SECOND = 1000;
 const TABLES_AT_ONCE = 32;
-const STOPPED = "the probe was stopped before it answered";
 const DONE = "the probe has answered";
+const ABORTED: ProbeAnswer = {
+  outcome: "unreachable",
+  message: "The probe was aborted.",
+};
 const MISSING = "does not exist";
 
 /**
@@ -134,7 +141,7 @@ async function SignIn(session: Session, url: string): Promise<ProbeAnswer> {
     server: {
       host: target.host,
       port: target.port,
-      signal: session.closer.signal,
+      signal: session.closes,
     },
     user: target.user,
     password: target.password,
@@ -164,20 +171,7 @@ async function SignIn(session: Session, url: string): Promise<ProbeAnswer> {
   });
 }
 
-/**
- * Signs in to the RethinkDB server of `url` and asks it what the account may do to each table of
- * the database the URL's path names, with the catalog's own checks: an account reads a table when
- * the server answers its `info()`, and writes it when the server allows the delete of a key no row
- * has, which changes nothing. The client's `timeout` bounds only the connect, so each answer after
- * it is bounded by closing the connection; `signal` closes it at once, whatever the server does.
- */
-export const probe: Probe = async ({ url, timeoutMs, signal }: ProbeConfig) => {
-  const session: Session = { closer: new AbortController(), timeoutMs };
-  const stop = () => session.closer.abort(new Error(STOPPED));
-  signal.addEventListener("abort", stop, { once: true });
-  if (signal.aborted) {
-    stop();
-  }
+async function Answer(session: Session, url: string): Promise<ProbeAnswer> {
   try {
     return await SignIn(session, url);
   } catch (error) {
@@ -187,8 +181,47 @@ export const probe: Probe = async ({ url, timeoutMs, signal }: ProbeConfig) => {
     return isRethinkDBError(cause) && cause.type === RethinkDBErrorType.AUTH
       ? { outcome: "refused", refusal: "credentials", message }
       : { outcome: "unreachable", message };
+  }
+}
+
+/** Resolves to `ABORTED` when `signal` aborts, until `settled` does. */
+function Aborted(
+  signal: AbortSignal,
+  settled: AbortSignal,
+): Promise<ProbeAnswer> {
+  return new Promise((resolve) => {
+    signal.addEventListener("abort", () => resolve(ABORTED), {
+      once: true,
+      signal: settled,
+    });
+  });
+}
+
+/**
+ * Signs in to the RethinkDB server of `url` and asks it what the account may do to each table of
+ * the database the URL's path names, with the catalog's own checks: an account reads a table when
+ * the server answers its `info()`, and writes it when the server allows the delete of a key no row
+ * has, which changes nothing. The client's `timeout` bounds only the connect, so each answer after
+ * it is bounded by closing the connection. When `signal` aborts before the probe has settled, it
+ * closes the connection and resolves at once to `unreachable` with "The probe was aborted.",
+ * whatever the server has answered so far; already aborted, it opens no connection.
+ */
+export const probe: Probe = async ({ url, timeoutMs, signal }: ProbeConfig) => {
+  if (signal.aborted) {
+    return ABORTED;
+  }
+  const closer = new AbortController();
+  const session: Session = {
+    closer,
+    closes: AbortSignal.any([signal, closer.signal]),
+    timeoutMs,
+  };
+  try {
+    return await Promise.race([
+      Answer(session, url),
+      Aborted(signal, closer.signal),
+    ]);
   } finally {
-    signal.removeEventListener("abort", stop);
-    session.closer.abort(new Error(DONE));
+    closer.abort(new Error(DONE));
   }
 };

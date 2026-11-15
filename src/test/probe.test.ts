@@ -28,6 +28,7 @@ const BLIND = `probe_blind_${RUN}`;
 const MAILED = `probe@reader_${RUN}`;
 const ACCOUNTS = [READER, WRITER, BLIND, MAILED];
 const PROBE_FILE = path.join(__dirname, "..", "probe.js");
+const ABORTED = { outcome: "unreachable", message: "The probe was aborted." };
 
 function UrlOf(
   user: string,
@@ -245,7 +246,7 @@ function ClosingCases() {
         stop.signal,
       );
       expect(performance.now() - started).to.be.lessThan(TIMEOUT_MS / 2);
-      expect(answer.outcome).to.equal("unreachable");
+      expect(answer).to.deep.equal(ABORTED);
       expect(await relay.openAfter(SETTLE_MS)).to.equal(0);
     } finally {
       await relay.close();
@@ -263,8 +264,23 @@ function ClosingCases() {
         stop.signal,
       );
       expect(performance.now() - started).to.be.lessThan(TIMEOUT_MS / 2);
-      expect(answer.outcome).to.equal("unreachable");
+      expect(answer).to.deep.equal(ABORTED);
       expect(await silent.openAfter(SETTLE_MS)).to.equal(0);
+    } finally {
+      await silent.close();
+    }
+  });
+
+  it("opens no connection when the signal has already aborted", async () => {
+    const silent = await SilentServer();
+    try {
+      const answer = await Probe(
+        UrlOf(READER, { port: silent.port }),
+        AbortSignal.abort(),
+      );
+      expect(answer).to.deep.equal(ABORTED);
+      await new Promise((resolve) => setTimeout(resolve, STOP_AFTER_MS));
+      expect(silent.accepted()).to.equal(0);
     } finally {
       await silent.close();
     }
