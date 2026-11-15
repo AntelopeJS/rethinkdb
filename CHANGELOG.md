@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.10.3
+
+[compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.10.2...v1.10.3)
+
+### 🚀 Enhancements
+
+- **query:** Hand over one server response per ReadCursor read ([#117](https://github.com/AntelopeJS/rethinkdb/pull/117))
+
+### ❤️ Contributors
+
+- Antony Rizzitelli ([@Upd4ting](http://github.com/Upd4ting))
+
 ## v1.10.2
 
 [compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.10.1...v1.10.2)
