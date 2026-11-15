@@ -107,6 +107,36 @@ export function FailsChunk(
     });
 }
 
+/** A route, and how many queries it has forwarded. */
+export interface QueryCounter {
+  route: () => Route;
+  queries: () => number;
+}
+
+/** A route that counts the queries the client sends after the sign-in, and forwards them. */
+export function CountsQueries(): QueryCounter {
+  const HEADER_BYTES = 12;
+  const LENGTH_OFFSET = 8;
+  let queries = 0;
+  const route = () => {
+    let pending = Buffer.alloc(0);
+    return AfterSignIn((_clientChunk, chunk) => {
+      pending = Buffer.concat([pending, chunk]);
+      while (
+        pending.length >= HEADER_BYTES &&
+        pending.length >= HEADER_BYTES + pending.readUInt32LE(LENGTH_OFFSET)
+      ) {
+        pending = pending.subarray(
+          HEADER_BYTES + pending.readUInt32LE(LENGTH_OFFSET),
+        );
+        queries += 1;
+      }
+      return "forward";
+    });
+  };
+  return { route, queries: () => queries };
+}
+
 /** The server drops the connection on the `n`th chunk the client sends after the sign-in. */
 export function DropsOnChunk(n: number): () => Route {
   return () =>

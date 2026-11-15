@@ -74,48 +74,60 @@ async function Within<T>(session: Session, work: () => Promise<T>): Promise<T> {
   }
 }
 
+/** What `proven` leaves open of the table's access, from the catalog's checks. */
 async function AccessOf(
   connection: Connection,
   database: string,
   name: string,
+  proven: TableAccess,
 ): Promise<TableAccess> {
   const table = r.db(database).table(name);
-  const [readable, writes] = await Promise.all([
-    TableInfoOf(table, connection).then(
-      () => true,
-      () => false,
-    ),
-    Writes(table, connection),
+  const [readable, writable] = await Promise.all([
+    proven.readable ||
+      TableInfoOf(table, connection).then(
+        () => true,
+        () => false,
+      ),
+    proven.writable ||
+      Writes(table, connection).then(
+        (writes) => writes.insert || writes.update || writes.delete,
+      ),
   ]);
-  return {
-    readable,
-    writable: writes.insert || writes.update || writes.delete,
-  };
+  return { readable, writable };
 }
 
 /**
- * The access of each table, 32 at a time. The catalog's checks read any error as a refusal, so a
- * batch the server closed the connection on throws, rather than answering no access.
+ * Whether the account reads any table and writes any table, 32 tables at a time, until one table
+ * has proven each. The catalog's checks read any error as a refusal, so a batch the server closed
+ * the connection on throws, rather than answering no access.
  */
 async function AccessOfTables(
   session: Session,
   connection: Connection,
   database: string,
   names: readonly string[],
-): Promise<TableAccess[]> {
-  const access: TableAccess[] = [];
-  for (let first = 0; first < names.length; first += TABLES_AT_ONCE) {
+): Promise<TableAccess> {
+  let proven: TableAccess = { readable: false, writable: false };
+  for (
+    let first = 0;
+    first < names.length && !(proven.readable && proven.writable);
+    first += TABLES_AT_ONCE
+  ) {
     const batch = names.slice(first, first + TABLES_AT_ONCE);
-    access.push(
-      ...(await Within(session, () =>
-        Promise.all(batch.map((name) => AccessOf(connection, database, name))),
-      )),
+    const access = await Within(session, () =>
+      Promise.all(
+        batch.map((name) => AccessOf(connection, database, name, proven)),
+      ),
     );
     if (!connection.open) {
       throw new Error(DROPPED);
     }
+    proven = {
+      readable: access.some((table) => table.readable),
+      writable: access.some((table) => table.writable),
+    };
   }
-  return access;
+  return proven;
 }
 
 /**
@@ -180,8 +192,8 @@ async function SignIn(session: Session, url: string): Promise<ProbeAnswer> {
   }
   const access = await AccessOfTables(session, connection, database, names);
   return signedIn({
-    canRead: access.length === 0 || access.some((table) => table.readable),
-    canWrite: access.some((table) => table.writable),
+    canRead: names.length === 0 || access.readable,
+    canWrite: access.writable,
   });
 }
 

@@ -10,6 +10,7 @@ import { probe } from "../probe";
 import { AdminConnection, SERVER } from "../test-external/fixture";
 import {
   ClosedPort,
+  CountsQueries,
   DropsOnChunk,
   FailsChunk,
   SilentServer,
@@ -23,6 +24,8 @@ const STOP_AFTER_MS = 100;
 const RUN = randomBytes(4).toString("hex");
 const SHOP = `probe_shop_${RUN}`;
 const EMPTY = `probe_empty_${RUN}`;
+const WIDE = `probe_wide_${RUN}`;
+const WIDE_TABLES = 40;
 const PASSWORD = `probe-${RUN}`;
 const READER = `probe_reader_${RUN}`;
 const WRITER = `probe_writer_${RUN}`;
@@ -74,11 +77,21 @@ async function SetUpShop(admin: Connection) {
   await r.db(SHOP).grant(READER, { read: true }).run(admin);
   await r.db(SHOP).grant(MAILED, { read: true }).run(admin);
   await r.db(SHOP).grant(WRITER, { read: true, write: true }).run(admin);
+  await r.dbCreate(WIDE).run(admin);
+  await Promise.all(
+    Array.from({ length: WIDE_TABLES }, (_, index) =>
+      r.db(WIDE).tableCreate(`t${index}`).run(admin),
+    ),
+  );
+  await r.db(WIDE).wait().run(admin);
+  await r.db(WIDE).grant(READER, { read: true }).run(admin);
+  await r.db(WIDE).grant(WRITER, { read: true, write: true }).run(admin);
 }
 
 async function TearDownShop(admin: Connection) {
   await r.dbDrop(SHOP).run(admin);
   await r.dbDrop(EMPTY).run(admin);
+  await r.dbDrop(WIDE).run(admin);
   await r
     .db("rethinkdb")
     .table("users")
@@ -229,6 +242,38 @@ function RefusedCases() {
   });
 }
 
+function BoundedWorkCases() {
+  const FIRST_QUERY_AND_LISTING = 2;
+  const BATCH = 32;
+
+  async function QueriesOf(user: string) {
+    const counter = CountsQueries();
+    const relay = await StartRelay(SERVER.port, counter.route);
+    try {
+      const answer = await Probe(
+        UrlOf(user, { database: WIDE, port: relay.port }),
+      );
+      return { answer, queries: counter.queries() };
+    } finally {
+      await relay.close();
+    }
+  }
+
+  it("stops checking tables once one has proven read and one has proven write", async () => {
+    const { answer, queries } = await QueriesOf(WRITER);
+    expect(answer).to.deep.include({ canRead: true, canWrite: true });
+    expect(queries).to.equal(FIRST_QUERY_AND_LISTING + 2 * BATCH);
+  });
+
+  it("checks only write on the tables after the one that proved read", async () => {
+    const { answer, queries } = await QueriesOf(READER);
+    expect(answer).to.deep.include({ canRead: true, canWrite: false });
+    expect(queries).to.equal(
+      FIRST_QUERY_AND_LISTING + 2 * BATCH + (WIDE_TABLES - BATCH),
+    );
+  });
+}
+
 function ServerFailureCases() {
   it("answers cannot-list, signed in, when the server refuses or fails the listing of the tables", async () => {
     const LISTING = 2;
@@ -375,6 +420,7 @@ describe("the connection probe", function () {
   AccountCases();
   DatabaseCases();
   RefusedCases();
+  BoundedWorkCases();
   ServerFailureCases();
   ClosingCases();
 });
