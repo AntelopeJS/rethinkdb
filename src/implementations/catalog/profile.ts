@@ -11,7 +11,7 @@ import type {
   RowCount,
   ValueRange,
 } from "@antelopejs/interface-database-catalog";
-import { r, type RDatum } from "rethinkdb-ts";
+import { r, type RDatum, type RStream } from "rethinkdb-ts";
 
 import { Located, Locate, SelectColumns } from "./locate";
 import {
@@ -128,34 +128,42 @@ async function Length(
     : max;
 }
 
-function AsCategories(rows: [string | number | boolean, number][]): Categories {
+interface FoldedCategories {
+  values: [string | number | boolean, number][];
+  other: number;
+}
+
+function AsCategories(folded: FoldedCategories): Categories {
   return {
-    values: rows
-      .filter(([, count]) => count >= CATEGORY_MIN_ROWS)
-      .slice(0, CATEGORY_LIMIT)
-      .map(([value, count]) => ({ value, rows: count })),
-    other: rows
-      .filter(
-        ([, count], index) =>
-          count < CATEGORY_MIN_ROWS || index >= CATEGORY_LIMIT,
-      )
-      .reduce((total, [, count]) => total + count, 0),
+    values: folded.values.map(([value, count]) => ({ value, rows: count })),
+    other: folded.other,
   };
 }
 
-async function CategoriesOf(
-  source: Source,
-  column: ProfiledColumn,
+/**
+ * The most frequent of the present values of a column with their counts, folded on the server: a value seen in
+ * fewer than 5 rows, or past the 25th, is only counted in `other`, so it never leaves the database.
+ */
+export async function CategoriesOf(
+  values: RStream,
 ): Promise<Measure<Categories>> {
   return Mapped(
-    await Measured<[string | number | boolean, number][]>(
-      Present(source, column)
+    await Measured<FoldedCategories>(
+      values
         .group((value) => value)
         .count()
         .ungroup()
         .orderBy(r.desc("reduction"), "group")
         .limit(CATEGORY_LIMIT + 1)
-        .map((group) => [group("group"), group("reduction")]),
+        .do((counted: RDatum) => {
+          const named = counted
+            .limit(CATEGORY_LIMIT)
+            .filter((group) => group("reduction").ge(CATEGORY_MIN_ROWS));
+          return {
+            values: named.map((group) => [group("group"), group("reduction")]),
+            other: counted.sum("reduction").sub(named.sum("reduction")),
+          };
+        }),
     ),
     AsCategories,
   );
@@ -273,7 +281,7 @@ async function ProfileColumn(
     isCategorical &&
     name !== facts.primaryKey
   ) {
-    profile.categories = await CategoriesOf(source, column);
+    profile.categories = await CategoriesOf(Present(source, column));
   }
   if (column.kind === "date") {
     profile.months = await Months(source, column);

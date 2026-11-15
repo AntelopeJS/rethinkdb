@@ -33,6 +33,18 @@ const ORDERS_START = Date.UTC(2025, 0, 1);
 const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
 const WRITABLE_TABLES = ["customers", "orders", "order_lines"];
+const TALLY_BUCKETS = 26;
+
+/**
+ * The `label` of each row of `tallies`: `common` in 190 rows, `five` in 5, `four` in 4, `lone` in 1.
+ * A value in fewer than 5 rows is rare, and a profile names only the others.
+ */
+const TALLY_LABELS = [
+  ...Array<string>(190).fill("common"),
+  ...Array<string>(5).fill("five"),
+  ...Array<string>(4).fill("four"),
+  "lone",
+];
 
 function Uuid(prefix: string, index: number): string {
   return `${prefix}-0000-4000-8000-${String(index).padStart(12, "0")}`;
@@ -98,6 +110,17 @@ async function SeedTables(connection: Connection) {
   await db.tableCreate("orders").run(connection);
   await db.tableCreate("order_lines").run(connection);
   await db.tableCreate("events").run(connection);
+  await db.tableCreate("tallies").run(connection);
+  await db
+    .table("tallies")
+    .insert(
+      TALLY_LABELS.map((label, index) => ({
+        id: `tally-${index}`,
+        label,
+        bucket: `b${String(index % TALLY_BUCKETS).padStart(2, "0")}`,
+      })),
+    )
+    .run(connection);
   await db
     .table("customers")
     .insert(Range(CUSTOMER_COUNT, Customer))
