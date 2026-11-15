@@ -43,6 +43,8 @@ interface Session {
 const MS_PER_SECOND = 1000;
 const TABLES_AT_ONCE = 32;
 const DONE = "the probe has answered";
+const DROPPED =
+  "the server closed the connection before it answered every table check";
 const ABORTED: ProbeAnswer = {
   outcome: "unreachable",
   message: "The probe was aborted.",
@@ -90,6 +92,10 @@ async function AccessOf(
   };
 }
 
+/**
+ * The access of each table, 32 at a time. The catalog's checks read any error as a refusal, so a
+ * batch the server closed the connection on throws, rather than answering no access.
+ */
 async function AccessOfTables(
   session: Session,
   connection: Connection,
@@ -104,6 +110,9 @@ async function AccessOfTables(
         Promise.all(batch.map((name) => AccessOf(connection, database, name))),
       )),
     );
+    if (!connection.open) {
+      throw new Error(DROPPED);
+    }
   }
   return access;
 }

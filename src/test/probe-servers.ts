@@ -43,22 +43,46 @@ export interface Relay {
 }
 
 /**
- * Whether a connection goes quiet from this chunk on, from the client or from the server: it
- * forwards nothing more in either direction, and closes nothing.
+ * What a relay does with a chunk of one connection, from the client or from the server: forward
+ * it, go quiet from this chunk on (forward nothing more and close nothing), or drop the connection.
  */
-export type Stall = (chunk: Buffer, fromClient: boolean) => boolean;
+export type Route = (
+  chunk: Buffer,
+  fromClient: boolean,
+) => "forward" | "stall" | "drop";
 
-/** A stall that lets through the three NUL-ended messages a RethinkDB server sends to sign in. */
-export function StallsAfterSignIn(): Stall {
-  const HANDSHAKE_MESSAGES = 3;
+const HANDSHAKE_MESSAGES = 3;
+
+/**
+ * Routes the three NUL-ended messages a RethinkDB server sends to sign in, then `afterSignIn` for
+ * the `n`th chunk the client sends after them, counted from 1.
+ */
+function AfterSignIn(
+  afterSignIn: (clientChunk: number) => "forward" | "stall" | "drop",
+): Route {
   let ended = 0;
+  let sent = 0;
   return (chunk, fromClient) => {
-    const signedIn = ended >= HANDSHAKE_MESSAGES;
-    if (!fromClient) {
-      ended += chunk.filter((byte) => byte === 0).length;
+    if (ended < HANDSHAKE_MESSAGES) {
+      if (!fromClient) {
+        ended += chunk.filter((byte) => byte === 0).length;
+      }
+      return "forward";
     }
-    return signedIn;
+    sent += fromClient ? 1 : 0;
+    return afterSignIn(sent);
   };
+}
+
+/** The server goes quiet once the client has signed in. */
+export function StallsAfterSignIn(): Route {
+  return AfterSignIn(() => "stall");
+}
+
+/** The server drops the connection on the `n`th chunk the client sends after the sign-in. */
+export function DropsOnChunk(n: number): () => Route {
+  return () =>
+    AfterSignIn((clientChunk) => (clientChunk >= n ? "drop" : "forward"));
 }
 
 function Track(
@@ -110,22 +134,28 @@ export function SilentServer(): Promise<Relay> {
 }
 
 /**
- * Forwards each connection to the server on `targetPort`. A connection whose `Stall` answers
- * `true` forwards nothing more, as a server does that hangs after signing a client in.
+ * Forwards each connection to the server on `targetPort`, each chunk as its `Route` says: a
+ * stalled connection forwards nothing more, as a server does that hangs after signing a client in.
  */
 export function StartRelay(
   targetPort: number,
-  newStall?: () => Stall,
+  newRoute?: () => Route,
 ): Promise<Relay> {
   const clients = new Set<net.Socket>();
   const upstreams = new Set<net.Socket>();
   const server = net.createServer((client) => {
     const upstream = net.connect(targetPort, "127.0.0.1");
-    const stall = newStall?.();
+    const route = newRoute?.();
     let stalled = false;
     const forward = (chunk: Buffer, fromClient: boolean) => {
-      stalled = stalled || (stall?.(chunk, fromClient) ?? false);
-      if (!stalled) {
+      const fate = stalled
+        ? "stall"
+        : (route?.(chunk, fromClient) ?? "forward");
+      stalled = fate === "stall";
+      if (fate === "drop") {
+        client.destroy();
+        upstream.destroy();
+      } else if (fate === "forward") {
         (fromClient ? upstream : client).write(chunk);
       }
     };

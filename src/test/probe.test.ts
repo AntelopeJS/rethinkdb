@@ -10,6 +10,7 @@ import { probe } from "../probe";
 import { AdminConnection, SERVER } from "../test-external/fixture";
 import {
   ClosedPort,
+  DropsOnChunk,
   SilentServer,
   StallsAfterSignIn,
   StartRelay,
@@ -230,6 +231,20 @@ function ClosingCases() {
       expect(performance.now() - started).to.be.lessThan(TIMEOUT_MS * 2);
       expect(answer.outcome).to.equal("unreachable");
       expect(await relay.openAfter(SETTLE_MS)).to.equal(0);
+    } finally {
+      await relay.close();
+    }
+  });
+
+  it("answers unreachable, not an account with no access, when the server drops the connection during the table checks", async () => {
+    const FIRST_TABLE_CHECK = 3;
+    const relay = await StartRelay(
+      SERVER.port,
+      DropsOnChunk(FIRST_TABLE_CHECK),
+    );
+    try {
+      const answer = await Probe(UrlOf("admin", { port: relay.port }));
+      expect(answer.outcome).to.equal("unreachable");
     } finally {
       await relay.close();
     }
