@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.10.4
+
+[compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.10.3...v1.10.4)
+
+### 🩹 Fixes
+
+- **catalog:** Fold rare category values on the server ([#118](https://github.com/AntelopeJS/rethinkdb/pull/118))
+
+### ❤️ Contributors
+
+- Antony Rizzitelli ([@Upd4ting](http://github.com/Upd4ting))
+
 ## v1.10.3
 
 [compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.10.2...v1.10.3)
