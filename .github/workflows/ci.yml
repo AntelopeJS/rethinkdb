@@ -2,16 +2,19 @@ name: CI
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
-    branches: [main]
-  workflow_dispatch: null
+    branches: [next]
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   ci:
-    uses: AntelopeJS/.github/.github/workflows/ci-node.yml@v1
+    uses: AntelopeJS/.github/.github/workflows/ci-node.yml@v2
     with:
       services-compose-file: .github/release-services.yml
       docs-files: |
@@ -19,7 +22,6 @@ jobs:
         docs
       renovate-sync: false
       test-job: true
-      windows: true
       setup-commands: |
         if [ "$RUNNER_OS" = Windows ]; then
           cd "$RUNNER_TEMP"
@@ -43,4 +45,4 @@ jobs:
     permissions:
       contents: write
       actions: write
-    uses: AntelopeJS/.github/.github/workflows/ci-renovate-sync.yml@v1
+    uses: AntelopeJS/.github/.github/workflows/ci-renovate-sync.yml@v2
