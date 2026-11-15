@@ -13,7 +13,11 @@ export const WRITER_USER = "erp_writer";
 
 export const ACCOUNT_PASSWORD = "erp-password";
 
-export const SERVER = { host: "127.0.0.1", port: 28015 };
+/** The test server: 127.0.0.1:28015, or the port `RETHINKDB_TEST_PORT` names. */
+export const SERVER = {
+  host: "127.0.0.1",
+  port: Number(process.env.RETHINKDB_TEST_PORT ?? 28015),
+};
 
 const CUSTOMER_COUNT = 500;
 const PRODUCT_COUNT = 300;

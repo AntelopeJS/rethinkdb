@@ -85,12 +85,17 @@ function ResolveMode(options?: Options): Mode {
   return mode;
 }
 
+/** What a `rethinkdb://` URL names: the server and the account, and the database as its path. */
 interface ParsedUrl {
-  connection: RConnectionOptions;
+  connection: { host: string; port: number; user: string; password: string };
   database?: string;
 }
 
-function ParseUrl(url: string): ParsedUrl {
+/**
+ * Reads `rethinkdb://user:password@host:port/database`: the port defaults to 28015 and the user to
+ * `admin`, and an empty path names no database. It throws on a URL of another protocol.
+ */
+export function ParseUrl(url: string): ParsedUrl {
   const parsed = new URL(url);
   if (parsed.protocol !== URL_PROTOCOL) {
     throw new Error(

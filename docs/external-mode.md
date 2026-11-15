@@ -156,3 +156,33 @@ set. An owned instance refuses every catalog call.
   field with at most 25 distinct values, each counted at least 5 times. A text field answers no
   minimum or maximum value, only the minimum, average, and maximum of its lengths. `SampleRows`
   answers at most 20 rows, as text cut at 200 characters, for a person to look at.
+
+## The connection probe
+
+`require("@antelopejs/rethinkdb/dist/probe")` exports `probe`, the `Probe` of
+`@antelopejs/interface-database-catalog`. It loads outside the AntelopeJS runtime, so a tool can
+check a URL before it configures the module.
+
+```javascript
+const { probe } = require("@antelopejs/rethinkdb/dist/probe");
+
+const answer = await probe({
+  url: "rethinkdb://dms:…@db.example.com:28015/erp",
+  timeoutMs: 5000,
+  signal: AbortSignal.timeout(15000),
+});
+```
+
+- **It asks with the catalog's checks.** The probe signs in, times a first query, and lists the
+  tables of the database the URL's path names. An account reads a table when the server answers
+  its `info()`, and writes it when the server allows the delete of the key no row has. The answer
+  has `canRead` when the account reads any table or the database has none, and `canWrite` when it
+  writes any table. No row changes.
+- **A missing database is an answer.** A URL with no path answers `signed-in` with
+  `unreadable: "no-database-named"`, and a database the server lacks answers
+  `unreadable: "no-database"`, both with no access. `user` is the URL's user, or `admin`.
+- **A wrong password is refused.** The server's `ReqlAuthError` answers
+  `{ outcome: "refused", refusal: "credentials" }`. Every other failure answers `unreachable`.
+- **It never waits on the server.** `timeoutMs` bounds the connect and each answer after it: the
+  probe closes the connection when an answer is late. When `signal` aborts, it closes the
+  connection at once and answers `unreachable`. It never rejects.

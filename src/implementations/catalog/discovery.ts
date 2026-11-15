@@ -7,7 +7,7 @@ import type {
   RelationSummary,
   RelationWrites,
 } from "@antelopejs/interface-database-catalog";
-import { r, type RStream } from "rethinkdb-ts";
+import { type Connection, r, type RStream, type RTable } from "rethinkdb-ts";
 
 import { ExternalDatabaseName, GetOptions } from "../../config";
 import { KeyOf } from "../database/external-descriptor";
@@ -66,8 +66,19 @@ export async function ReadInfo(): Promise<CatalogInfo> {
   };
 }
 
+/**
+ * The info of a table, which the server answers only to an account that may read the table. On
+ * no connection, it runs on the pool of the instance.
+ */
+export function TableInfoOf(
+  table: RTable,
+  connection?: Connection,
+): Promise<TableInfo> {
+  return table.info().run(connection);
+}
+
 export async function ListTable(name: string): Promise<ListedTable> {
-  const info: TableInfo = await Table(name).info().run();
+  const info = await TableInfoOf(Table(name));
   const primaryKey = info.primary_key ?? DEFAULT_PRIMARY_KEY;
   const uuidKeys = await UuidKeys(name, primaryKey);
   return {
@@ -83,13 +94,17 @@ export async function ListTable(name: string): Promise<ListedTable> {
 
 /**
  * Whether the account may write a table, from a delete of a key no row has: it answers a
- * permission error to a reader and `skipped: 1` to a writer, and changes nothing either way.
+ * permission error to a reader and `skipped: 1` to a writer, and changes nothing either way. On no
+ * connection, it runs on the pool of the instance.
  */
-async function Writes(name: string): Promise<RelationWrites> {
-  const allowed = await Table(name)
+export async function Writes(
+  table: RTable,
+  connection?: Connection,
+): Promise<RelationWrites> {
+  const allowed = await table
     .get(UNREACHABLE_KEY)
     .delete()
-    .run()
+    .run(connection)
     .then(
       () => true,
       () => false,
@@ -108,7 +123,7 @@ export async function Summarize(table: ListedTable): Promise<RelationSummary> {
     key: finding.key
       ? { columns: [table.primaryKey], source: "primary" }
       : null,
-    writes: await Writes(table.name),
+    writes: await Writes(Table(table.name)),
     comment: null,
   };
 }
