@@ -84,7 +84,7 @@ async function AccessOf(
   const table = r.db(database).table(name);
   const [readable, writable] = await Promise.all([
     proven.readable ||
-      TableInfoOf(table, connection).then(
+      TableInfoOf(database, name, connection).then(
         () => true,
         () => false,
       ),

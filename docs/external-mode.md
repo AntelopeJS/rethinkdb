@@ -175,12 +175,14 @@ const answer = await probe({
 
 - **It asks with the catalog's checks.** The probe signs in, times a first query, and lists the
   tables of the database the URL's path names. An account reads a table when the server answers
-  its `info()`, and writes it when the server allows the delete of the key no row has. The answer
-  has `canRead` when the account reads any table or the database has none, and `canWrite` when it
-  writes any table. No row changes. It asks about 32 tables at a time and stops after the
+  its `info()`, and writes it when the server allows the delete of the key no row has. The tables
+  of the system database `rethinkdb` answer `info()` to every account, so there the read check
+  also reads the key no row has, which the server refuses to an account that may not read. The
+  answer has `canRead` when the account reads any table or the database has none, and `canWrite`
+  when it writes any table. No row changes. It asks about 32 tables at a time and stops after the
   batch in which one table has proven each, so an account that may only read is asked about every
-  table. On a fresh connection the server takes about a
-  millisecond per table the first time, so 2,000 tables take a few seconds.
+  table. On a fresh connection the server takes about a millisecond per table the first time, so
+  2,000 tables take a few seconds.
 - **A missing database is an answer.** A URL with no path answers `signed-in` with
   `unreadable: "no-database-named"`, and a database the server lacks, or a name the server
   refuses as a database name, answers `unreadable: "no-database"`, both with no access. A path

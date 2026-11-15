@@ -36,6 +36,7 @@ interface FieldType {
 const DEFAULT_PRIMARY_KEY = "id";
 const FALLBACK_ROWS = 1000;
 const UNREACHABLE_KEY = "__antelopejs_write_probe__ no row has this key";
+const SYSTEM_DATABASE = "rethinkdb";
 const DOMINANT_SHARE = 0.8;
 const PERCENT = 100;
 const NULL_TYPE = "NULL";
@@ -67,18 +68,25 @@ export async function ReadInfo(): Promise<CatalogInfo> {
 }
 
 /**
- * The info of a table, which the server answers only to an account that may read the table. On
- * no connection, it runs on the pool of the instance.
+ * The info of a table, which the server answers only to an account that may read the table. The
+ * tables of the system database answer `info()` to every account, so there a read of the key no
+ * row has comes first, which the server refuses to an account that may not read. On no
+ * connection, it runs on the pool of the instance.
  */
-export function TableInfoOf(
-  table: RTable,
+export async function TableInfoOf(
+  database: string,
+  name: string,
   connection?: Connection,
 ): Promise<TableInfo> {
+  const table = r.db(database).table(name);
+  if (database === SYSTEM_DATABASE) {
+    await table.get(UNREACHABLE_KEY).run(connection);
+  }
   return table.info().run(connection);
 }
 
 export async function ListTable(name: string): Promise<ListedTable> {
-  const info = await TableInfoOf(Table(name));
+  const info = await TableInfoOf(ExternalDatabaseName(), name);
   const primaryKey = info.primary_key ?? DEFAULT_PRIMARY_KEY;
   const uuidKeys = await UuidKeys(name, primaryKey);
   return {

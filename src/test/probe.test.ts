@@ -133,6 +133,17 @@ function AccountCases() {
     expect(answer).to.not.have.property("unreadable");
   });
 
+  it("answers no read of the system database to an account with no grants, and read to admin", async () => {
+    const SYSTEM_DATABASE = "rethinkdb";
+    const blind = SignedIn(
+      await Probe(UrlOf(BLIND, { database: SYSTEM_DATABASE })),
+    );
+    expect(blind).to.deep.include({ canRead: false, canWrite: false });
+    expect(
+      await Probe(UrlOf("admin", { database: SYSTEM_DATABASE })),
+    ).to.deep.include({ outcome: "signed-in", canRead: true, canWrite: true });
+  });
+
   it("answers read to an account whose name holds an @, under its decoded name", async () => {
     expect(await Probe(UrlOf(MAILED))).to.deep.include({
       outcome: "signed-in",
