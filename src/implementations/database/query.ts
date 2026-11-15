@@ -18,7 +18,13 @@ import {
   ExternalInstanceRefusal,
 } from "./external-selection";
 import { runAtomicMutation } from "./atomic";
-import { IsObject, type QueryStage, StageNamed } from "./utils";
+import {
+  IsList,
+  IsNumber,
+  IsObject,
+  type QueryStage,
+  StageNamed,
+} from "./utils";
 import {
   CreateInstance,
   DestroyInstance,
@@ -150,73 +156,105 @@ async function Opened(
   return { ...(await OpenBoundedCursor(term, timeoutMs)), timeoutMs };
 }
 
-function Release(reqId: number) {
-  openCursors.get(reqId)?.release?.();
-  openCursors.delete(reqId);
+async function Open(stages: QueryStage[]): Promise<OpenCursor> {
+  assert(stages[0]?.stage === "schema", "Expected schema stage");
+  const schemaId = stages[0].options?.id;
+  assert(schemaId, "Unknown schema");
+  await WaitForSchemaReady(schemaId);
+  const query = SelectionQuery.decode(stages, SelectionQuery.newContext());
+  const opened = await Opened(query, query.buildTerm());
+  opened.cursor.init();
+  return {
+    ...opened,
+    iterator: opened.cursor[Symbol.asyncIterator](),
+    isChangeStream: query.isChangeStream,
+  };
 }
 
-const openCursors = new Map<number, OpenCursor>();
+/**
+ * The cursors by `reqId`, each from its first read until it is released. Whoever removes a
+ * cursor from it releases that cursor, so a cursor is released once.
+ */
+const cursors = new Map<number, Promise<OpenCursor>>();
 
+function Release(
+  reqId: number,
+  opening: Promise<OpenCursor>,
+  entry: OpenCursor,
+) {
+  if (cursors.get(reqId) === opening) {
+    cursors.delete(reqId);
+    entry.release?.();
+  }
+}
+
+/**
+ * The rows rethinkdb-ts already received for `cursor` and has not handed over: the rest of its
+ * latest server response, which `Cursor` keeps in its private `results` and `position`. Taking
+ * them leaves `next()` to wait for the next response.
+ */
+function TakeReceived(cursor: Cursor): unknown[] {
+  const results: unknown = cursor["results"];
+  const position: unknown = cursor["position"];
+  if (!IsList(results) || !IsNumber(position)) {
+    return [];
+  }
+  const atom = results[0];
+  const rows = cursor.getType() === "Atom" && IsList(atom) ? atom : results;
+  cursor["position"] = rows.length;
+  return rows.slice(position);
+}
+
+/**
+ * Reads the next batch of cursor `reqId`, opening it with `stages` on its first read: the next
+ * row and every row of the same server response, or `[]` once the cursor is exhausted or closed.
+ */
 export async function ReadCursor(
   reqId: number,
   stages: QueryStage[],
-): Promise<IteratorResult<unknown, void>> {
-  if (!openCursors.has(reqId)) {
-    assert(stages[0]?.stage === "schema", "Expected schema stage");
-    const schemaId = stages[0].options?.id;
-    assert(schemaId, "Unknown schema");
-    await WaitForSchemaReady(schemaId);
-    const context = SelectionQuery.newContext();
-    const query = SelectionQuery.decode(stages, context);
-    const term = query.buildTerm();
+): Promise<unknown[]> {
+  let opening = cursors.get(reqId);
+  if (!opening) {
     Logger.Debug("Opening cursor #", reqId);
-    const opened = await Opened(query, term);
-    const { cursor } = opened;
-    const entry: OpenCursor = {
-      ...opened,
-      iterator: cursor[Symbol.asyncIterator](),
-      isChangeStream: query.isChangeStream,
-    };
-    openCursors.set(reqId, entry);
-    cursor.on("close", () => {
-      Logger.Debug("Cursor #", reqId, "closed by server");
-      if (!entry.expired?.()) {
-        Release(reqId);
-      }
-    });
-    cursor.init();
+    opening = Open(stages);
+    cursors.set(reqId, opening);
   }
-
-  const entry = openCursors.get(reqId);
-  assert(entry, `Cursor #${reqId} not found.`);
+  const entry = await opening.catch((error: unknown) => {
+    if (cursors.get(reqId) === opening) {
+      cursors.delete(reqId);
+    }
+    throw error;
+  });
+  if (cursors.get(reqId) !== opening) {
+    return [];
+  }
   if (entry.expired?.()) {
-    Release(reqId);
+    Release(reqId, opening, entry);
     throw new QueryTimeoutError(entry.timeoutMs ?? 0);
   }
   entry.arm?.();
-  const result = await entry.iterator
+  const first = await entry.iterator
     .next()
     .finally(() => entry.disarm?.())
     .catch((error: unknown) => {
       const expired = entry.expired?.() ?? false;
-      Release(reqId);
+      Release(reqId, opening, entry);
       throw expired ? new QueryTimeoutError(entry.timeoutMs ?? 0) : error;
     });
 
-  if (result.done) {
+  if (first.done) {
     const expired = entry.expired?.() ?? false;
-    Release(reqId);
+    Release(reqId, opening, entry);
     if (expired) {
       throw new QueryTimeoutError(entry.timeoutMs ?? 0);
     }
-    return { done: true, value: undefined };
+    return [];
   }
 
-  if (entry.isChangeStream && IsChangeEvent(result.value)) {
-    return { done: false, value: mapChangeEvent(result.value) };
-  }
-
-  return { done: false, value: result.value };
+  const rows = [first.value, ...TakeReceived(entry.cursor)];
+  return entry.isChangeStream
+    ? rows.map((row) => (IsChangeEvent(row) ? mapChangeEvent(row) : row))
+    : rows;
 }
 
 /** A change feed event: the row before and after the change, either one absent or null. */
@@ -244,11 +282,19 @@ function mapChangeEvent(change: ChangeEvent) {
   };
 }
 
+/**
+ * Releases cursor `reqId`, once it has opened when its first read is still opening it. Closing
+ * the cursor cancels its query, which settles a read in flight with `[]`.
+ */
 export async function CloseCursor(reqId: number) {
-  const entry = openCursors.get(reqId);
+  const opening = cursors.get(reqId);
+  if (!opening) {
+    return;
+  }
+  Logger.Debug("Closing cursor #", reqId);
+  cursors.delete(reqId);
+  const entry = await opening.catch(() => undefined);
   if (entry) {
-    Logger.Debug("Closing cursor #", reqId);
-    openCursors.delete(reqId);
     await entry.cursor.close().catch(() => undefined);
     entry.release?.();
   }
