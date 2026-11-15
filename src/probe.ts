@@ -50,6 +50,7 @@ const ABORTED: ProbeAnswer = {
   message: "The probe was aborted.",
 };
 const MISSING = "does not exist";
+const DRIVER_ERROR = "ReqlDriverError";
 
 /**
  * Runs `work` and closes the connection when no answer comes within `timeoutMs`. A work whose
@@ -119,7 +120,9 @@ async function AccessOfTables(
 
 /**
  * The tables of the database, or why the account reads none. The server answers a database it
- * lacks with an operation failure, and a name no database can have with a logic error.
+ * lacks with an operation failure, and a name no database can have with a logic error; any other
+ * error the server answers refuses or fails the listing. An error of the driver itself, such as a
+ * closed connection, is no answer of the server, and throws.
  */
 async function TableNamesOf(
   session: Session,
@@ -131,20 +134,18 @@ async function TableNamesOf(
       r.db(database).tableList().run(connection),
     );
   } catch (error) {
-    if (!isRethinkDBError(error) || session.closer.signal.aborted) {
+    if (
+      !isRethinkDBError(error) ||
+      error.name === DRIVER_ERROR ||
+      session.closer.signal.aborted
+    ) {
       throw error;
     }
-    if (error.type === RethinkDBErrorType.PERMISSION_ERROR) {
-      return "cannot-list";
-    }
-    if (
-      error.type === RethinkDBErrorType.QUERY_LOGIC ||
+    return error.type === RethinkDBErrorType.QUERY_LOGIC ||
       (error.type === RethinkDBErrorType.OP_FAILED &&
         error.message.includes(MISSING))
-    ) {
-      return "no-database";
-    }
-    throw error;
+      ? "no-database"
+      : "cannot-list";
   }
 }
 

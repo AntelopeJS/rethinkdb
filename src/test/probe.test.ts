@@ -11,6 +11,7 @@ import { AdminConnection, SERVER } from "../test-external/fixture";
 import {
   ClosedPort,
   DropsOnChunk,
+  FailsChunk,
   SilentServer,
   StallsAfterSignIn,
   StartRelay,
@@ -29,6 +30,9 @@ const BLIND = `probe_blind_${RUN}`;
 const MAILED = `probe@reader_${RUN}`;
 const ACCOUNTS = [READER, WRITER, BLIND, MAILED];
 const PROBE_FILE = path.join(__dirname, "..", "probe.js");
+const INTERNAL = 1_000_000;
+const OP_FAILED = 4_100_000;
+const PERMISSION_ERROR = 6_000_000;
 const ABORTED = { outcome: "unreachable", message: "The probe was aborted." };
 
 function UrlOf(
@@ -225,6 +229,66 @@ function RefusedCases() {
   });
 }
 
+function ServerFailureCases() {
+  it("answers cannot-list, signed in, when the server refuses or fails the listing of the tables", async () => {
+    const LISTING = 2;
+    const failures: [number, string][] = [
+      [
+        PERMISSION_ERROR,
+        "User `reader` does not have the required `read` permissions.",
+      ],
+      [OP_FAILED, `Database \`${SHOP}\` is not available.`],
+      [INTERNAL, "The server failed the listing."],
+    ];
+    for (const [errorType, message] of failures) {
+      const relay = await StartRelay(
+        SERVER.port,
+        FailsChunk(LISTING, errorType, message),
+      );
+      try {
+        const answer = await Probe(UrlOf(READER, { port: relay.port }));
+        expect(answer, message).to.deep.include({
+          outcome: "signed-in",
+          user: READER,
+          canRead: false,
+          canWrite: false,
+          unreadable: "cannot-list",
+        });
+        expect(answer, message)
+          .to.have.property("latencyMs")
+          .that.is.greaterThan(0);
+      } finally {
+        await relay.close();
+      }
+    }
+  });
+
+  it("answers unreachable when the server drops the connection on the listing of the tables", async () => {
+    const LISTING = 2;
+    const relay = await StartRelay(SERVER.port, DropsOnChunk(LISTING));
+    try {
+      const answer = await Probe(UrlOf(READER, { port: relay.port }));
+      expect(answer.outcome).to.equal("unreachable");
+    } finally {
+      await relay.close();
+    }
+  });
+
+  it("answers unreachable, not an account with no access, when the server drops the connection during the table checks", async () => {
+    const FIRST_TABLE_CHECK = 3;
+    const relay = await StartRelay(
+      SERVER.port,
+      DropsOnChunk(FIRST_TABLE_CHECK),
+    );
+    try {
+      const answer = await Probe(UrlOf("admin", { port: relay.port }));
+      expect(answer.outcome).to.equal("unreachable");
+    } finally {
+      await relay.close();
+    }
+  });
+}
+
 function ClosingCases() {
   it("closes its connection once it has answered", async () => {
     const relay = await StartRelay(SERVER.port);
@@ -245,20 +309,6 @@ function ClosingCases() {
       expect(performance.now() - started).to.be.lessThan(TIMEOUT_MS * 2);
       expect(answer.outcome).to.equal("unreachable");
       expect(await relay.openAfter(SETTLE_MS)).to.equal(0);
-    } finally {
-      await relay.close();
-    }
-  });
-
-  it("answers unreachable, not an account with no access, when the server drops the connection during the table checks", async () => {
-    const FIRST_TABLE_CHECK = 3;
-    const relay = await StartRelay(
-      SERVER.port,
-      DropsOnChunk(FIRST_TABLE_CHECK),
-    );
-    try {
-      const answer = await Probe(UrlOf("admin", { port: relay.port }));
-      expect(answer.outcome).to.equal("unreachable");
     } finally {
       await relay.close();
     }
@@ -325,5 +375,6 @@ describe("the connection probe", function () {
   AccountCases();
   DatabaseCases();
   RefusedCases();
+  ServerFailureCases();
   ClosingCases();
 });

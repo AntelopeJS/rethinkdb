@@ -46,10 +46,10 @@ export interface Relay {
  * What a relay does with a chunk of one connection, from the client or from the server: forward
  * it, go quiet from this chunk on (forward nothing more and close nothing), or drop the connection.
  */
-export type Route = (
-  chunk: Buffer,
-  fromClient: boolean,
-) => "forward" | "stall" | "drop";
+export type Route = (chunk: Buffer, fromClient: boolean) => Fate;
+
+/** Forward the chunk, go quiet, drop the connection, or send the client these bytes instead. */
+type Fate = "forward" | "stall" | "drop" | Buffer;
 
 const HANDSHAKE_MESSAGES = 3;
 
@@ -58,7 +58,7 @@ const HANDSHAKE_MESSAGES = 3;
  * the `n`th chunk the client sends after them, counted from 1.
  */
 function AfterSignIn(
-  afterSignIn: (clientChunk: number) => "forward" | "stall" | "drop",
+  afterSignIn: (clientChunk: number, chunk: Buffer) => Fate,
 ): Route {
   let ended = 0;
   let sent = 0;
@@ -69,14 +69,42 @@ function AfterSignIn(
       }
       return "forward";
     }
-    sent += fromClient ? 1 : 0;
-    return afterSignIn(sent);
+    if (!fromClient) {
+      return "forward";
+    }
+    sent += 1;
+    return afterSignIn(sent, chunk);
   };
 }
 
 /** The server goes quiet once the client has signed in. */
 export function StallsAfterSignIn(): Route {
   return AfterSignIn(() => "stall");
+}
+
+/**
+ * The server answers the query of the `n`th chunk the client sends after the sign-in with a
+ * runtime error of `errorType`, a ReQL `ErrorType` code, in place of the real answer.
+ */
+export function FailsChunk(
+  n: number,
+  errorType: number,
+  message: string,
+): () => Route {
+  const RUNTIME_ERROR = 18;
+  const TOKEN_BYTES = 8;
+  return () =>
+    AfterSignIn((clientChunk, chunk) => {
+      if (clientChunk !== n) {
+        return "forward";
+      }
+      const body = Buffer.from(
+        JSON.stringify({ t: RUNTIME_ERROR, e: errorType, r: [message], b: [] }),
+      );
+      const length = Buffer.alloc(4);
+      length.writeUInt32LE(body.length);
+      return Buffer.concat([chunk.subarray(0, TOKEN_BYTES), length, body]);
+    });
 }
 
 /** The server drops the connection on the `n`th chunk the client sends after the sign-in. */
@@ -152,7 +180,9 @@ export function StartRelay(
         ? "stall"
         : (route?.(chunk, fromClient) ?? "forward");
       stalled = fate === "stall";
-      if (fate === "drop") {
+      if (Buffer.isBuffer(fate)) {
+        client.write(fate);
+      } else if (fate === "drop") {
         client.destroy();
         upstream.destroy();
       } else if (fate === "forward") {

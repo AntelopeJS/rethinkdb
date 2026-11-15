@@ -182,7 +182,8 @@ const answer = await probe({
   `unreadable: "no-database-named"`, and a database the server lacks, or a name the server
   refuses as a database name, answers `unreadable: "no-database"`, both with no access. A path
   that is not valid percent-encoding answers `unreachable` before the probe connects. `user` is
-  the URL's user, or `admin`.
+  the URL's user, or `admin`. Any other error the server answers to the listing of the tables
+  answers `unreadable: "cannot-list"` with no access.
 - **A wrong password is refused.** The server's `ReqlAuthError` answers
   `{ outcome: "refused", refusal: "credentials" }`. Every other failure answers `unreachable`.
 - **It never waits on the server.** `timeoutMs` bounds the connect and each answer after it: the
