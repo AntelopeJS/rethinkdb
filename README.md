@@ -50,7 +50,7 @@ export default defineConfig({
       source: {
         type: "package",
         package: "@antelopejs/rethinkdb",
-        version: "^1.4.0",
+        version: "~1.10.4",
       },
       config: {
         pool: {
