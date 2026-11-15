@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { pbkdf2 } from "node:crypto";
 
 import { probe } from "../probe";
 import {
@@ -84,5 +85,49 @@ describe("the connection probe's credentials", function () {
     );
     expect(signIn.tls).to.equal(false);
     expect(signIn.proof).to.equal(ProofFor("", signIn));
+  });
+});
+
+describe("the connection probe on a server that asks for a costly password derivation", () => {
+  const HOSTILE_ITERATIONS = 2_147_483_647;
+  const PROBES = 4;
+  const THREAD_POOL_ANSWER_MS = 1000;
+
+  function ThreadPoolAnswers(): Promise<boolean> {
+    return Promise.race([
+      new Promise<boolean>((resolve) =>
+        pbkdf2("", "", 1, 32, "sha256", () => resolve(true)),
+      ),
+      new Promise<boolean>((resolve) =>
+        setTimeout(() => resolve(false), THREAD_POOL_ANSWER_MS),
+      ),
+    ]);
+  }
+
+  it("refuses it before deriving, so the shared thread pool stays free", async () => {
+    const hostile = await StartScramRecorder(HOSTILE_ITERATIONS);
+    try {
+      const answers = await Promise.all(
+        Array.from({ length: PROBES }, () =>
+          probe({
+            url: `rethinkdb://127.0.0.1:${hostile.port}/shop`,
+            timeoutMs: TIMEOUT_MS,
+            signal: new AbortController().signal,
+          }),
+        ),
+      );
+      for (const answer of answers) {
+        expect(answer).to.deep.include({
+          outcome: "refused",
+          refusal: "other",
+        });
+        expect(answer)
+          .to.have.property("message")
+          .that.includes(String(HOSTILE_ITERATIONS));
+      }
+      expect(await ThreadPoolAnswers()).to.equal(true);
+    } finally {
+      await hostile.close();
+    }
   });
 });

@@ -51,12 +51,20 @@ function Field(authentication: string, name: string): string {
   return part?.slice(prefix.length) ?? "";
 }
 
-function ServerFirst(clientFirst: string, salt: Buffer): string {
+function ServerFirst(
+  clientFirst: string,
+  salt: Buffer,
+  iterations: number,
+): string {
   const nonce = `${Field(clientFirst, "r")}${randomBytes(18).toString("base64")}`;
-  return `r=${nonce},s=${salt.toString("base64")},i=${ITERATIONS}`;
+  return `r=${nonce},s=${salt.toString("base64")},i=${iterations}`;
 }
 
-function Record(socket: net.Socket, signIns: SignIn[]): void {
+function Record(
+  socket: net.Socket,
+  signIns: SignIn[],
+  iterations: number,
+): void {
   const salt = randomBytes(16);
   let pending = Buffer.alloc(0);
   let clientFirstBare = "";
@@ -75,7 +83,7 @@ function Record(socket: net.Socket, signIns: SignIn[]): void {
     if (!serverFirst) {
       const clientFirst = AuthenticationOf(pending.subarray(MAGIC_BYTES, end));
       clientFirstBare = clientFirst.slice(clientFirst.indexOf("n="));
-      serverFirst = ServerFirst(clientFirst, salt);
+      serverFirst = ServerFirst(clientFirst, salt, iterations);
       pending = pending.subarray(end + 1);
       socket.write(
         Buffer.concat([
@@ -97,7 +105,7 @@ function Record(socket: net.Socket, signIns: SignIn[]): void {
       proof: Field(final, "p"),
       authMessage: `${clientFirstBare},${serverFirst},${final.slice(0, final.indexOf(",p="))}`,
       salt,
-      iterations: ITERATIONS,
+      iterations,
     });
     socket.end(
       Message({
@@ -110,14 +118,16 @@ function Record(socket: net.Socket, signIns: SignIn[]): void {
   socket.on("error", () => undefined);
 }
 
-/** Starts a server that records each sign-in. */
-export async function StartScramRecorder(): Promise<ScramRecorder> {
+/** Starts a server that records each sign-in, asking for `iterations` of the password derivation. */
+export async function StartScramRecorder(
+  iterations = ITERATIONS,
+): Promise<ScramRecorder> {
   const signIns: SignIn[] = [];
   const sockets = new Set<net.Socket>();
   const server = net.createServer((socket) => {
     sockets.add(socket);
     socket.on("close", () => sockets.delete(socket));
-    Record(socket, signIns);
+    Record(socket, signIns, iterations);
   });
   return {
     port: await Listen(server),

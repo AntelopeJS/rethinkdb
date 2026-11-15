@@ -11,8 +11,11 @@ import {
   RethinkDBErrorType,
 } from "rethinkdb-ts";
 
+import { RethinkDBConnection } from "rethinkdb-ts/lib/connection/connection";
+
 import { ParseUrl } from "./config";
 import { TableInfoOf, Writes } from "./implementations/catalog/discovery";
+import { IsObject, IsText } from "./implementations/database/utils";
 
 interface TableAccess {
   readable: boolean;
@@ -44,6 +47,8 @@ const MS_PER_SECOND = 1000;
 const TABLES_AT_ONCE = 32;
 const DONE = "the probe has answered";
 const FAILED = "the connection failed";
+const MAX_ITERATIONS = 100_000;
+const ITERATIONS = /(?:^|,)i=(\d+)/;
 const DROPPED =
   "the server closed the connection before it answered every table check";
 const ABORTED: ProbeAnswer = {
@@ -162,19 +167,59 @@ async function TableNamesOf(
   }
 }
 
+/** The server's first SCRAM message, which names the iterations of the password derivation. */
+function IsServerFirst(
+  message: unknown,
+): message is { authentication: string } {
+  return (
+    IsObject(message) &&
+    "authentication" in message &&
+    IsText(message.authentication)
+  );
+}
+
+/** The probe refuses a server that asks for more iterations than `MAX_ITERATIONS`. */
+class CostlyDerivation extends Error {}
+
+/**
+ * Opens the connection as `r.connect` does, with one check before the client derives the password:
+ * the derivation runs on the process's shared thread pool and cannot be stopped, so a server's
+ * first SCRAM message that asks for more than `MAX_ITERATIONS` ends the sign-in instead.
+ */
+async function Connect(
+  session: Session,
+  target: ReturnType<typeof ParseUrl>["connection"],
+): Promise<Connection> {
+  const connection = new RethinkDBConnection(
+    { host: target.host, port: target.port, signal: session.closes },
+    {
+      user: target.user,
+      password: target.password,
+      timeout: session.timeoutMs / MS_PER_SECOND,
+      silent: true,
+    },
+  );
+  const { socket } = connection;
+  const read = socket.readNext.bind(socket);
+  socket.readNext = async <T>(token: number): Promise<T> => {
+    const message = await read<T>(token);
+    const iterations = IsServerFirst(message)
+      ? Number(ITERATIONS.exec(message.authentication)?.[1] ?? 0)
+      : 0;
+    if (iterations > MAX_ITERATIONS) {
+      throw new CostlyDerivation(
+        `the server asks for ${iterations} iterations of the password derivation, above the ${MAX_ITERATIONS} the probe accepts`,
+      );
+    }
+    return message;
+  };
+  await connection.reconnect();
+  return connection;
+}
+
 async function SignIn(session: Session, url: string): Promise<ProbeAnswer> {
   const { connection: target, database } = ParseUrl(url);
-  const connection = await r.connect({
-    server: {
-      host: target.host,
-      port: target.port,
-      signal: session.closes,
-    },
-    user: target.user,
-    password: target.password,
-    timeout: session.timeoutMs / MS_PER_SECOND,
-    silent: true,
-  });
+  const connection = await Connect(session, target);
   const started = performance.now();
   await Within(session, () => r.expr(1).run(connection));
   const latencyMs = Math.ceil(performance.now() - started);
@@ -227,6 +272,9 @@ async function Answer(session: Session, url: string): Promise<ProbeAnswer> {
     const cause: unknown = closed.aborted ? closed.reason : error;
     const message =
       (cause instanceof Error ? MessageOf(cause) : String(cause)) || FAILED;
+    if (cause instanceof CostlyDerivation) {
+      return { outcome: "refused", refusal: "other", message };
+    }
     return isRethinkDBError(cause) && cause.type === RethinkDBErrorType.AUTH
       ? { outcome: "refused", refusal: "credentials", message }
       : { outcome: "unreachable", message };

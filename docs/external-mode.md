@@ -190,7 +190,11 @@ const answer = await probe({
   the URL's user, or `admin`. Any other error the server answers to the listing of the tables
   answers `unreadable: "cannot-list"` with no access.
 - **A wrong password is refused.** The server's `ReqlAuthError` answers
-  `{ outcome: "refused", refusal: "credentials" }`. Every other failure answers `unreachable`.
+  `{ outcome: "refused", refusal: "credentials" }`. A server that asks for more than 100,000
+  iterations of the password derivation (RethinkDB stores 4,096 unless an account is created with
+  more) answers `{ outcome: "refused", refusal: "other" }` before the probe derives anything,
+  because the derivation would hold a thread of the process's shared pool until it ends. Every
+  other failure answers `unreachable`.
 - **It never waits on the server.** `timeoutMs` bounds the connect and each answer after it: the
   probe closes the connection when an answer is late. When `signal` aborts before the probe has
   settled, it closes the connection and resolves at once to
