@@ -156,3 +156,47 @@ set. An owned instance refuses every catalog call.
   field with at most 25 distinct values, each counted at least 5 times. A text field answers no
   minimum or maximum value, only the minimum, average, and maximum of its lengths. `SampleRows`
   answers at most 20 rows, as text cut at 200 characters, for a person to look at.
+
+## The connection probe
+
+`require("@antelopejs/rethinkdb/dist/probe")` exports `probe`, the `Probe` of
+`@antelopejs/interface-database-catalog`. It loads outside the AntelopeJS runtime, so a tool can
+check a URL before it configures the module.
+
+```javascript
+const { probe } = require("@antelopejs/rethinkdb/dist/probe");
+
+const answer = await probe({
+  url: "rethinkdb://dms:…@db.example.com:28015/erp",
+  timeoutMs: 5000,
+  signal: AbortSignal.timeout(15000),
+});
+```
+
+- **It asks with the catalog's checks.** The probe signs in, times a first query, and lists the
+  tables of the database the URL's path names. An account reads a table when the server answers
+  its `info()`, and writes it when the server allows the delete of the key no row has. The tables
+  of the system database `rethinkdb` answer `info()` to every account, so there the read check
+  also reads the key no row has, which the server refuses to an account that may not read. The
+  answer has `canRead` when the account reads any table or the database has none, and `canWrite`
+  when it writes any table. No row changes. It asks about 32 tables at a time and stops after the
+  batch in which one table has proven each, so an account that may only read is asked about every
+  table. On a fresh connection the server takes about a millisecond per table the first time, so
+  2,000 tables take a few seconds.
+- **A missing database is an answer.** A URL with no path answers `signed-in` with
+  `unreadable: "no-database-named"`, and a database the server lacks, or a name the server
+  refuses as a database name, answers `unreadable: "no-database"`, both with no access. A path
+  that is not valid percent-encoding answers `unreachable` before the probe connects. `user` is
+  the URL's user, or `admin`. Any other error the server answers to the listing of the tables
+  answers `unreadable: "cannot-list"` with no access.
+- **A wrong password is refused.** The server's `ReqlAuthError` answers
+  `{ outcome: "refused", refusal: "credentials" }`. A server that asks for more than 100,000
+  iterations of the password derivation (RethinkDB stores 4,096 unless an account is created with
+  more) answers `{ outcome: "refused", refusal: "other" }` before the probe derives anything,
+  because the derivation would hold a thread of the process's shared pool until it ends. Every
+  other failure answers `unreachable`.
+- **It never waits on the server.** `timeoutMs` bounds the connect and each answer after it: the
+  probe closes the connection when an answer is late. When `signal` aborts before the probe has
+  settled, it closes the connection and resolves at once to
+  `{ outcome: "unreachable", message: "The probe was aborted." }`, whatever the server has answered
+  so far. A signal already aborted opens no connection. It never rejects.

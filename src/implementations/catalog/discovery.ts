@@ -7,7 +7,7 @@ import type {
   RelationSummary,
   RelationWrites,
 } from "@antelopejs/interface-database-catalog";
-import { r, type RStream } from "rethinkdb-ts";
+import { type Connection, r, type RStream, type RTable } from "rethinkdb-ts";
 
 import { ExternalDatabaseName, GetOptions } from "../../config";
 import { KeyOf } from "../database/external-descriptor";
@@ -36,6 +36,7 @@ interface FieldType {
 const DEFAULT_PRIMARY_KEY = "id";
 const FALLBACK_ROWS = 1000;
 const UNREACHABLE_KEY = "__antelopejs_write_probe__ no row has this key";
+const SYSTEM_DATABASE = "rethinkdb";
 const DOMINANT_SHARE = 0.8;
 const PERCENT = 100;
 const NULL_TYPE = "NULL";
@@ -66,8 +67,26 @@ export async function ReadInfo(): Promise<CatalogInfo> {
   };
 }
 
+/**
+ * The info of a table, which the server answers only to an account that may read the table. The
+ * tables of the system database answer `info()` to every account, so there a read of the key no
+ * row has comes first, which the server refuses to an account that may not read. On no
+ * connection, it runs on the pool of the instance.
+ */
+export async function TableInfoOf(
+  database: string,
+  name: string,
+  connection?: Connection,
+): Promise<TableInfo> {
+  const table = r.db(database).table(name);
+  if (database === SYSTEM_DATABASE) {
+    await table.get(UNREACHABLE_KEY).run(connection);
+  }
+  return table.info().run(connection);
+}
+
 export async function ListTable(name: string): Promise<ListedTable> {
-  const info: TableInfo = await Table(name).info().run();
+  const info = await TableInfoOf(ExternalDatabaseName(), name);
   const primaryKey = info.primary_key ?? DEFAULT_PRIMARY_KEY;
   const uuidKeys = await UuidKeys(name, primaryKey);
   return {
@@ -83,13 +102,17 @@ export async function ListTable(name: string): Promise<ListedTable> {
 
 /**
  * Whether the account may write a table, from a delete of a key no row has: it answers a
- * permission error to a reader and `skipped: 1` to a writer, and changes nothing either way.
+ * permission error to a reader and `skipped: 1` to a writer, and changes nothing either way. On no
+ * connection, it runs on the pool of the instance.
  */
-async function Writes(name: string): Promise<RelationWrites> {
-  const allowed = await Table(name)
+export async function Writes(
+  table: RTable,
+  connection?: Connection,
+): Promise<RelationWrites> {
+  const allowed = await table
     .get(UNREACHABLE_KEY)
     .delete()
-    .run()
+    .run(connection)
     .then(
       () => true,
       () => false,
@@ -108,7 +131,7 @@ export async function Summarize(table: ListedTable): Promise<RelationSummary> {
     key: finding.key
       ? { columns: [table.primaryKey], source: "primary" }
       : null,
-    writes: await Writes(table.name),
+    writes: await Writes(Table(table.name)),
     comment: null,
   };
 }
