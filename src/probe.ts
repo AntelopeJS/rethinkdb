@@ -43,6 +43,7 @@ interface Session {
 const MS_PER_SECOND = 1000;
 const TABLES_AT_ONCE = 32;
 const DONE = "the probe has answered";
+const FAILED = "the connection failed";
 const DROPPED =
   "the server closed the connection before it answered every table check";
 const ABORTED: ProbeAnswer = {
@@ -197,13 +198,35 @@ async function SignIn(session: Session, url: string): Promise<ProbeAnswer> {
   });
 }
 
+function IsError(value: unknown): value is Error {
+  return value instanceof Error;
+}
+
+/**
+ * The message of a failure, never empty: an error with no message of its own, as the
+ * `AggregateError` Node's connect throws when every address of a host such as `localhost` refuses,
+ * gives the messages of its `errors`.
+ */
+function MessageOf(error: Error): string {
+  const errors = "errors" in error ? error.errors : undefined;
+  if (error.message || !Array.isArray(errors)) {
+    return error.message;
+  }
+  return errors
+    .filter(IsError)
+    .map((inner) => inner.message)
+    .filter((inner) => inner !== "")
+    .join("; ");
+}
+
 async function Answer(session: Session, url: string): Promise<ProbeAnswer> {
   try {
     return await SignIn(session, url);
   } catch (error) {
     const { signal: closed } = session.closer;
     const cause: unknown = closed.aborted ? closed.reason : error;
-    const message = cause instanceof Error ? cause.message : String(cause);
+    const message =
+      (cause instanceof Error ? MessageOf(cause) : String(cause)) || FAILED;
     return isRethinkDBError(cause) && cause.type === RethinkDBErrorType.AUTH
       ? { outcome: "refused", refusal: "credentials", message }
       : { outcome: "unreachable", message };

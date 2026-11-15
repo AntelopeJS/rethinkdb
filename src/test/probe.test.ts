@@ -230,6 +230,14 @@ function RefusedCases() {
     expect(answer.outcome).to.equal("unreachable");
   });
 
+  it("names why a closed localhost port is unreachable, from each address the connect tried", async () => {
+    const answer = await Probe(
+      `rethinkdb://localhost:${await ClosedPort()}/shop`,
+    );
+    expect(answer).to.have.property("outcome", "unreachable");
+    expect(answer).to.have.property("message").that.includes("ECONNREFUSED");
+  });
+
   it("answers a server that never speaks as unreachable, once the connect times out", async () => {
     const silent = await SilentServer();
     try {
