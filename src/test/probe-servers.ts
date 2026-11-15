@@ -19,7 +19,8 @@ function PortOf(server: net.Server): number {
   return address.port;
 }
 
-async function Listen(server: net.Server): Promise<number> {
+/** Listens on a free local port, and answers it. */
+export async function Listen(server: net.Server): Promise<number> {
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   return PortOf(server);
 }
