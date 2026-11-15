@@ -54,16 +54,17 @@ function Field(authentication: string, name: string): string {
 function ServerFirst(
   clientFirst: string,
   salt: Buffer,
-  iterations: number,
+  iterationsField: string,
 ): string {
   const nonce = `${Field(clientFirst, "r")}${randomBytes(18).toString("base64")}`;
-  return `r=${nonce},s=${salt.toString("base64")},i=${iterations}`;
+  return `r=${nonce},s=${salt.toString("base64")},${iterationsField}`;
 }
 
 function Record(
   socket: net.Socket,
   signIns: SignIn[],
   iterations: number,
+  iterationsField: string,
 ): void {
   const salt = randomBytes(16);
   let pending = Buffer.alloc(0);
@@ -83,7 +84,7 @@ function Record(
     if (!serverFirst) {
       const clientFirst = AuthenticationOf(pending.subarray(MAGIC_BYTES, end));
       clientFirstBare = clientFirst.slice(clientFirst.indexOf("n="));
-      serverFirst = ServerFirst(clientFirst, salt, iterations);
+      serverFirst = ServerFirst(clientFirst, salt, iterationsField);
       pending = pending.subarray(end + 1);
       socket.write(
         Buffer.concat([
@@ -118,16 +119,20 @@ function Record(
   socket.on("error", () => undefined);
 }
 
-/** Starts a server that records each sign-in, asking for `iterations` of the password derivation. */
+/**
+ * Starts a server that records each sign-in, asking for `iterations` of the password derivation in
+ * the third field of its first SCRAM message, written as `iterationsField`.
+ */
 export async function StartScramRecorder(
   iterations = ITERATIONS,
+  iterationsField = `i=${iterations}`,
 ): Promise<ScramRecorder> {
   const signIns: SignIn[] = [];
   const sockets = new Set<net.Socket>();
   const server = net.createServer((socket) => {
     sockets.add(socket);
     socket.on("close", () => sockets.delete(socket));
-    Record(socket, signIns, iterations);
+    Record(socket, signIns, iterations, iterationsField);
   });
   return {
     port: await Listen(server),

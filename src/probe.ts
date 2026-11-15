@@ -48,7 +48,6 @@ const TABLES_AT_ONCE = 32;
 const DONE = "the probe has answered";
 const FAILED = "the connection failed";
 const MAX_ITERATIONS = 100_000;
-const ITERATIONS = /(?:^|,)i=(\d+)/;
 const DROPPED =
   "the server closed the connection before it answered every table check";
 const ABORTED: ProbeAnswer = {
@@ -178,6 +177,18 @@ function IsServerFirst(
   );
 }
 
+/**
+ * The iterations the client derives the password with, read as `rethinkdb-ts` reads them: the
+ * third comma-separated field of the server's first SCRAM message, whatever its key, without its
+ * first two characters.
+ */
+function IterationsOf(authentication: string): number {
+  const ITERATIONS_FIELD = 2;
+  const KEY_LENGTH = 2;
+  const field = authentication.split(",")[ITERATIONS_FIELD] ?? "";
+  return Number.parseInt(field.slice(KEY_LENGTH), 10);
+}
+
 /** The probe refuses a server that asks for more iterations than `MAX_ITERATIONS`. */
 class CostlyDerivation extends Error {}
 
@@ -204,7 +215,7 @@ async function Connect(
   socket.readNext = async <T>(token: number): Promise<T> => {
     const message = await read<T>(token);
     const iterations = IsServerFirst(message)
-      ? Number(ITERATIONS.exec(message.authentication)?.[1] ?? 0)
+      ? IterationsOf(message.authentication)
       : 0;
     if (iterations > MAX_ITERATIONS) {
       throw new CostlyDerivation(
