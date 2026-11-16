@@ -19,6 +19,7 @@ The RethinkDB backend for AntelopeJS, published as `@antelopejs/rethinkdb`. It i
 - Every test needs a RethinkDB 2.4 server on `127.0.0.1:28015`, including `pnpm run checks`. Start it with `docker compose -f .github/release-services.yml up -d --wait`.
 - `pnpm test` builds once (`pnpm run build`), then runs `ajs module test .`: the other suites in `src/test/`, compiled to `dist/test`, followed by the shared conformance suites of `@antelopejs/interface-database`. Those suites `require("chai")` from this package, which is why `knip.config.ts` ignores `chai`, `@types/chai` and `@types/mocha`.
 - `pnpm test` then runs the external-mode suites in `dist/test-external` with `RETHINK_TEST_MODE=external`: the test project seeds the client database `erp_test` as admin, with `erp_reader` and `erp_writer` accounts, and constructs the module as `erp_writer`. `pnpm test:external` runs only those suites.
+- `pnpm test` ends with the formal check of the stale index rebuild, `pnpm run test:formal`: a TLA+ model of concurrent boots, run by TLC from Java on `$JAVA` or `PATH`, else from Docker, described in [`.agents/skills/formal-index-rebuild/SKILL.md`](.agents/skills/formal-index-rebuild/SKILL.md). Run it after a change to `initialize.ts`, `index-state.ts` or `indexes.ts`.
 - `pnpm run checks` runs every test; there is no separate suite.
 
 <!-- antelopejs-guardrails:start -->

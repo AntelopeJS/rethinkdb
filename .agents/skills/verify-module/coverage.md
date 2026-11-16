@@ -55,8 +55,8 @@ Doc keys: R = rethinkdb README.md, X = rethinkdb docs/external-mode.md, I = inte
 
 | # | Documented behaviour | Source | Journey: check |
 | --- | --- | --- | --- |
-| 33 | insert resolves to generated ids, one per document | I write_results | writes/insert-values: "an array insert resolves to one id per document", "generated ids are non-empty text" |
-| 34 | insert of a provided `_id` resolves to that id | I write_results | not asserted: head answers `[]` (rethinkdb#73); asserting the docs would fail head, asserting head would pin the bug. The stored row is asserted |
+| 33 | insert resolves to generated ids, one per document, in input order beside provided ones | I write_results | writes/insert-values: "an array insert resolves to one id per document", "generated ids are non-empty text"; writes/insert-keys: "the generated keys are non-empty text", "the first generated key of the array is the key stored for that document", "the second ..." |
+| 34 | insert of a provided `_id` resolves to that id | I write_results | writes/insert-keys: "a document with a provided _id resolves to that _id", "a provided _id keeps its place among generated ones, first" and "..., third" |
 | 35 | conflict `update` keeps unmentioned fields, `replace` drops them, both answer the id | I 4.crud.md | writes/insert-conflicts |
 | 36 | a single row error is surfaced (DuplicateKeyError) | I 4.crud.md | writes/insert-conflicts, schemas/instances, external-write/external-writes |
 | 37 | update changes only given fields, answers the count; function update | I 3.selection.md | writes/update-replace-delete |
@@ -107,7 +107,7 @@ Doc keys: R = rethinkdb README.md, X = rethinkdb docs/external-mode.md, I = inte
 | 64 | `cursor()` yields one row at a time | I 7.query.md | reads/read-streams: "cursor() yields the rows one at a time, in order" |
 | 65 | `run()` executes | I 7.query.md | reads/read-streams: "run() executes the query" |
 | 66 | stream `key(field)` | I 5.stream.md | reads/read-streams: "key reads one field of every row" |
-| 67 | stream `key(field, fallback)` | I 5.stream.md | not asserted: head ignores the fallback (rethinkdb#74) |
+| 67 | stream `key(field, fallback)` | I 5.stream.md | reads/read-streams: "key(field, fallback) of a stream gives each row the fallback for a null and for a missing field", "... reads the value of every row that has one", "... gives the fallback for every row when no row has the field" |
 | 68 | document `key(field, fallback)` for null, missing and present | I 8.datum.md | reads/read-streams: "key(field, fallback) of a document reads the fallback for null and missing, and the value otherwise" |
 | 69 | key chains on a document | I 8.datum.md | reads/read-streams: "key chains read a nested field" |
 | 70 | `default` on a missing field and a missing document | I 8.datum.md | reads/read-streams: "default replaces a missing field", "default replaces a missing document" |
@@ -120,7 +120,7 @@ Doc keys: R = rethinkdb README.md, X = rethinkdb docs/external-mode.md, I = inte
 | 77 | join (left) answers `null` for the right side when no match exists; joinInner keeps the pairs that match | I 5.stream.md | reads/read-streams: "join answers null for the right side of a left row nothing matches, without a default", "joinInner keeps the pairs that match" |
 | 78 | lookup of a single key on a stream | I 7.lookup.md | reads/read-streams: "lookup of a single key replaces it with the document it names" |
 | 79 | lookup on a single document | I 7.lookup.md, 8.datum.md | reads/read-streams: "lookup on a single document replaces its key with the document and keeps its fields" |
-| 80 | lookup of a list of keys answers a list of documents | I 7.lookup.md | not asserted: head answers an empty list (rethinkdb#75) |
+| 80 | lookup of a list of keys answers a list of documents | I 7.lookup.md | reads/read-streams: "lookup of a list of keys replaces it with the documents those keys name", "lookup of a list of keys on a single document replaces it with the documents those keys name" |
 | 81 | nth(n) by position | I 5.stream.md | reads/read-streams: "nth(0) reads the first row in order", "nth(3) reads the fourth row in order" |
 | 82 | nth past the end | I | not asserted: the docs give no answer for it |
 | 83 | stream `default()` on a sequence | I 5.stream.md | not asserted: the docs do not say whether it applies per row |
@@ -228,3 +228,14 @@ Doc keys: R = rethinkdb README.md, X = rethinkdb docs/external-mode.md, I = inte
 | 134 | `RunQuery` runs a query on the module's connection; `r` is rethinkdb-ts | Q | raw-client/raw-client |
 | 164 | a table named without a database is read from the configured default database | Q docs/1.introduction.md | raw-client/raw-client: "a table named without a database is read from the configured default database" |
 | 135 | run options pass through to the driver | Q | not asserted: `readMode`, `durability` have no observable answer on a single server |
+
+### Index rebuild at boot and the connection probe (README, CHANGELOG 1.9.0, X)
+
+| # | Documented behaviour | Source | Journey: check |
+| --- | --- | --- | --- |
+| 166 | boot rebuilds an index whose stored function differs from its definition: it builds `<name>__rebuild`, swaps it in, keeps the rows and leaves no `__rebuild` index | CHANGELOG 1.9.0 (#105) | schemas/stale-index-rebuild: "a read by the declared nested field finds the row the stale index missed", "the table holds code__i and tenant_id and no code__rebuild", "the rebuilt index finds the row by the nested field" |
+| 167 | processes booting at once on one stale index each end with the declared function stored once, no `__rebuild` left, and no boot fails while another still makes progress | `initialize.ts` TSDoc | not asserted by a journey: needs several processes racing; the formal check `formal-index-rebuild` (`.agents/skills/formal-index-rebuild/`) models it |
+| 168 | `probe` answers `signed-in` with `canRead` and `canWrite` for the URL's database, and `canWrite` also when the account may create tables there, with or without tables | X The connection probe | probe/connection-probe: "admin on a database with no table reads it and may build in it", "an account that may only read a database with no table does not write", "an account with the config right on a database with no table writes", "an account that may only read a database with tables does not write", "an account with the config right on a database with tables writes, though it may not write a table" |
+| 169 | the probe answers a missing database and a URL with no database as no access, and a wrong password as refused | X | probe/connection-probe: "a database the server lacks answers no access", "a URL with no database answers no access", "a wrong password is refused" |
+| 170 | the probe changes no row and creates no table | X | probe/connection-probe: "the probes created no table and wrote no row" |
+| 171 | `timeoutMs`, `signal`, the 100,000-iteration limit, a dropped connection and the 32-table batches | X | not asserted by a journey: needs a server that stalls or lies; `src/test/probe.test.ts` and `src/test/probe-credentials.test.ts` drive them through a relay |
