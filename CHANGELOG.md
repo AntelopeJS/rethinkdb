@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.10.5
+
+[compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.10.4...v1.10.5)
+
+### 🩹 Fixes
+
+- **probe:** Count the right to create tables as write access ([#121](https://github.com/AntelopeJS/rethinkdb/pull/121))
+- **catalog:** End a number field's range at values counted 5 times ([#124](https://github.com/AntelopeJS/rethinkdb/pull/124))
+
+### 📦 Build
+
+- Move to @antelopejs/tooling-configs 0.8 and the three-tier CI ([#119](https://github.com/AntelopeJS/rethinkdb/pull/119))
+
+### ✅ Tests
+
+- **verify:** Keep the verification skill in line, add three journeys and a formal check of concurrent index rebuilds ([#122](https://github.com/AntelopeJS/rethinkdb/pull/122))
+
+### ❤️ Contributors
+
+- Antony Rizzitelli
+
 ## v1.10.4
 
 [compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.10.3...v1.10.4)
