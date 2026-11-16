@@ -33,6 +33,18 @@ describe("the range of an external number field", function () {
     expect(received).to.not.include("7009");
   });
 
+  it("keeps the true ends of a date field, and its time-axis trait", async () => {
+    const { answer } = await Received(() =>
+      Profile({
+        relation: `${CLIENT_DATABASE}.orders`,
+        columns: ["ordered_at"],
+      }),
+    );
+    const profile = answer.columns[0];
+    expect(profile?.range?.status).to.equal("ok");
+    expect(profile?.traits).to.include("time-axis");
+  });
+
   it("answers empty for a field whose every value is seen once", async () => {
     const { profile } = await ProfiledColumn("serial");
     expect(profile?.range).to.deep.equal({ status: "error", code: "empty" });

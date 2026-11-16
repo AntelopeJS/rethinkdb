@@ -24,6 +24,7 @@ import {
 
 const CATEGORY_LIMIT = 25;
 const CATEGORY_MIN_ROWS = 5;
+const ARRAY_LIMIT = 1_000_000;
 const ENUM_LIKE_MIN_ROWS = 100;
 const MONTH_LIMIT = 36;
 const LABEL_DISTINCT_SHARE = 0.9;
@@ -99,21 +100,27 @@ async function Range(
   column: ProfiledColumn,
 ): Promise<Measure<ValueRange>> {
   const values = Present(source, column);
-  const candidates =
+  const query =
     column.kind === "number"
-      ? values
-          .group((value) => value)
-          .count()
-          .ungroup()
-          .filter((group: RDatum) => group("reduction").ge(CATEGORY_MIN_ROWS))
-          .map((group: RDatum) => group("group"))
-      : values;
-  const ends = await Measured<RangeEnds>(
-    r.do(candidates, (counted: RDatum) => ({
-      min: counted.min().default(null),
-      max: counted.max().default(null),
-    })),
-  );
+      ? r.do(
+          values
+            .group((value) => value)
+            .count()
+            .ungroup()
+            .filter((group: RDatum) => group("reduction").ge(CATEGORY_MIN_ROWS))
+            .map((group: RDatum) => group("group")),
+          (counted: RDatum) => ({
+            min: counted.min().default(null),
+            max: counted.max().default(null),
+          }),
+        )
+      : r.expr({
+          min: values.min().default(null),
+          max: values.max().default(null),
+        });
+  const ends = await Measured<RangeEnds>({
+    run: (connection) => query.run(connection, { arrayLimit: ARRAY_LIMIT }),
+  });
   if (ends.status !== "ok") {
     return ends;
   }
