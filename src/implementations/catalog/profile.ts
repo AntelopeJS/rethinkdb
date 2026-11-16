@@ -80,30 +80,50 @@ function Present(source: Source, column: ProfiledColumn) {
     .filter((value: RDatum) => value.ne(null));
 }
 
-function Extreme(source: Source, column: ProfiledColumn, max: boolean) {
-  const values = Present(source, column);
-  return max ? values.max() : values.min();
-}
-
 function RangeEnd(value: number | Date): number | string {
   return value instanceof Date ? value.toISOString() : value;
 }
 
+interface RangeEnds {
+  min: number | Date | null;
+  max: number | Date | null;
+}
+
+/**
+ * The ends of a number field are taken among values counted at least 5 times on the server, so a
+ * rare value never leaves the database. A date keeps its true ends. A range with no end answers
+ * `empty`.
+ */
 async function Range(
   source: Source,
   column: ProfiledColumn,
 ): Promise<Measure<ValueRange>> {
-  const min = await Measured<number | Date>(Extreme(source, column, false));
-  const max = await Measured<number | Date>(Extreme(source, column, true));
-  if (min.status !== "ok") {
-    return min;
+  const values = Present(source, column);
+  const candidates =
+    column.kind === "number"
+      ? values
+          .group((value) => value)
+          .count()
+          .ungroup()
+          .filter((group: RDatum) => group("reduction").ge(CATEGORY_MIN_ROWS))
+          .map((group: RDatum) => group("group"))
+      : values;
+  const ends = await Measured<RangeEnds>(
+    r.do(candidates, (counted: RDatum) => ({
+      min: counted.min().default(null),
+      max: counted.max().default(null),
+    })),
+  );
+  if (ends.status !== "ok") {
+    return ends;
   }
-  return max.status === "ok"
-    ? {
+  const { min, max } = ends.value;
+  return min === null || max === null
+    ? { status: "error", code: "empty" }
+    : {
         status: "ok",
-        value: { min: RangeEnd(min.value), max: RangeEnd(max.value) },
-      }
-    : max;
+        value: { min: RangeEnd(min), max: RangeEnd(max) },
+      };
 }
 
 async function Length(

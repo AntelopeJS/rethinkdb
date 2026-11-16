@@ -153,8 +153,11 @@ set. An owned instance refuses every catalog call.
   rows. Any other large table is read through `sample(50000)`, which reads the whole table under
   the time limit.
 - **Values appear only as categories.** The catalog names values only as the categories of a
-  field with at most 25 distinct values, each counted at least 5 times. A text field answers no
-  minimum or maximum value, only the minimum, average, and maximum of its lengths. `SampleRows`
+  field with at most 25 distinct values, each counted at least 5 times. The range of a number
+  field ends at the smallest and largest values counted at least 5 times, and answers
+  `{ status: "error", code: "empty" }` when none is; a date field answers its true minimum and
+  maximum. A text field answers no minimum or maximum value, only the minimum, average, and
+  maximum of its lengths. `SampleRows`
   answers at most 20 rows, as text cut at 200 characters, for a person to look at.
 
 ## The connection probe
