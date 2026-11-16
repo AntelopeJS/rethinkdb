@@ -32,7 +32,8 @@ const READER = `probe_reader_${RUN}`;
 const WRITER = `probe_writer_${RUN}`;
 const BLIND = `probe_blind_${RUN}`;
 const MAILED = `probe@reader_${RUN}`;
-const ACCOUNTS = [READER, WRITER, BLIND, MAILED];
+const BUILDER = `probe_builder_${RUN}`;
+const ACCOUNTS = [READER, WRITER, BLIND, MAILED, BUILDER];
 const PROBE_FILE = path.join(__dirname, "..", "probe.js");
 const INTERNAL = 1_000_000;
 const OP_FAILED = 4_100_000;
@@ -78,6 +79,8 @@ async function SetUpShop(admin: Connection) {
   await r.db(SHOP).grant(READER, { read: true }).run(admin);
   await r.db(SHOP).grant(MAILED, { read: true }).run(admin);
   await r.db(SHOP).grant(WRITER, { read: true, write: true }).run(admin);
+  await r.db(EMPTY).grant(READER, { read: true }).run(admin);
+  await r.db(EMPTY).grant(BUILDER, { read: true, config: true }).run(admin);
   await r.dbCreate(WIDE).run(admin);
   await Promise.all(
     Array.from({ length: WIDE_TABLES }, (_, index) =>
@@ -163,14 +166,37 @@ function AccountCases() {
 }
 
 function DatabaseCases() {
-  it("answers a database with no table as read and not written, under admin when the URL names no user", async () => {
+  it("answers a database with no table as read, and written under admin when the URL names no user", async () => {
     const url = `rethinkdb://${SERVER.host}:${SERVER.port}/${EMPTY}`;
     expect(await Probe(url)).to.deep.include({
       outcome: "signed-in",
       user: "admin",
       canRead: true,
-      canWrite: false,
+      canWrite: true,
     });
+  });
+
+  /**
+   * Fails on a probe that answers write access on a database with no table by anything but the
+   * right to create tables there, or that misses that right.
+   */
+  it("answers a database with no table as written only by an account that may create tables in it", async () => {
+    for (const [user, canWrite] of [
+      [READER, false],
+      [BUILDER, true],
+    ] as const) {
+      const answer = await Probe(UrlOf(user, { database: EMPTY }));
+      expect(answer, user).to.deep.include({
+        outcome: "signed-in",
+        user,
+        canRead: true,
+        canWrite,
+      });
+      expect(answer, user).to.not.have.property("unreadable");
+    }
+    expect(
+      await AsAdmin((admin) => r.db(EMPTY).tableList().run(admin)),
+    ).to.deep.equal([]);
   });
 
   it("answers a database the server lacks as signed in, with no access", async () => {
@@ -263,7 +289,7 @@ function RefusedCases() {
 }
 
 function BoundedWorkCases() {
-  const FIRST_QUERY_AND_LISTING = 2;
+  const FIRST_QUERY_LISTING_AND_CREATE_CHECK = 3;
   const BATCH = 32;
 
   async function QueriesOf(user: string) {
@@ -282,14 +308,14 @@ function BoundedWorkCases() {
   it("stops checking tables once one has proven read and one has proven write", async () => {
     const { answer, queries } = await QueriesOf(WRITER);
     expect(answer).to.deep.include({ canRead: true, canWrite: true });
-    expect(queries).to.equal(FIRST_QUERY_AND_LISTING + 2 * BATCH);
+    expect(queries).to.equal(FIRST_QUERY_LISTING_AND_CREATE_CHECK + 2 * BATCH);
   });
 
   it("checks only write on the tables after the one that proved read", async () => {
     const { answer, queries } = await QueriesOf(READER);
     expect(answer).to.deep.include({ canRead: true, canWrite: false });
     expect(queries).to.equal(
-      FIRST_QUERY_AND_LISTING + 2 * BATCH + (WIDE_TABLES - BATCH),
+      FIRST_QUERY_LISTING_AND_CREATE_CHECK + 2 * BATCH + (WIDE_TABLES - BATCH),
     );
   });
 }
@@ -339,17 +365,17 @@ function ServerFailureCases() {
     }
   });
 
-  it("answers unreachable, not an account with no access, when the server drops the connection during the table checks", async () => {
-    const FIRST_TABLE_CHECK = 3;
-    const relay = await StartRelay(
-      SERVER.port,
-      DropsOnChunk(FIRST_TABLE_CHECK),
-    );
-    try {
-      const answer = await Probe(UrlOf("admin", { port: relay.port }));
-      expect(answer.outcome).to.equal("unreachable");
-    } finally {
-      await relay.close();
+  it("answers unreachable, not an account with no access, when the server drops the connection during the create or table checks", async () => {
+    const CREATE_CHECK = 3;
+    const FIRST_TABLE_CHECK = 4;
+    for (const chunk of [CREATE_CHECK, FIRST_TABLE_CHECK]) {
+      const relay = await StartRelay(SERVER.port, DropsOnChunk(chunk));
+      try {
+        const answer = await Probe(UrlOf("admin", { port: relay.port }));
+        expect(answer.outcome, String(chunk)).to.equal("unreachable");
+      } finally {
+        await relay.close();
+      }
     }
   });
 }
