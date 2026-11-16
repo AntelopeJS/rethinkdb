@@ -179,9 +179,11 @@ const answer = await probe({
   of the system database `rethinkdb` answer `info()` to every account, so there the read check
   also reads the key no row has, which the server refuses to an account that may not read. The
   answer has `canRead` when the account reads any table or the database has none, and `canWrite`
-  when it writes any table. No row changes. It asks about 32 tables at a time and stops after the
-  batch in which one table has proven each, so an account that may only read is asked about every
-  table. On a fresh connection the server takes about a millisecond per table the first time, so
+  when it may create tables in the database or writes any table, so an empty database it may
+  build in is not read-only. It may create tables when the server answers the database's
+  `config()`, which needs the `config` permission `tableCreate` needs. No row or table changes.
+  It asks about 32 tables at a time and stops after the batch in which one table has proven each,
+  so an account that may only read is asked about every table. On a fresh connection the server takes about a millisecond per table the first time, so
   2,000 tables take a few seconds.
 - **A missing database is an answer.** A URL with no path answers `signed-in` with
   `unreadable: "no-database-named"`, and a database the server lacks, or a name the server

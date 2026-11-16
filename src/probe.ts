@@ -111,8 +111,9 @@ async function AccessOfTables(
   connection: Connection,
   database: string,
   names: readonly string[],
+  createsTables: boolean,
 ): Promise<TableAccess> {
-  let proven: TableAccess = { readable: false, writable: false };
+  let proven: TableAccess = { readable: false, writable: createsTables };
   for (
     let first = 0;
     first < names.length && !(proven.readable && proven.writable);
@@ -163,6 +164,32 @@ async function TableNamesOf(
         error.message.includes(MISSING))
       ? "no-database"
       : "cannot-list";
+  }
+}
+
+/**
+ * Whether the account may create tables in the database: the server answers the database's
+ * `config()` only to an account with the `config` permission on it, which `tableCreate` needs.
+ * Reading it changes nothing. The server refuses it, as it refuses `tableCreate`, on the system
+ * database `rethinkdb` too. An error of the driver itself, such as a closed connection, throws.
+ */
+async function CreatesTables(
+  session: Session,
+  connection: Connection,
+  database: string,
+): Promise<boolean> {
+  try {
+    await Within(session, () => r.db(database).config().run(connection));
+    return true;
+  } catch (error) {
+    if (
+      !isRethinkDBError(error) ||
+      error.name === DRIVER_ERROR ||
+      session.closer.signal.aborted
+    ) {
+      throw error;
+    }
+    return false;
   }
 }
 
@@ -247,7 +274,13 @@ async function SignIn(session: Session, url: string): Promise<ProbeAnswer> {
   if (!Array.isArray(names)) {
     return signedIn(Unreadable(names));
   }
-  const access = await AccessOfTables(session, connection, database, names);
+  const access = await AccessOfTables(
+    session,
+    connection,
+    database,
+    names,
+    await CreatesTables(session, connection, database),
+  );
   return signedIn({
     canRead: names.length === 0 || access.readable,
     canWrite: access.writable,
@@ -309,8 +342,10 @@ function Aborted(
  * Signs in to the RethinkDB server of `url` and asks it what the account may do to each table of
  * the database the URL's path names, with the catalog's own checks: an account reads a table when
  * the server answers its `info()`, and writes it when the server allows the delete of a key no row
- * has, which changes nothing. The client's `timeout` bounds only the connect, so each answer after
- * it is bounded by closing the connection. When `signal` aborts before the probe has settled, it
+ * has, which changes nothing. It also writes when the server answers the database's `config()`,
+ * the permission `tableCreate` needs, so an empty database it may build in is not read-only. The
+ * client's `timeout` bounds only the connect, so each answer after it is bounded by closing the
+ * connection. When `signal` aborts before the probe has settled, it
  * closes the connection and resolves at once to `unreachable` with "The probe was aborted.",
  * whatever the server has answered so far; already aborted, it opens no connection.
  */
