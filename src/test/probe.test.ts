@@ -81,6 +81,7 @@ async function SetUpShop(admin: Connection) {
   await r.db(SHOP).grant(WRITER, { read: true, write: true }).run(admin);
   await r.db(EMPTY).grant(READER, { read: true }).run(admin);
   await r.db(EMPTY).grant(BUILDER, { read: true, config: true }).run(admin);
+  await r.db(SHOP).grant(BUILDER, { read: true, config: true }).run(admin);
   await r.dbCreate(WIDE).run(admin);
   await Promise.all(
     Array.from({ length: WIDE_TABLES }, (_, index) =>
@@ -178,21 +179,24 @@ function DatabaseCases() {
 
   /**
    * Fails on a probe that answers write access on a database with no table by anything but the
-   * right to create tables there, or that misses that right.
+   * right to create tables there, or that counts that right only on a database with no table.
    */
-  it("answers a database with no table as written only by an account that may create tables in it", async () => {
-    for (const [user, canWrite] of [
-      [READER, false],
-      [BUILDER, true],
+  it("answers a database as written by an account that may create tables in it, with or without tables", async () => {
+    for (const [user, database, canWrite] of [
+      [READER, EMPTY, false],
+      [BUILDER, EMPTY, true],
+      [BUILDER, SHOP, true],
     ] as const) {
-      const answer = await Probe(UrlOf(user, { database: EMPTY }));
-      expect(answer, user).to.deep.include({
+      const answer = await Probe(UrlOf(user, { database }));
+      expect(answer, `${user} on ${database}`).to.deep.include({
         outcome: "signed-in",
         user,
         canRead: true,
         canWrite,
       });
-      expect(answer, user).to.not.have.property("unreadable");
+      expect(answer, `${user} on ${database}`).to.not.have.property(
+        "unreadable",
+      );
     }
     expect(
       await AsAdmin((admin) => r.db(EMPTY).tableList().run(admin)),
