@@ -372,11 +372,16 @@ function ServerFailureCases() {
   it("answers unreachable, not an account with no access, when the server drops the connection during the create or table checks", async () => {
     const CREATE_CHECK = 3;
     const FIRST_TABLE_CHECK = 4;
-    for (const chunk of [CREATE_CHECK, FIRST_TABLE_CHECK]) {
+    for (const [chunk, database] of [
+      [CREATE_CHECK, EMPTY],
+      [FIRST_TABLE_CHECK, SHOP],
+    ] as const) {
       const relay = await StartRelay(SERVER.port, DropsOnChunk(chunk));
       try {
-        const answer = await Probe(UrlOf("admin", { port: relay.port }));
-        expect(answer.outcome, String(chunk)).to.equal("unreachable");
+        const answer = await Probe(
+          UrlOf("admin", { database, port: relay.port }),
+        );
+        expect(answer.outcome, database).to.equal("unreachable");
       } finally {
         await relay.close();
       }
