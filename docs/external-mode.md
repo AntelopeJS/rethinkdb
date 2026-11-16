@@ -153,8 +153,11 @@ set. An owned instance refuses every catalog call.
   rows. Any other large table is read through `sample(50000)`, which reads the whole table under
   the time limit.
 - **Values appear only as categories.** The catalog names values only as the categories of a
-  field with at most 25 distinct values, each counted at least 5 times. A text field answers no
-  minimum or maximum value, only the minimum, average, and maximum of its lengths. `SampleRows`
+  field with at most 25 distinct values, each counted at least 5 times. The range of a number
+  field ends at the smallest and largest values counted at least 5 times, and answers
+  `{ status: "error", code: "empty" }` when none is; a date field answers its true minimum and
+  maximum. A text field answers no minimum or maximum value, only the minimum, average, and
+  maximum of its lengths. `SampleRows`
   answers at most 20 rows, as text cut at 200 characters, for a person to look at.
 
 ## The connection probe
@@ -179,9 +182,11 @@ const answer = await probe({
   of the system database `rethinkdb` answer `info()` to every account, so there the read check
   also reads the key no row has, which the server refuses to an account that may not read. The
   answer has `canRead` when the account reads any table or the database has none, and `canWrite`
-  when it writes any table. No row changes. It asks about 32 tables at a time and stops after the
-  batch in which one table has proven each, so an account that may only read is asked about every
-  table. On a fresh connection the server takes about a millisecond per table the first time, so
+  when it may create tables in the database or writes any table, so an empty database it may
+  build in is not read-only. It may create tables when the server answers the database's
+  `config()`, which needs the `config` permission `tableCreate` needs. No row or table changes.
+  It asks about 32 tables at a time and stops after the batch in which one table has proven each,
+  so an account that may only read is asked about every table. On a fresh connection the server takes about a millisecond per table the first time, so
   2,000 tables take a few seconds.
 - **A missing database is an answer.** A URL with no path answers `signed-in` with
   `unreadable: "no-database-named"`, and a database the server lacks, or a name the server

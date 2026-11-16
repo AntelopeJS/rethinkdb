@@ -9,6 +9,7 @@ function part(result: Answer, key: string): Answer {
 const SEED = `const schema = new db.Schema("verify-reads", {
   products: { fields: { name: "string", price: "number", category: "string", addedAt: "date", secret: "string", note: "string", meta: "object" }, indexes: { category: {}, price: {}, addedAt: {}, cat_name: { fields: ["category", "name"] } } },
   orders: { fields: { productId: "string", qty: "number" }, indexes: {} },
+  carts: { fields: { productIds: "string[]" }, indexes: {} },
 });
 await schema.createInstance("a");
 const products = schema.instance("a").table("products");
@@ -21,6 +22,7 @@ await products.insert([
   { _id: "p5", name: "Easel", price: 50, category: "art", addedAt: new Date("2024-05-01T00:00:00.000Z"), secret: "s5", note: null, meta: { dims: { w: 3 } } },
 ]);
 await orders.insert([{ _id: "o1", productId: "p1", qty: 2 }, { _id: "o2", productId: "p1", qty: 3 }, { _id: "o3", productId: "p3", qty: 1 }, { _id: "o4", productId: "none", qty: 9 }]);
+const carts = schema.instance("a").table("carts");
 const names = (rows) => rows.map((row) => row.name);
 const out = {};
 `;
@@ -111,6 +113,14 @@ out.nthFourth = (await products.orderBy("addedAt").nth(3)).name;
 out.countField = await products.count("category");
 out.countAll = await orders.count();
 out.datumKeyFallback = [await products.get("p5").key("note", "none"), await products.get("p2").key("name", "none"), await products.get("p2").key("color", "plain")];
+out.streamKeyFallback = await products.key("note", "none");
+out.streamKeyPresent = (await products.key("name", "none")).sort();
+out.streamKeyNoRowHasIt = await products.key("color", "plain");
+await carts.insert([{ _id: "c1", productIds: ["p1", "p3"] }, { _id: "c2", productIds: ["p5"] }]);
+const lookedCarts = await carts.lookup(products, "productIds", "_id");
+out.lookupList = lookedCarts.map((cart) => [cart._id, names(cart.productIds).sort()]).sort();
+const lookedCart = await carts.get("c1").lookup(products, "productIds", "_id");
+out.lookupListDatum = [lookedCart._id, names(lookedCart.productIds).sort()];
 out.datumKeyChain = await products.get("p5").key("meta").key("dims").key("w");
 out.datumDefault = await products.get("nope").default({ name: "Guest" });
 out.datumDo = await products.get("p1").do((p) => ({ label: p.key("name"), twice: p.key("price").mul(2) }));
@@ -153,6 +163,11 @@ return out;`,
       sees("count(field) counts the distinct values of the field", part(result, "countField"), 3),
       sees("count() counts every row", part(result, "countAll"), 4),
       sees("key(field, fallback) of a document reads the fallback for null and missing, and the value otherwise", part(result, "datumKeyFallback"), ["none", "Bible", "plain"]),
+      sees("key(field, fallback) of a stream gives each row the fallback for a null and for a missing field", part(result, "streamKeyFallback"), ["none", "none", "none", "none", "none"]),
+      sees("key(field, fallback) of a stream reads the value of every row that has one", part(result, "streamKeyPresent"), ["Atlas", "Bible", "Cable", "Drill", "Easel"]),
+      sees("key(field, fallback) of a stream gives the fallback for every row when no row has the field", part(result, "streamKeyNoRowHasIt"), ["plain", "plain", "plain", "plain", "plain"]),
+      sees("lookup of a list of keys replaces it with the documents those keys name", part(result, "lookupList"), [["c1", ["Atlas", "Cable"]], ["c2", ["Easel"]]]),
+      sees("lookup of a list of keys on a single document replaces it with the documents those keys name", part(result, "lookupListDatum"), ["c1", ["Atlas", "Cable"]]),
       sees("key chains read a nested field", part(result, "datumKeyChain"), 3),
       sees("default replaces a missing document", part(result, "datumDefault"), { name: "Guest" }),
       sees("do builds a value from the document", part(result, "datumDo"), { label: "Atlas", twice: 20 }),

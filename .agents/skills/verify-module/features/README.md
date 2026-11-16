@@ -10,8 +10,8 @@ One file per feature. `covers:` lists the source globs it owns, `docs:` the page
 |---|---|---|
 | [smoke](smoke.md) | The fixed journey every verdict runs. | module-dev, insert-values |
 | [module](module.md) | Configures `pool`, `connection` or `url` and gets a connected module, or a refusal that says why. | connection-modes, config-refused, external-options |
-| [schemas](schemas.md) | Declares a `Schema` and its instances and gets the databases, tables and indexes an owned instance creates. | storage-layout, refused-indexes, refused-registration, instances, cross-instance-indexes |
-| [writes](writes.md) | Inserts, updates, replaces and deletes rows on an owned table, with conflict options and counts. | insert-values, insert-conflicts, update-replace-delete |
+| [schemas](schemas.md) | Declares a `Schema` and its instances and gets the databases, tables and indexes an owned instance creates. | storage-layout, refused-indexes, refused-registration, instances, cross-instance-indexes, stale-index-rebuild |
+| [writes](writes.md) | Inserts, updates, replaces and deletes rows on an owned table, with conflict options and counts. | insert-values, insert-keys, insert-conflicts, update-replace-delete |
 | [write-values](write-values.md) | Writes values RethinkDB stores specially: bigints, symbols, `undefined`, nested dates and mixed lists. | unstorable-values, stored-values |
 | [atomic](atomic.md) | Applies a compare-and-set mutation with `table.atomicMutation`. | atomic-outcomes |
 | [reads](reads.md) | Reads with selections, streams, ValueProxy expressions and change feeds on an owned table. | read-selections, read-streams, read-expressions, change-feeds |
@@ -19,3 +19,4 @@ One file per feature. `covers:` lists the source globs it owns, `docs:` the page
 | [external-write](external-write.md) | Writes the declared fields of a client's tables and gets the refusals an external instance makes. | external-writes, external-refusals |
 | [catalog](catalog.md) | Describes, profiles and samples an external database through `@antelopejs/interface-database-catalog`. | catalog-describe, catalog-refused, catalog-start |
 | [raw-client](raw-client.md) | Runs a ReQL query on the module's connection with `RunQuery` from `@antelopejs/interface-rethinkdb`. | raw-client |
+| [probe](probe.md) | Asks `probe` from `dist/probe` whether a URL signs in and what the account may do there. | connection-probe |

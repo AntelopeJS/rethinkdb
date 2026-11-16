@@ -6,12 +6,15 @@ import { externalReads, externalRegistration } from "./journeys-external.ts";
 import { externalRefusals, externalWrites } from "./journeys-external-writes.ts";
 import { configRefused, connectionModes, externalOptions, moduleDev } from "./journeys-module.ts";
 import { crossInstanceIndexes, instances, refusedIndexes, storageLayout } from "./journeys-owned.ts";
+import { connectionProbe } from "./journeys-probe.ts";
+import { staleIndexRebuild } from "./journeys-rebuild.ts";
 import { refusedRegistrationKept } from "./journeys-refusal.ts";
 import { readExpressions } from "./journeys-expressions.ts";
 import { changeFeeds } from "./journeys-feeds.ts";
 import { rawClient } from "./journeys-raw.ts";
 import { readSelections, readStreams } from "./journeys-reads.ts";
 import { guardedAll, poolConfig } from "./session.ts";
+import { insertKeys } from "./journeys-insert-keys.ts";
 import { insertConflicts, insertValues, storedValues, unstorableValues, updateReplaceDelete } from "./journeys-writes.ts";
 
 const config: VerifyConfig = {
@@ -45,6 +48,15 @@ const config: VerifyConfig = {
       why: "the package name and release workflow claim @antelopejs/rethinkdb on npm",
     },
   },
+  formal: [
+    {
+      name: "formal-index-rebuild",
+      covers: ["src/implementations/database/initialize.ts", "src/implementations/database/index-state.ts", "src/implementations/database/indexes.ts"],
+      files: [".agents/skills/formal-index-rebuild/**"],
+      command: ["node", ".agents/skills/formal-index-rebuild/check.mjs"],
+      violation: /^(?:BROKEN|CHANGED|HOLDS)\s+(\w+)/gm,
+    },
+  ],
   userFacing: ["src/*.ts", "src/utils/**", "src/implementations/**"],
   services: {
     rethinkdb: {
@@ -70,7 +82,9 @@ const config: VerifyConfig = {
     "refused-registration": refusedRegistrationKept,
     instances,
     "cross-instance-indexes": crossInstanceIndexes,
+    "stale-index-rebuild": staleIndexRebuild,
     "insert-values": insertValues,
+    "insert-keys": insertKeys,
     "unstorable-values": unstorableValues,
     "stored-values": storedValues,
     "insert-conflicts": insertConflicts,
@@ -89,6 +103,7 @@ const config: VerifyConfig = {
     "catalog-refused": catalogRefused,
     "catalog-start": catalogStart,
     "raw-client": rawClient,
+    "connection-probe": connectionProbe,
   }),
 };
 

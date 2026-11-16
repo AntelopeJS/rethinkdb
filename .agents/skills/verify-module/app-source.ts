@@ -1,7 +1,13 @@
-/** The consumer module every journey adds beside the driver: it runs a scenario body inside the project, with the AQL package and `rethinkdb-ts` in scope, and answers the JSON it returned. */
+/**
+ * The consumer module every journey adds beside the driver: it runs a scenario body inside the project, with the AQL package and `rethinkdb-ts` in scope, and answers the JSON it returned.
+ * `@antelopejs/interface-database` 0.4 queries have no `then`, so the consumer gives them one that calls `run()`: a scenario writes `await query` for `await query.run()`, and cursors and `for await` stay as the interface has them.
+ */
 export const APP_SOURCE = String.raw`"use strict";
 const http = require("node:http");
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+require("@antelopejs/interface-database").Query.prototype.then = function then(resolve, reject) {
+  return this.run().then(resolve, reject);
+};
 let server;
 
 function ordered(value) {

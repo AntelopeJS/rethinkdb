@@ -2,6 +2,7 @@
 covers:
   - src/implementations/database/schema.ts
   - src/implementations/database/initialize.ts
+  - src/implementations/database/index-state.ts
   - src/implementations/database/indexes.ts
   - src/implementations/database/utils.ts
 docs:
@@ -12,6 +13,7 @@ journeys:
   - refused-registration
   - instances
   - cross-instance-indexes
+  - stale-index-rebuild
 ---
 
 # Schemas and instances
@@ -25,6 +27,7 @@ What an owned instance creates in RethinkDB: a database per schema, a table per 
 - `refused-registration`: a refused registration is kept by the schema gate instead of rejecting: `ajs project dev` stays up and answers, `createInstance` and a query on the schema reject with the refusal's message, the project logs the failure once with no unhandled rejection, and Ctrl+C still exits 130.
 - `instances`: rows of two tables belong to one instance, `_id` is shared by all, `CROSS_INSTANCE` reads, updates and deletes them all, answers 0 for an update or delete of a missing key, and refuses an insert, `listInstances` leaves out the default instance, `destroyInstance` removes only its own rows in every table, and instances and rows outlive a restart.
 - `cross-instance-indexes`: getAll, between, orderBy, distinct and count(field) on simple, compound and multi indexes answer the same rows with and without `crossInstance`, scoped or across instances, and the unflagged ones log one warning each.
+- `stale-index-rebuild`: a boot over a table whose `code__i` index an earlier release built from another function builds `code__rebuild`, swaps it in, leaves no `__rebuild` index and keeps the row, and a read by the declared nested field then finds it. Concurrent boots of one stale index are the formal check `formal-index-rebuild`, not a journey.
 
 ## How to get to it (user POV)
 

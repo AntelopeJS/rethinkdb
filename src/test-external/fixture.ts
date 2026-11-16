@@ -46,6 +46,14 @@ const TALLY_LABELS = [
   "lone",
 ];
 
+/** The `level` of each row of `grades`: 7001 and 7009 in 4 rows each, 7002 and 7008 in 5 rows each. */
+const GRADE_LEVELS = [
+  ...Array<number>(4).fill(7001),
+  ...Array<number>(5).fill(7002),
+  ...Array<number>(5).fill(7008),
+  ...Array<number>(4).fill(7009),
+];
+
 function Uuid(prefix: string, index: number): string {
   return `${prefix}-0000-4000-8000-${String(index).padStart(12, "0")}`;
 }
@@ -118,6 +126,17 @@ async function SeedTables(connection: Connection) {
         id: `tally-${index}`,
         label,
         bucket: `b${String(index % TALLY_BUCKETS).padStart(2, "0")}`,
+      })),
+    )
+    .run(connection);
+  await db.tableCreate("grades").run(connection);
+  await db
+    .table("grades")
+    .insert(
+      GRADE_LEVELS.map((level, index) => ({
+        id: `grade-${index}`,
+        level,
+        serial: index + 1,
       })),
     )
     .run(connection);

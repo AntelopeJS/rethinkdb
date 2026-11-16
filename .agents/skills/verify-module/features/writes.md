@@ -7,6 +7,7 @@ docs:
   - README.md
 journeys:
   - insert-values
+  - insert-keys
   - insert-conflicts
   - update-replace-delete
 ---
@@ -18,6 +19,7 @@ journeys:
 ## Sub-features
 
 - `insert-values`: text, numbers, booleans, null, dates, lists and nested documents are stored as those ReQL types.
+- `insert-keys`: `insert` resolves to the key of every document, in input order: the provided `_id` where a document has one and the generated key otherwise, for one document, an array and each conflict option, and each key is the one stored.
 - `insert-conflicts`: a taken `_id` throws `DuplicateKeyError` on `_id` and stores nothing; `conflict: "update"` keeps unmentioned fields and `"replace"` drops them.
 - `update-replace-delete`: counts and effects of the four writes, with a function update and getAll and filter selections; an update that changes nothing resolves to 0, since update counts the documents it modified.
 
@@ -35,4 +37,3 @@ pnpm exec antelopejs-verify journey "$RUN" writes
 
 - Each journey starts by dropping every database and account of the run's server (`begin`), because the container has no client to reset it with.
 - Values RethinkDB cannot store (a bigint, `undefined`, a symbol) and dates inside lists and nested documents are [write-values](write-values.md).
-- A plain `insert` of a document with a provided `_id` resolves to no id (drafted as an issue); the journeys assert the stored row instead.
