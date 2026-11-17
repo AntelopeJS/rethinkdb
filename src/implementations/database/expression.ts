@@ -185,7 +185,20 @@ const COMPLEX_STAGE_MAP = new Map<string, StageHandler>([
             TermType.FUNC,
             [
               [TermType.MAKE_ARRAY, [argId]],
-              [TermType.NE, [[TermType.MATCH, [expr.value, regex]], null]],
+              [
+                TermType.BRANCH,
+                [
+                  [
+                    TermType.EQ,
+                    [[TermType.TYPE_OF, [[TermType.VAR, [argId]]]], "STRING"],
+                  ],
+                  [
+                    TermType.NE,
+                    [[TermType.MATCH, [[TermType.VAR, [argId]], regex]], null],
+                  ],
+                  false,
+                ],
+              ],
             ],
           ],
           expr.value,
