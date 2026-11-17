@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.10.6
+
+[compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.10.5...v1.10.6)
+
+### 🩹 Fixes
+
+- Answer false for match on a value that is not a string ([#125](https://github.com/AntelopeJS/rethinkdb/pull/125))
+
+### ❤️ Contributors
+
+- Antony Rizzitelli
+
 ## v1.10.5
 
 [compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.10.4...v1.10.5)
