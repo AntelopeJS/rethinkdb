@@ -122,12 +122,12 @@ Initialization builds every missing index at boot, so a boot that adds indexes t
 
 <!-- antelopejs-docs-compat:start -->
 
-| Package                                  | Supported        | Tested with |
-| ---------------------------------------- | ---------------- | ----------- |
-| `@antelopejs/interface-core`             | `>=0.5.1 <0.6.0` | `0.5.1`     |
-| `@antelopejs/interface-database`         | `>=0.4.1 <0.5.0` | `0.4.1`     |
-| `@antelopejs/interface-database-catalog` | `>=0.1.0 <0.2.0` | `0.1.1`     |
-| `@antelopejs/interface-rethinkdb`        | `>=0.1.0 <0.2.0` | `0.1.0`     |
+| Package                                  | Supported                | Tested with              |
+| ---------------------------------------- | ------------------------ | ------------------------ |
+| `@antelopejs/interface-core`             | `>=0.5.1 <0.6.0`         | `0.5.1`                  |
+| `@antelopejs/interface-database`         | `>=0.4.1 <0.5.0`         | `0.4.1`                  |
+| `@antelopejs/interface-database-catalog` | `0.1.1-next.44.gee21aa3` | `0.1.1-next.44.gee21aa3` |
+| `@antelopejs/interface-rethinkdb`        | `>=0.1.0 <0.2.0`         | `0.1.0`                  |
 
 <!-- antelopejs-docs-compat:end -->
 
