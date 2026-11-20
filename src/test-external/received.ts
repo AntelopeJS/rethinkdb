@@ -1,6 +1,8 @@
 import { subscribe, unsubscribe } from "node:diagnostics_channel";
 import { Socket } from "node:net";
 
+import type { ResultValue } from "@antelopejs/interface-database-catalog/testing";
+
 import { IsObject } from "../implementations/database/utils";
 
 /** What Node publishes on `net.client.socket` for each client socket it opens. */
@@ -40,4 +42,15 @@ export async function Received<T>(
   } finally {
     unsubscribe("net.client.socket", tap);
   }
+}
+
+const JSON_SCALAR =
+  /"(?:[^"\\]|\\.)*"|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null/g;
+
+/** The JSON scalars found in what the server sent, each a value to compare whole. */
+export function ReceivedValues(received: string): ResultValue[] {
+  return (received.match(JSON_SCALAR) ?? []).map((token) => {
+    // SAFETY: JSON_SCALAR matches only a JSON string, number, boolean or null, each a ResultValue.
+    return JSON.parse(token) as ResultValue;
+  });
 }

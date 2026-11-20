@@ -18,6 +18,11 @@
     "noEmitOnError": true,
     "sourceMap": true,
     "useDefineForClassFields": true,
+    "paths": {
+      "@antelopejs/interface-database-catalog/testing": [
+        "./node_modules/@antelopejs/interface-database-catalog/dist/testing.d.ts"
+      ]
+    },
     "types": ["chai", "mocha", "node"]
   },
   "include": ["src/**/*.ts", "src/**/*.js"]

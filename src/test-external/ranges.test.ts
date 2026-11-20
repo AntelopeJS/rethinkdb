@@ -1,19 +1,25 @@
 import { expect } from "chai";
 import {
   type ColumnProfile,
+  type RelationProfile,
   Profile,
 } from "@antelopejs/interface-database-catalog";
 
-import { Received } from "./received";
-import { CLIENT_DATABASE } from "./fixture";
+import { AssertNoRareValue } from "@antelopejs/interface-database-catalog/testing";
 
-async function ProfiledColumn(
-  column: string,
-): Promise<{ profile: ColumnProfile | undefined; received: string }> {
+import { Received, ReceivedValues } from "./received";
+import { CLIENT_DATABASE, GRADE_LEVEL_COUNTS } from "./fixture";
+
+async function ProfiledColumn(column: string): Promise<{
+  profile: ColumnProfile | undefined;
+  relation: RelationProfile;
+  received: string;
+}> {
   const { answer, received } = await Received(() =>
     Profile({ relation: `${CLIENT_DATABASE}.grades`, columns: [column] }),
   );
   return {
+    relation: answer,
     profile: answer.columns.find((profiled) => profiled.name === column),
     received,
   };
@@ -23,14 +29,17 @@ describe("the range of an external number field", function () {
   this.timeout(60_000);
 
   it("ends at values seen 5 times, past values seen 4 times, and receives no rarer value", async () => {
-    const { profile, received } = await ProfiledColumn("level");
+    const { profile, relation, received } = await ProfiledColumn("level");
     expect(profile?.range).to.deep.equal({
       status: "ok",
       value: { min: 7002, max: 7008 },
     });
     expect(received).to.include("7002");
-    expect(received).to.not.include("7001");
-    expect(received).to.not.include("7009");
+    AssertNoRareValue({
+      profile: relation,
+      results: ReceivedValues(received),
+      counts: { level: GRADE_LEVEL_COUNTS },
+    });
   });
 
   it("keeps the true ends of a date field, and its time-axis trait", async () => {

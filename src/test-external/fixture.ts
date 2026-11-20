@@ -54,6 +54,14 @@ const GRADE_LEVELS = [
   ...Array<number>(4).fill(7009),
 ];
 
+/** How many rows of `grades` hold each `level`. */
+export const GRADE_LEVEL_COUNTS = [
+  { value: 7001, rows: 4 },
+  { value: 7002, rows: 5 },
+  { value: 7008, rows: 5 },
+  { value: 7009, rows: 4 },
+];
+
 function Uuid(prefix: string, index: number): string {
   return `${prefix}-0000-4000-8000-${String(index).padStart(12, "0")}`;
 }
