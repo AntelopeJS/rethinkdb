@@ -47,10 +47,9 @@ export async function Received<T>(
 const JSON_SCALAR =
   /"(?:[^"\\]|\\.)*"|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null/g;
 
-/** The JSON scalars found in what the server sent, each a value to compare whole. */
+/** The JSON scalars found in what the server sent, as text, each a value to compare whole. */
 export function ReceivedValues(received: string): ResultValue[] {
-  return (received.match(JSON_SCALAR) ?? []).map((token) => {
-    // SAFETY: JSON_SCALAR matches only a JSON string, number, boolean or null, each a ResultValue.
-    return JSON.parse(token) as ResultValue;
-  });
+  return (received.match(JSON_SCALAR) ?? []).map((token) =>
+    token.startsWith('"') ? token.slice(1, -1) : token,
+  );
 }
