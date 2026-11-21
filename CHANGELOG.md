@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.10.7
+
+[compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.10.6...v1.10.7)
+
+### 🩹 Fixes
+
+- **deps:** Depend on the stable @antelopejs/interface-database-catalog
+
+### ✅ Tests
+
+- Run the shared fewer-than-5 profile check ([#128](https://github.com/AntelopeJS/rethinkdb/pull/128))
+
+### 🤖 CI
+
+- Roll out the trunk CI and the merge queue ([#127](https://github.com/AntelopeJS/rethinkdb/pull/127))
+
+### ❤️ Contributors
+
+- Antony Rizzitelli
+
 ## v1.10.6
 
 [compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.10.5...v1.10.6)
