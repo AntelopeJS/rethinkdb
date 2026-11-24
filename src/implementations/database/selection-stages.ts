@@ -6,7 +6,7 @@ import { type IndexedRead, indexOptions } from "./indexes";
 import type { SelectionQuery } from "./selection";
 import {
   allocateArgNumber,
-  IsUpdateFunction,
+  IsUpdateByFunction,
   type QueryStage,
   StageNamed,
 } from "./utils";
@@ -109,28 +109,30 @@ const SELECTION_STAGES = new Map<string, SelectionStageHandler>([
   [
     "update",
     (query, stage) => {
-      const [document] = StageNamed(stage, "update").args;
+      const update = StageNamed(stage, "update");
       query.resultType = "update";
-      if (query.external) {
-        if (IsUpdateFunction(document)) {
+      if (IsUpdateByFunction(update)) {
+        if (query.external) {
           throw query.external.mapperRefusal();
         }
-        query.setInsertRawArgs(document);
-        return;
-      }
-      if (IsUpdateFunction(document)) {
+        const [updater] = update.args;
         const argId = allocateArgNumber();
         const docVar: TermJson = [TermType.VAR, [argId]];
-        const body = DecodeFunction(document, query.getContext().unbound(), [
+        const body = DecodeFunction(updater, query.getContext().unbound(), [
           docVar,
         ]);
         query.setNewValue([
           TermType.FUNC,
           [[TermType.MAKE_ARRAY, [argId]], body],
         ]);
-      } else {
-        query.setNewValue(DecodeValue(document, query.getContext().unbound()));
+        return;
       }
+      const [document] = update.args;
+      if (query.external) {
+        query.setInsertRawArgs(document);
+        return;
+      }
+      query.setNewValue(DecodeValue(document, query.getContext().unbound()));
     },
   ],
   [

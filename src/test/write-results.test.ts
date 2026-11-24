@@ -13,7 +13,7 @@ interface WriteRecord {
   errors?: number;
   first_error?: string;
   stage?: string;
-  args?: string[];
+  args?: unknown[];
 }
 
 interface WriteTables {
@@ -48,6 +48,10 @@ describe("Write acknowledgements and scoped primary keys", () => {
   it(
     "stores a document whose stage field reads func on an update",
     storeFuncStageDocument,
+  );
+  it(
+    "writes a document holding stage func and an args pair as a document",
+    storeFuncPairDocument,
   );
   it("resolves insert to the provided and generated keys", answerInsertKeys);
   it(
@@ -128,6 +132,17 @@ async function storeFuncStageDocument() {
     [storedWithArgs.stage, storedWithArgs.args],
     ["func", ["a", "b"]],
   );
+}
+
+async function storeFuncPairDocument() {
+  const key = randomUUID();
+  await owner.insert({ _id: key, value: "draft" }).run();
+  await owner
+    .get(key)
+    .update({ stage: "func", args: [[1, 2], "x"] })
+    .run();
+  const stored = await owner.get(key).run();
+  assert.deepEqual([stored.stage, stored.args], ["func", [[1, 2], "x"]]);
 }
 
 async function answerInsertKeys() {
