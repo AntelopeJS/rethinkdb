@@ -23,13 +23,6 @@ export function StageNamed<Name extends QueryStageName>(
   return stage;
 }
 
-/** Whether a recorded `update` stage carries a function of the row, as its `by` option says. */
-export function IsUpdateByFunction(
-  stage: QueryStage<"update">,
-): stage is Extract<QueryStage<"update">, { options: { by: "function" } }> {
-  return stage.options.by === "function";
-}
-
 export type ArgumentProvider = (subQuery: QueryStage[]) => TermJson;
 
 /** Whether `value` is a non-null object, arrays included. */
