@@ -1,15 +1,11 @@
+import { UpdatesByFunction } from "@antelopejs/interface-database/common";
 import { TermType } from "rethinkdb-ts/lib/proto/enums";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
 
 import { DecodeFunction, DecodeValue } from "./expression";
 import { type IndexedRead, indexOptions } from "./indexes";
 import type { SelectionQuery } from "./selection";
-import {
-  allocateArgNumber,
-  IsUpdateByFunction,
-  type QueryStage,
-  StageNamed,
-} from "./utils";
+import { allocateArgNumber, type QueryStage, StageNamed } from "./utils";
 
 type SelectionStageHandler = (query: SelectionQuery, stage: QueryStage) => void;
 
@@ -111,7 +107,7 @@ const SELECTION_STAGES = new Map<string, SelectionStageHandler>([
     (query, stage) => {
       const update = StageNamed(stage, "update");
       query.resultType = "update";
-      if (IsUpdateByFunction(update)) {
+      if (UpdatesByFunction(update)) {
         if (query.external) {
           throw query.external.mapperRefusal();
         }

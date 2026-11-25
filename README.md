@@ -125,7 +125,7 @@ Initialization builds every missing index at boot, so a boot that adds indexes t
 | Package                                  | Supported                 | Tested with               |
 | ---------------------------------------- | ------------------------- | ------------------------- |
 | `@antelopejs/interface-core`             | `>=0.5.1 <0.6.0`          | `0.5.1`                   |
-| `@antelopejs/interface-database`         | `0.4.4-next.124.gbc7f370` | `0.4.4-next.124.gbc7f370` |
+| `@antelopejs/interface-database`         | `0.4.4-next.128.g3e7dab7` | `0.4.4-next.128.g3e7dab7` |
 | `@antelopejs/interface-database-catalog` | `>=0.1.1 <0.2.0`          | `0.1.1`                   |
 | `@antelopejs/interface-rethinkdb`        | `>=0.1.0 <0.2.0`          | `0.1.0`                   |
 
