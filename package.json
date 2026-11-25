@@ -1,6 +1,6 @@
 {
   "name": "@antelopejs/rethinkdb",
-  "version": "1.10.7",
+  "version": "1.10.8",
   "description": "RethinkDB backend for AntelopeJS, implementing the Database and RethinkDB interfaces with rethinkdb-ts",
   "keywords": [
     "antelopejs",
@@ -50,7 +50,7 @@
   },
   "dependencies": {
     "@antelopejs/interface-core": ">=0.5.1 <0.6.0",
-    "@antelopejs/interface-database": "0.4.4-next.128.g3e7dab7",
+    "@antelopejs/interface-database": ">=0.4.4 <0.5.0",
     "@antelopejs/interface-database-catalog": ">=0.1.1 <0.2.0",
     "chai": "^4.5.0",
     "reflect-metadata": "^0.2.2",

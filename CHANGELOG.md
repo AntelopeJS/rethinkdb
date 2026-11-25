@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.10.8
+
+[compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.10.7...v1.10.8)
+
+### 🩹 Fixes
+
+- **deps:** Depend on the stable @antelopejs/interface-database
+
+### 💅 Refactors
+
+- Switch the update stage on options.by ([#132](https://github.com/AntelopeJS/rethinkdb/pull/132))
+- Use UpdatesByFunction from interface-database ([#135](https://github.com/AntelopeJS/rethinkdb/pull/135))
+
+### 🏡 Chore
+
+- **deps:** Update dependency oxlint-tsgolint to v7.0.2008 ([#134](https://github.com/AntelopeJS/rethinkdb/pull/134))
+- **deps:** Update dependency rimraf to v6.1.4 ([#136](https://github.com/AntelopeJS/rethinkdb/pull/136))
+
+### 🤖 CI
+
+- Re-sync the AntelopeJS pack for the release app ([#130](https://github.com/AntelopeJS/rethinkdb/pull/130))
+- Stop forwarding the retired RELEASE_GITHUB_TOKEN ([#131](https://github.com/AntelopeJS/rethinkdb/pull/131))
+
+### ❤️ Contributors
+
+- Antony Rizzitelli
+
 ## v1.10.7
 
 [compare changes](https://github.com/AntelopeJS/rethinkdb/compare/v1.10.6...v1.10.7)
