@@ -177,10 +177,6 @@ function DatabaseCases() {
     });
   });
 
-  /**
-   * Fails on a probe that answers write access on a database with no table by anything but the
-   * right to create tables there, or that counts that right only on a database with no table.
-   */
   it("answers a database as written by an account that may create tables in it, with or without tables", async () => {
     for (const [user, database, canWrite] of [
       [READER, EMPTY, false],
