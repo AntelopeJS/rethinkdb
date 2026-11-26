@@ -1,14 +1,4 @@
 #!/usr/bin/env node
-/**
- * Model-checks IndexRebuild.tla with TLC through the shared runner of
- * @antelopejs/tooling-configs, under the configurations in `CHECKS`: the
- * model of the code as it is, then the changes that must each break one rule.
- *
- * Every INVARIANT of a configuration must hold, except its `findings`, which
- * must break with a shortest counterexample of exactly the recorded number of
- * states. Exits 0 when TLC agrees, 1 when a rule changed, and 2 when TLC could
- * not run.
- */
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,6 +6,10 @@ import { checkSpec } from "@antelopejs/tooling-configs/formal";
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(DIR, "../../..");
+/**
+ * Exit code when a rule changed. Model-checks IndexRebuild.tla with TLC under the configurations in
+ * `CHECKS`; exits 0 when TLC agrees and 2 when TLC could not run.
+ */
 const CHANGED = 1;
 
 /**

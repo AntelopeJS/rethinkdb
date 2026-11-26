@@ -1,7 +1,7 @@
 import assert from "node:assert";
 import { TermType } from "rethinkdb-ts/lib/proto/enums";
 import type { TermJson } from "rethinkdb-ts/lib/internal-types";
-import { Query, ValueProxy } from "@antelopejs/interface-database";
+import { IsQuery, IsValueProxy } from "@antelopejs/interface-database";
 import type { Value } from "@antelopejs/interface-database/common";
 
 import {
@@ -316,11 +316,11 @@ export function DecodeValue(
   value: NonNullable<Value<unknown>> | null,
   context: DecodingContext,
 ): TermJson {
-  if (value instanceof ValueProxy) {
+  if (IsValueProxy(value)) {
     return decodeExpression(value.build(), context);
   }
 
-  if (value instanceof Query) {
+  if (IsQuery(value)) {
     return decodeSubquery(value.build(), context);
   }
 

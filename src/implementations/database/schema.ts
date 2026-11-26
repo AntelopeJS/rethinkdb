@@ -107,7 +107,7 @@ export function GetSchema(schemaId: string) {
 
 export function GetTable(schemaId: string, tableId: string) {
   const schema = GetSchema(schemaId);
-  assert(tableId in schema);
+  assert(Object.hasOwn(schema, tableId));
   return schema[tableId];
 }
 
@@ -117,7 +117,9 @@ export function FindIndex(
   indexId: string,
 ): IndexDefinition | undefined {
   const table = GetTable(schemaId, tableId);
-  return indexId in table.indexes ? table.indexes[indexId] : undefined;
+  return Object.hasOwn(table.indexes, indexId)
+    ? table.indexes[indexId]
+    : undefined;
 }
 
 const ALWAYS_INDEXED_FIELDS = new Set([PRIMARY_KEY_FIELD, TENANT_ID_FIELD]);
@@ -141,7 +143,7 @@ export function GetIndex(
   onlyIndex?: boolean,
 ) {
   const table = GetTable(schemaId, tableId);
-  if (indexId in table.indexes) {
+  if (Object.hasOwn(table.indexes, indexId)) {
     return table.indexes[indexId];
   }
   assert(!onlyIndex);

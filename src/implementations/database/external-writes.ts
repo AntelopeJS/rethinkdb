@@ -260,7 +260,9 @@ function Split(
 function GuardedUpdate(payload: Payload): TermJson {
   return Func((row) => {
     const changed: TermJson[] = payload.descriptors.map((descriptor) => {
-      const incoming = payload.fields[descriptor.field];
+      const incoming = Object.hasOwn(payload.fields, descriptor.field)
+        ? payload.fields[descriptor.field]
+        : undefined;
       return [
         TermType.BRANCH,
         [
