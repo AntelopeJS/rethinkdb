@@ -34,7 +34,7 @@
     "prepack": "pnpm run build",
     "release": "pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run prepack && release-it",
     "typecheck": "tsc --noEmit && tsc -p .agents/skills/formal-index-rebuild",
-    "test": "pnpm run build && ajs module test . && pnpm run test:external:run && pnpm run test:formal",
+    "test": "pnpm run build && ajs module test . --timeout 10000 && pnpm run test:external:run && pnpm run test:formal",
     "test:external": "pnpm run build && pnpm run test:external:run",
     "test:formal": "node .agents/skills/formal-index-rebuild/check.mjs",
     "test:external:run": "RETHINK_TEST_MODE=external ajs module test . $(for file in dist/test-external/*.test.js; do printf -- '-f %s ' \"$file\"; done)",
