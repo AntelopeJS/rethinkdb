@@ -9,6 +9,11 @@ on:
   schedule:
     - cron: "17 2 * * *"
   workflow_dispatch:
+    inputs:
+      nightly:
+        description: Run the nightly tier, with the Windows jobs and Stress
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -17,6 +22,7 @@ jobs:
   ci:
     uses: AntelopeJS/.github/.github/workflows/ci-node.yml@v2
     with:
+      nightly: ${{ inputs.nightly == true }}
       services-compose-file: .github/release-services.yml
       docs-files: |
         README.md
